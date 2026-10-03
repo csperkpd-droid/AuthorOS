@@ -99,7 +99,9 @@ describe("trash", () => {
     expect(await db.scene.count({ where: { bookId: book.id } })).toBe(0);
     expect(await db.contentRevision.count({ where: { nodeId: scene.id } })).toBe(0);
     // Only the surviving book's node remains: no orphaned graph nodes.
-    const nodes = await db.storyNode.findMany({ where: { workspaceId: ctx.workspaceId } });
+    const nodes = await db.storyNode.findMany({
+      where: { workspaceId: ctx.workspaceId, kind: { not: "PEN_NAME" } },
+    });
     expect(nodes.map((n) => n.id)).toEqual([keep.id]);
   });
 
@@ -119,14 +121,20 @@ describe("trash", () => {
     expect(await emptyTrash(stranger)).toBe(0);
 
     expect(await emptyTrash(ctx)).toBe(1);
-    expect(await db.storyNode.count({ where: { workspaceId: ctx.workspaceId } })).toBe(0);
+    expect(
+      await db.storyNode.count({
+        where: { workspaceId: ctx.workspaceId, kind: { not: "PEN_NAME" } },
+      }),
+    ).toBe(0);
   });
 });
 
 describe("story graph and tenancy guarantees in the database", () => {
   it("gives every story object a node of the matching kind", async () => {
     const { book, part, chapter, scene } = await bookWithContent();
-    const nodes = await db.storyNode.findMany({ where: { workspaceId: ctx.workspaceId } });
+    const nodes = await db.storyNode.findMany({
+      where: { workspaceId: ctx.workspaceId, kind: { not: "PEN_NAME" } },
+    });
     const kinds = Object.fromEntries(nodes.map((n) => [n.id, n.kind]));
     expect(kinds).toEqual({
       [book.id]: "BOOK",

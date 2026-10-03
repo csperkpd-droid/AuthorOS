@@ -11,6 +11,7 @@ import {
   type NodeSummary,
 } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import { canConnect, getKind, isConnectionKind, labelFrom, type ConnectionKind } from "./registry";
 import {
@@ -163,6 +164,7 @@ export async function createPlannedConnection(
 
 /** Connects two story objects (see planConnection for the rules). */
 export async function connect(ctx: AuthorContext, input: NewConnectionInput) {
+  assertCan(ctx, "edit", "storyBible");
   const plan = await planConnection(ctx, input);
   return db.$transaction((tx) => createPlannedConnection(tx, ctx, plan));
 }
@@ -178,6 +180,7 @@ async function requireConnection(ctx: AuthorContext, id: string) {
 
 /** Changes a connection's label, note or attribute (e.g. a character's role in a scene). */
 export async function updateConnection(ctx: AuthorContext, id: string, input: ConnectionDetails) {
+  assertCan(ctx, "edit", "storyBible");
   const data = connectionDetails.parse(input);
   const connection = await requireConnection(ctx, id);
   const attributes =
@@ -199,6 +202,7 @@ export async function updateConnection(ctx: AuthorContext, id: string, input: Co
 
 /** Removes a link. The connected objects are untouched. */
 export async function disconnect(ctx: AuthorContext, id: string) {
+  assertCan(ctx, "edit", "storyBible");
   await requireConnection(ctx, id);
   await db.connection.delete({ where: { id } });
 }

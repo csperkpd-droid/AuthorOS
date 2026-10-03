@@ -7,6 +7,7 @@ import { createPlannedConnection, planConnection } from "@/modules/connections";
 import { saveContent } from "@/modules/history";
 import { createStoryNode, liveNote } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import { noteTitle } from "./schemas";
 
@@ -40,6 +41,7 @@ export async function createNote(
   ctx: AuthorContext,
   { title, aboutId }: { title: string; aboutId?: string },
 ) {
+  assertCan(ctx, "edit", "storyBible");
   const parsedTitle = noteTitle.parse(title);
   return db.$transaction(async (tx) => {
     const id = await createStoryNode(tx, ctx.workspaceId, "NOTE");
@@ -58,6 +60,7 @@ export async function createNote(
 }
 
 export async function renameNote(ctx: AuthorContext, id: string, title: string) {
+  assertCan(ctx, "edit", "storyBible");
   const parsed = noteTitle.parse(title);
   await getNote(ctx, id);
   await db.note.update({ where: { id }, data: { title: parsed } });
@@ -68,11 +71,13 @@ export async function saveNoteBody(
   ctx: AuthorContext,
   { noteId, content, baseVersion }: { noteId: string; content: unknown; baseVersion: number },
 ) {
+  assertCan(ctx, "edit", "storyBible");
   await getNote(ctx, noteId);
   return saveContent(ctx, { nodeId: noteId, content, baseVersion });
 }
 
 export async function trashNote(ctx: AuthorContext, id: string) {
+  assertCan(ctx, "edit", "storyBible");
   await getNote(ctx, id);
   await db.note.update({ where: { id }, data: { deletedAt: new Date() } });
 }

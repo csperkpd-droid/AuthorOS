@@ -143,7 +143,7 @@ model WorkspaceMember {
 /// Constraints (hand-written in migrations): at most one default per
 /// workspace; the default cannot be archived.
 model PenName {
-  id          String    @id @default(uuid(7)) @db.Uuid
+  id          String    @id @db.Uuid
   workspaceId String    @map("workspace_id") @db.Uuid
   name        String
   bio         String?
@@ -154,6 +154,8 @@ model PenName {
   updatedAt   DateTime  @updatedAt @map("updated_at")
   archivedAt  DateTime? @map("archived_at")
 
+  /// Pen names are story nodes (M7): connectable like other story objects.
+  node             StoryNode         @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   series           Series[]
   books            Book[]
@@ -181,6 +183,7 @@ enum StoryNodeKind {
   OUTLINE
   TASK
   EVENT
+  PEN_NAME
 
   @@map("story_node_kind")
 }
@@ -207,7 +210,10 @@ model StoryNode {
   idea         Idea?
   outline      Outline?
   task         Task?
-  event        CalendarEvent?
+  event        CalendarEvent?    @relation("EventNode")
+  penName      PenName?
+  /// Calendar entries about this object (e.g. a book's deadline).
+  dates        CalendarEvent[]   @relation("EventSubject")
   outgoing     Connection[]      @relation("ConnectionSource")
   incoming     Connection[]      @relation("ConnectionTarget")
   revisions    ContentRevision[]
@@ -269,7 +275,6 @@ model Book {
   tropes          String[]   @default([])
   heatLevel       HeatLevel? @map("heat_level")
   /// Deadline for the current draft (shown on the calendar and dashboard).
-  dueOn           DateTime?  @map("due_on") @db.Date
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
   deletedAt       DateTime?  @map("deleted_at")
@@ -825,24 +830,39 @@ model Task {
 /// A dated event on the author's calendar (launch, conference, edit due…).
 /// A story node, so it can concern books and other story objects.
 model CalendarEvent {
-  id          String    @id @db.Uuid
-  workspaceId String    @map("workspace_id") @db.Uuid
+  id          String          @id @db.Uuid
+  workspaceId String          @map("workspace_id") @db.Uuid
   title       String
   description String?
-  startsOn    DateTime  @map("starts_on") @db.Date
+  startsOn    DateTime        @map("starts_on") @db.Date
   /// Last day of a multi-day event (inclusive). Null = one day.
-  endsOn      DateTime? @map("ends_on") @db.Date
+  endsOn      DateTime?       @map("ends_on") @db.Date
   /// "HH:MM" local time. Null = all day.
-  startTime   String?   @map("start_time")
-  createdAt   DateTime  @default(now()) @map("created_at")
-  updatedAt   DateTime  @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
+  startTime   String?         @map("start_time")
+  /// What the entry is: an event of its own, or a date that belongs to
+  /// another story object (`subjectId`), such as a book's deadline.
+  purpose     CalendarPurpose @default(EVENT)
+  subjectId   String?         @map("subject_id") @db.Uuid
+  createdAt   DateTime        @default(now()) @map("created_at")
+  updatedAt   DateTime        @updatedAt @map("updated_at")
+  deletedAt   DateTime?       @map("deleted_at")
 
-  node StoryNode @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  node    StoryNode  @relation("EventNode", fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  subject StoryNode? @relation("EventSubject", fields: [subjectId], references: [id], onDelete: Cascade)
 
   @@unique([id, workspaceId])
   @@index([workspaceId, startsOn])
+  @@index([subjectId])
   @@map("calendar_events")
+}
+
+/// Dates live in one place (M7): every dated entry is a calendar event.
+/// DEADLINE entries belong to a subject (one live deadline per subject).
+enum CalendarPurpose {
+  EVENT
+  DEADLINE
+
+  @@map("calendar_purpose")
 }
 
 enum WritingSource {

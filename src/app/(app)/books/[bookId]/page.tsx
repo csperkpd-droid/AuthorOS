@@ -19,6 +19,7 @@ import { BookDialog, trashBookAction } from "@/modules/library/ui";
 import { getBookTree } from "@/modules/manuscript";
 import { BinderManager } from "@/modules/manuscript/ui";
 import { ChangePenNameDialog } from "@/modules/impact/ui";
+import { deadlinesFor } from "@/modules/calendar";
 import { listPenNames } from "@/modules/pen-names";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
@@ -45,7 +46,9 @@ export async function generateMetadata({
 export default async function BookPage({ params }: PageProps<"/books/[bookId]">) {
   const { bookId } = await params;
   const ctx = await requireAuthorContext();
-  const book = await orNotFound(getBook(ctx, bookId));
+  const found = await orNotFound(getBook(ctx, bookId));
+  // The deadline lives on the calendar (one source of truth for dates).
+  const book = { ...found, dueOn: (await deadlinesFor(ctx, [bookId])).get(bookId) ?? null };
   const [tree, penNames, seriesOptions, connections, outlines, structureOptions, kits] =
     await Promise.all([
       orNotFound(getBookTree(ctx, bookId)),
@@ -156,7 +159,7 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
             <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
               <CalendarClock className="size-3.5" aria-hidden />
               Due{" "}
-              {formatDay(book.dueOn.toISOString().slice(0, 10), {
+              {formatDay(book.dueOn, {
                 weekday: undefined,
                 year: "numeric",
               })}

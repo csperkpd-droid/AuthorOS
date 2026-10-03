@@ -8,7 +8,9 @@ import { FormError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { useAction } from "@/hooks/use-action";
 
-import { setRelationshipMembersAction } from "../actions";
+import { ImpactReview, type ImpactReport } from "@/modules/impact/ui";
+
+import { previewRelationshipMembersAction, setRelationshipMembersAction } from "../actions";
 import { MEMBER_ROLE_SUGGESTIONS } from "../schemas";
 
 type Member = { id: string; role: string | null };
@@ -33,13 +35,17 @@ export function MembersDialog({
   const id = useId();
   const [chosen, setChosen] = useState<Member[]>(members);
   const isChosen = (characterId: string) => chosen.some((m) => m.id === characterId);
-  const { run, pending, error } = useAction(setRelationshipMembersAction);
+  const { run, pending, error, setError } = useAction(setRelationshipMembersAction);
+  // Removing members is reviewed first (Change Impact).
+  const [report, setReport] = useState<ImpactReport | null>(null);
+  const payload = () => chosen.map((m) => ({ characterId: m.id, role: m.role?.trim() || null }));
   return (
     <Dialog
       open={open}
       onOpenChange={(o) => {
         setOpen(o);
         setChosen(members);
+        setReport(null);
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
@@ -47,14 +53,31 @@ export function MembersDialog({
         title="Members"
         description="Two characters make a pair; three or more make a group."
       >
+        {report && (
+          <ImpactReview
+            report={report}
+            confirmLabel="Save members"
+            pending={pending}
+            error={error}
+            onCancel={() => setReport(null)}
+            onConfirm={async () => {
+              if ((await run(relationshipId, payload(), report.token)).ok) setOpen(false);
+            }}
+          />
+        )}
         <form
+          hidden={Boolean(report)}
           className="space-y-4"
           onSubmit={async (e) => {
             e.preventDefault();
-            const result = await run(
-              relationshipId,
-              chosen.map((m) => ({ characterId: m.id, role: m.role?.trim() || null })),
-            );
+            const removes = members.some((m) => !isChosen(m.id));
+            if (removes) {
+              const preview = await previewRelationshipMembersAction(relationshipId, payload());
+              if (!preview.ok) return setError(preview.error);
+              setReport(preview.data);
+              return;
+            }
+            const result = await run(relationshipId, payload());
             if (result.ok) setOpen(false);
           }}
         >

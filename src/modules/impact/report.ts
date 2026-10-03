@@ -2,6 +2,7 @@ import "server-only";
 
 import { createHash } from "node:crypto";
 
+import { ConflictError, RuleError } from "@/lib/errors";
 import { formatCount } from "@/lib/format";
 
 import type { ImpactBlocker, ImpactGroup, ImpactReport } from "./types";
@@ -56,4 +57,21 @@ export function buildReport({
 /** Whether anything besides the object itself would be affected. */
 export function affectsOthers(report: ImpactReport, selfKey?: string) {
   return report.groups.some((g) => g.affected && g.count > 0 && g.key !== selfKey);
+}
+
+/**
+ * Applying a reviewed change. Refused while it has blockers; refused
+ * without a review when it affects anything (no silent detaching or
+ * orphaning, whichever path calls the service); refused when what it would
+ * affect changed since the review (stale token).
+ */
+export function assertReviewed(report: ImpactReport, token: string | undefined) {
+  if (report.blockers.length) throw new RuleError(report.blockers[0].reason);
+  if (token === undefined) {
+    if (report.groups.some((g) => g.affected && g.count > 0))
+      throw new RuleError("Review what this change affects first.");
+    return;
+  }
+  if (token !== report.token)
+    throw new ConflictError("This changed since you reviewed it. Review it again.");
 }

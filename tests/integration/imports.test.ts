@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { db } from "@/lib/db";
+import { deadlinesFor, setDeadline } from "@/modules/calendar";
 import { createCharacter } from "@/modules/characters";
 import { connect } from "@/modules/connections";
 import { exportWorkspaceJson } from "@/modules/exports";
@@ -326,6 +327,37 @@ describe("import: restoring into the same workspace", () => {
       /changed since/,
     );
     expect(await db.relationship.count({ where: { id: s.pair.id } })).toBe(0);
+  });
+});
+
+describe("import: older backups", () => {
+  it("upgrades a version 1 file: pen names become nodes, due dates become deadlines", async () => {
+    const s = await seed(ctx);
+    await setDeadline(ctx, s.book.id, "2027-03-01");
+    const { data } = await exportWorkspaceJson(ctx, { scope: { kind: "all" } });
+    // Shape it as a version 1 file did.
+    const deadline = data.calendarEvents.find((e) => e.purpose === "DEADLINE")!;
+    const v1 = {
+      ...data,
+      version: 1,
+      storyNodes: data.storyNodes.filter((n) => n.kind !== "PEN_NAME" && n.id !== deadline.id),
+      calendarEvents: data.calendarEvents
+        .filter((e) => e.id !== deadline.id)
+        .map((e) => {
+          const legacy: Partial<typeof e> = { ...e };
+          delete legacy.purpose;
+          delete legacy.subjectId;
+          return legacy;
+        }),
+      books: data.books.map((b) => (b.id === s.book.id ? { ...b, dueOn: "2027-03-01" } : b)),
+    };
+    await resetDatabase();
+    const other = await createAuthor("Jane");
+    const bytes = new TextEncoder().encode(JSON.stringify(v1));
+    const { review } = await restore(other, bytes);
+    expect(review.errors).toEqual([]);
+    expect((await deadlinesFor(other, [s.book.id])).get(s.book.id)).toBe("2027-03-01");
+    expect(await db.storyNode.count({ where: { id: s.rose.id, kind: "PEN_NAME" } })).toBe(1);
   });
 });
 

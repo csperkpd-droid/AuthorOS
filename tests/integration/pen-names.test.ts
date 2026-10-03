@@ -19,7 +19,7 @@ import {
 import { findPrimaryMembership } from "@/modules/workspaces";
 import type { AuthorContext } from "@/server/context";
 
-import { createAuthor, resetDatabase } from "../support/db";
+import { createAuthor, penNode, resetDatabase } from "../support/db";
 
 let ctx: AuthorContext;
 
@@ -146,7 +146,12 @@ describe("database guarantees", () => {
   it("allows only one default pen name per workspace", async () => {
     await expect(
       db.penName.create({
-        data: { workspaceId: ctx.workspaceId, name: "Second", isDefault: true },
+        data: {
+          id: (await penNode(ctx.workspaceId)).id,
+          workspaceId: ctx.workspaceId,
+          name: "Second",
+          isDefault: true,
+        },
       }),
     ).rejects.toThrow(/unique/i);
   });

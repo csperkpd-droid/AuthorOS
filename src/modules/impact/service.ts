@@ -6,8 +6,9 @@ import { ConflictError, NotFoundError, RuleError } from "@/lib/errors";
 import { formatCount } from "@/lib/format";
 import { positionAtEnd } from "@/lib/ordering";
 import { requireAssignablePenName } from "@/modules/pen-names";
-import { relationshipTitle } from "@/modules/relationships";
+import { kindsWhere, relationshipTitle } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import { buildReport } from "./report";
 import type { ImpactBlocker, ImpactItem, ImpactReport } from "./types";
@@ -40,7 +41,8 @@ export type IdentityMove = { kind: "BOOK" | "SERIES"; id: string; toPenNameId: s
 
 type Client = Prisma.TransactionClient | typeof db;
 
-const SHARED_KINDS: StoryNodeKind[] = ["NOTE", "IDEA", "TASK", "EVENT"];
+/** Kinds shared by every identity (from the Story Object Registry). */
+const SHARED_KINDS = kindsWhere((t) => t.identity === "shared");
 
 type Plan = {
   report: ImpactReport;
@@ -415,7 +417,12 @@ async function planIdentityMove(
 /** Title, link and pen name of non-character work items (for blockers). */
 async function describeWork(client: Client, nodes: { id: string; kind: StoryNodeKind }[]) {
   const ids = (kind: StoryNodeKind) => nodes.filter((n) => n.kind === kind).map((n) => n.id);
-  const [series, books, parts, chapters, scenes, outlines] = await Promise.all([
+  const [penNames, series, books, parts, chapters, scenes, outlines] = await Promise.all([
+    // A link to the pen name itself stays with that pen name.
+    client.penName.findMany({
+      where: { id: { in: ids("PEN_NAME") } },
+      select: { id: true, name: true },
+    }),
     client.series.findMany({
       where: { id: { in: ids("SERIES") } },
       select: { id: true, title: true, penNameId: true },
@@ -462,6 +469,12 @@ async function describeWork(client: Client, nodes: { id: string; kind: StoryNode
     }),
   ]);
   return [
+    ...penNames.map((p) => ({
+      id: p.id,
+      title: `Pen name ${p.name}`,
+      href: "/identities",
+      penNameId: p.id,
+    })),
     ...series.map((s) => ({
       id: s.id,
       title: s.title,
@@ -509,6 +522,7 @@ export async function previewIdentityMove(
  * it (`token`).
  */
 export async function applyIdentityMove(ctx: AuthorContext, move: IdentityMove, token: string) {
+  assertCan(ctx, "manage", "identity");
   await db.$transaction(async (tx) => {
     // Lock the root so concurrent moves of the same work serialize.
     if (move.kind === "BOOK") {

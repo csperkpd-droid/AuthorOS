@@ -6,6 +6,7 @@ import { NotFoundError, RuleError } from "@/lib/errors";
 import { getPenNameForNewWork, requireAssignablePenName } from "@/modules/pen-names";
 import { createStoryNode, liveCharacter, liveScene, liveSeries } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import { characterInput, profileFieldInput, type CharacterInput } from "./schemas";
 
@@ -109,6 +110,7 @@ async function resolveHome(
 }
 
 export async function createCharacter(ctx: AuthorContext, input: CharacterInput) {
+  assertCan(ctx, "edit", "storyBible");
   const data = characterInput.parse(input);
   const home = await resolveHome(ctx, { seriesId: data.seriesId, penNameId: data.penNameId });
   return db.$transaction(async (tx) => {
@@ -134,6 +136,7 @@ export async function createCharacter(ctx: AuthorContext, input: CharacterInput)
  * relationships, arcs), so no information crosses identities.
  */
 export async function updateCharacter(ctx: AuthorContext, id: string, input: CharacterInput) {
+  assertCan(ctx, "edit", "storyBible");
   const data = characterInput.parse(input);
   const current = await getCharacter(ctx, id);
   const home = await resolveHome(ctx, {
@@ -144,6 +147,24 @@ export async function updateCharacter(ctx: AuthorContext, id: string, input: Cha
     throw new RuleError(
       "This character is linked to scenes, relationships or arcs, so it stays with its pen name.",
     );
+  }
+  // A series' characters appear only in that series' books: a new series
+  // can't strand appearances in books outside it.
+  if (home.seriesId && home.seriesId !== (current.series?.id ?? null)) {
+    const outside = await db.connection.count({
+      where: {
+        workspaceId: ctx.workspaceId,
+        sourceId: id,
+        kind: "appears_in",
+        target: {
+          scene: { book: { OR: [{ seriesId: null }, { seriesId: { not: home.seriesId } }] } },
+        },
+      },
+    });
+    if (outside > 0)
+      throw new RuleError(
+        `${current.name} appears in ${outside === 1 ? "1 scene" : `${outside} scenes`} outside that series. Remove those appearances first, or keep the character’s series.`,
+      );
   }
   await db.character.update({
     where: { id },
@@ -173,6 +194,7 @@ export async function updateProfileField(
   field: string,
   value: string,
 ) {
+  assertCan(ctx, "edit", "storyBible");
   const data = profileFieldInput.parse({ field, value });
   const character = await getCharacter(ctx, id);
   const profile = { ...character.profile };
@@ -182,6 +204,7 @@ export async function updateProfileField(
 }
 
 export async function trashCharacter(ctx: AuthorContext, id: string) {
+  assertCan(ctx, "edit", "storyBible");
   await getCharacter(ctx, id);
   await db.character.update({ where: { id }, data: { deletedAt: new Date() } });
 }

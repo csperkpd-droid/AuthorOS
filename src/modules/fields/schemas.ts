@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { FieldType, StoryNodeKind } from "@/generated/prisma/enums";
+import { STORY_OBJECT_TYPES } from "@/modules/story-graph/ui";
 
 export const fieldLabel = z
   .string()
@@ -10,7 +11,9 @@ export const fieldLabel = z
 
 export const newFieldInput = z
   .object({
-    nodeKind: z.enum(StoryNodeKind),
+    nodeKind: z
+      .enum(StoryNodeKind)
+      .refine((kind) => STORY_OBJECT_TYPES[kind].fieldable, "Custom fields don’t apply to that."),
     label: fieldLabel,
     type: z.enum(FieldType).default("TEXT"),
     /**

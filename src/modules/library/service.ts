@@ -2,12 +2,13 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import { toDbDate } from "@/lib/dates";
 import { NotFoundError, RuleError } from "@/lib/errors";
 import { planInsertAfter, positionAtEnd, sortByPosition } from "@/lib/ordering";
+import { assertReviewed, buildReport } from "@/modules/impact";
 import { getPenNameForNewWork, requireAssignablePenName } from "@/modules/pen-names";
 import { createStoryNode, liveBook } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import {
   bookInput,
@@ -31,7 +32,6 @@ const bookCardSelect = {
   targetWordCount: true,
   tropes: true,
   heatLevel: true,
-  dueOn: true,
   seriesId: true,
   seriesPosition: true,
   updatedAt: true,
@@ -139,6 +139,7 @@ export async function listSeriesOptions(ctx: AuthorContext) {
 }
 
 export async function createSeries(ctx: AuthorContext, input: SeriesInput) {
+  assertCan(ctx, "edit", "manuscript");
   const data = seriesInput.parse(input);
   const penName = data.penNameId
     ? await requireAssignablePenName(ctx, data.penNameId)
@@ -168,6 +169,7 @@ export const PEN_NAME_CHANGE_NEEDS_REVIEW =
  * associated story data together after the author has reviewed them.
  */
 export async function updateSeries(ctx: AuthorContext, id: string, input: SeriesInput) {
+  assertCan(ctx, "edit", "manuscript");
   const data = seriesInput.parse(input);
   const current = await getSeries(ctx, id);
   if (data.penNameId && data.penNameId !== current.penName.id) {
@@ -181,6 +183,7 @@ export async function updateSeries(ctx: AuthorContext, id: string, input: Series
 
 /** Moves a series (and with it, its books) to the Trash. */
 export async function trashSeries(ctx: AuthorContext, id: string) {
+  assertCan(ctx, "edit", "manuscript");
   await getSeries(ctx, id);
   await db.series.update({ where: { id }, data: { deletedAt: new Date() } });
 }
@@ -218,6 +221,7 @@ async function seriesSiblings(seriesId: string, excludeBookId?: string) {
 }
 
 export async function createBook(ctx: AuthorContext, input: NewBookInput) {
+  assertCan(ctx, "edit", "manuscript");
   const data = newBookInput.parse(input);
 
   let penNameId: string;
@@ -261,6 +265,7 @@ export async function createBook(ctx: AuthorContext, input: NewBookInput) {
  * data move with it after review.
  */
 export async function updateBook(ctx: AuthorContext, id: string, input: BookInput) {
+  assertCan(ctx, "edit", "manuscript");
   const data = bookInput.parse(input);
   const book = await getBook(ctx, id);
   if (data.penNameId && data.penNameId !== book.penName.id) {
@@ -279,7 +284,6 @@ export async function updateBook(ctx: AuthorContext, id: string, input: BookInpu
       description: data.description ?? null,
       status: data.status,
       targetWordCount: data.targetWordCount,
-      ...(data.dueOn !== undefined && { dueOn: data.dueOn ? toDbDate(data.dueOn) : null }),
       ...(data.tropes !== undefined && { tropes: data.tropes }),
       ...(data.heatLevel !== undefined && { heatLevel: data.heatLevel }),
     },
@@ -287,35 +291,153 @@ export async function updateBook(ctx: AuthorContext, id: string, input: BookInpu
 }
 
 /**
- * Puts a book into a series of the same pen name (at the end), or makes it
- * standalone (`seriesId: null`; it keeps its pen name). Joining a series of
- * another pen name would move the book's story data between identities, so
- * the author first changes the book's pen name (with its impact review).
+ * What changing a book's series affects (Change Impact). Leaving a series
+ * (to stand alone or to join another one of the same pen name) takes the
+ * book out of that series' structures: beats planned for this book stop
+ * being planned for a book (they stay in the series arc), and this book's
+ * scenes are no longer placed on the series' beats (the scenes stay).
+ * Characters of the series who appear in its scenes block the change.
  */
-export async function setBookSeries(ctx: AuthorContext, id: string, seriesId: string | null) {
+async function seriesChangePlan(ctx: AuthorContext, id: string, seriesId: string | null) {
   const book = await getBook(ctx, id);
-  if (book.seriesId === seriesId) return;
-
-  if (seriesId === null) {
-    await assertNoSeriesCharacters(id, book.seriesId!);
-    await db.book.update({ where: { id }, data: { seriesId: null, seriesPosition: null } });
-    return;
-  }
-  const series = await requireVisibleSeries(ctx, seriesId);
-  if (series.penNameId !== book.penName.id) {
+  const target = seriesId
+    ? {
+        ...(await requireVisibleSeries(ctx, seriesId)),
+        title: (await db.series.findUniqueOrThrow({ where: { id: seriesId } })).title,
+      }
+    : null;
+  if (target && target.penNameId !== book.penName.id) {
     throw new RuleError(
       "That series belongs to another pen name. Change this book’s pen name first, so you can review what moves with it.",
     );
   }
-  if (book.seriesId) await assertNoSeriesCharacters(id, book.seriesId);
-  await db.book.update({
-    where: { id },
-    data: { seriesId, seriesPosition: positionAtEnd(await seriesSiblings(seriesId)) },
+  const from = book.seriesId
+    ? await db.series.findUniqueOrThrow({
+        where: { id: book.seriesId },
+        select: { id: true, title: true },
+      })
+    : null;
+  const leaving = from && from.id !== seriesId ? from : null;
+  const [plannedBeats, placements, strandedCharacters] = leaving
+    ? await Promise.all([
+        db.outlineBeat.findMany({
+          where: { workspaceId: ctx.workspaceId, bookId: id, outline: { seriesId: leaving.id } },
+          select: { id: true, title: true, outline: { select: { id: true, title: true } } },
+        }),
+        db.beatScene.findMany({
+          where: {
+            workspaceId: ctx.workspaceId,
+            scene: { bookId: id },
+            beat: { outline: { seriesId: leaving.id } },
+          },
+          select: {
+            beatId: true,
+            sceneId: true,
+            beat: { select: { title: true, outline: { select: { id: true, title: true } } } },
+            scene: { select: { title: true } },
+          },
+        }),
+        db.character.findMany({
+          where: {
+            workspaceId: ctx.workspaceId,
+            seriesId: leaving.id,
+            node: {
+              outgoing: { some: { kind: "appears_in", target: { scene: { bookId: id } } } },
+            },
+          },
+          select: { id: true, name: true },
+        }),
+      ])
+    : [[], [], []];
+  const action = !seriesId
+    ? `Make “${book.title}” a standalone book?`
+    : from
+      ? `Move “${book.title}” to “${target!.title}”?`
+      : `Add “${book.title}” to “${target!.title}”?`;
+  const report = buildReport({
+    title: action,
+    description: leaving
+      ? `The book leaves “${leaving.title}”, so it leaves that series’ structures. The beats and scenes themselves stay.`
+      : "The book joins the series. Nothing else changes.",
+    groups: [
+      {
+        key: "PLANNED_BEATS",
+        label: `Beats of “${leaving?.title ?? ""}” planned for this book`,
+        noun: { one: "beat", many: "beats" },
+        effect: "No longer planned for a book; they stay in the series arc",
+        items: plannedBeats.map((b) => ({
+          id: b.id,
+          title: `${b.outline.title} › ${b.title}`,
+          href: `/structure/${b.outline.id}`,
+        })),
+      },
+      {
+        key: "PLACEMENTS",
+        label: "Scenes placed on the series’ beats",
+        noun: { one: "beat placement", many: "beat placements" },
+        effect: "Removed; the scenes stay in the book",
+        items: placements.map((p) => ({
+          id: `${p.beatId}|${p.sceneId}`,
+          title: `${p.scene.title} on ${p.beat.outline.title} › ${p.beat.title}`,
+          href: `/structure/${p.beat.outline.id}`,
+        })),
+      },
+    ],
+    blockers: strandedCharacters.map((c) => ({
+      title: c.name,
+      href: `/characters/${c.id}`,
+      reason: `${c.name} belongs to “${leaving!.title}” and appears in this book’s scenes. Remove them from those scenes, or keep the book in the series.`,
+    })),
+    extra: [id, seriesId],
+  });
+  return { book, report, plannedBeats, placements };
+}
+
+/** "What will this affect?" for changing a book's series (null = standalone). */
+export async function previewBookSeries(ctx: AuthorContext, id: string, seriesId: string | null) {
+  return (await seriesChangePlan(ctx, id, seriesId)).report;
+}
+
+/**
+ * Puts a book into a series of the same pen name (at the end), or makes it
+ * standalone (`seriesId: null`; it keeps its pen name). Joining a series of
+ * another pen name would move the book's story data between identities, so
+ * the author first changes the book's pen name (with its impact review).
+ * Leaving a series goes through Change Impact: `token` is the reviewed
+ * report's; without it, a change that affects structures is refused.
+ */
+export async function setBookSeries(
+  ctx: AuthorContext,
+  id: string,
+  seriesId: string | null,
+  token?: string,
+) {
+  assertCan(ctx, "edit", "manuscript");
+  const { book, report, plannedBeats, placements } = await seriesChangePlan(ctx, id, seriesId);
+  if (book.seriesId === seriesId) return;
+  assertReviewed(report, token);
+  await db.$transaction(async (tx) => {
+    if (plannedBeats.length)
+      await tx.outlineBeat.updateMany({
+        where: { id: { in: plannedBeats.map((b) => b.id) } },
+        data: { bookId: null },
+      });
+    for (const p of placements)
+      await tx.beatScene.delete({
+        where: { beatId_sceneId: { beatId: p.beatId, sceneId: p.sceneId } },
+      });
+    await tx.book.update({
+      where: { id },
+      data: seriesId
+        ? { seriesId, seriesPosition: positionAtEnd(await seriesSiblings(seriesId)) }
+        : { seriesId: null, seriesPosition: null },
+    });
   });
 }
 
 /** Reorders a book within its series: place it after `afterBookId` (null = first). */
 export async function moveBookInSeries(ctx: AuthorContext, id: string, afterBookId: string | null) {
+  assertCan(ctx, "edit", "manuscript");
   const book = await getBook(ctx, id);
   if (!book.seriesId) throw new RuleError("Only books in a series have an order.");
   const plan = planInsertAfter(await seriesSiblings(book.seriesId, id), afterBookId);
@@ -329,25 +451,7 @@ export async function moveBookInSeries(ctx: AuthorContext, id: string, afterBook
 }
 
 export async function trashBook(ctx: AuthorContext, id: string) {
+  assertCan(ctx, "edit", "manuscript");
   await getBook(ctx, id);
   await db.book.update({ where: { id }, data: { deletedAt: new Date() } });
-}
-
-/**
- * A series' characters appear only in that series' books. A book that still
- * has them in its scenes can't leave the series without stranding them.
- */
-async function assertNoSeriesCharacters(bookId: string, seriesId: string) {
-  const count = await db.connection.count({
-    where: {
-      kind: "appears_in",
-      source: { character: { seriesId } },
-      target: { scene: { bookId } },
-    },
-  });
-  if (count > 0) {
-    throw new RuleError(
-      "Characters of this series appear in this book’s scenes, so it can’t leave the series. Remove them from its scenes first.",
-    );
-  }
 }

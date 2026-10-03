@@ -6,6 +6,7 @@ import { db } from "@/lib/db";
 import { ConflictError, RuleError } from "@/lib/errors";
 import { formatCount } from "@/lib/format";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import { applyPlan } from "./apply";
 import { ImportFileError } from "./errors";
@@ -72,6 +73,7 @@ export async function reviewImport(
   file: ImportFile,
   input: ImportOptionsInput = {},
 ): Promise<ImportReview> {
+  assertCan(ctx, "manage", "workspace");
   const options = importOptions.parse(input);
   const empty = { counts: [], conflicts: [], adjustments: [], canImport: false, token: null };
   let parsed;
@@ -127,6 +129,7 @@ export async function runImport(
   file: ImportFile,
   input: ImportOptionsInput & { token: string },
 ): Promise<ImportResult> {
+  assertCan(ctx, "manage", "workspace");
   const options = importOptions.parse(input);
   const { bundle } = read(file);
   return db.$transaction(

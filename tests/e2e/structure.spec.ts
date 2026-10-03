@@ -72,6 +72,8 @@ test.describe("story structure", () => {
     await expect(custom.getByText("~30%")).toBeVisible();
     await page.getByRole("button", { name: "Actions for Storm strands them" }).click();
     await page.getByRole("menuitem", { name: "Remove beat" }).click();
+    const review = page.getByRole("dialog", { name: "Remove the beat “Storm strands them”?" });
+    await review.getByRole("button", { name: "Remove beat" }).click();
     await expect(custom).toHaveCount(0);
 
     // The scene shows both beats, and is still one scene.

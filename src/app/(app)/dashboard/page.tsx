@@ -9,7 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { availabilityLabel, navigation } from "@/config/navigation";
 import { formatDay } from "@/lib/dates";
 import { formatDateTime, formatNumber, formatWords } from "@/lib/format";
-import { upcoming } from "@/modules/calendar";
+import { deadlinesFor, upcoming } from "@/modules/calendar";
 import { listLibrary } from "@/modules/library";
 import { listRecentScenes } from "@/modules/manuscript";
 import { getActivePenName } from "@/modules/pen-names";
@@ -29,7 +29,7 @@ export default async function DashboardPage() {
     getActivePenName(ctx),
     listRecentScenes(ctx, { penNameId }),
     writingStats(ctx, { days: 30 }),
-    bookPace(ctx, { penNameId }),
+    deadlinesFor(ctx).then((deadlines) => bookPace(ctx, { penNameId, deadlines })),
     listLibrary(ctx, { penNameId }),
   ]);
   const soon = await upcoming(ctx, { from: stats.today, days: 7, penNameId });

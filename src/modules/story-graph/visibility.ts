@@ -40,7 +40,25 @@ export const liveIdea = { deletedAt: null } satisfies Prisma.IdeaWhereInput;
 
 export const liveTask = { deletedAt: null } satisfies Prisma.TaskWhereInput;
 
-export const liveEvent = { deletedAt: null } satisfies Prisma.CalendarEventWhereInput;
+/**
+ * An event is visible when it isn't trashed and, for a date that belongs to
+ * another object (a book's deadline), while that object is visible.
+ */
+export const liveEvent = {
+  deletedAt: null,
+  OR: [
+    { subjectId: null },
+    {
+      subject: {
+        OR: [
+          { book: { is: liveBook } },
+          { series: { is: liveSeries } },
+          { penName: { isNot: null } },
+        ],
+      },
+    },
+  ],
+} satisfies Prisma.CalendarEventWhereInput;
 
 /** A structure is visible when its book (or series) and its owner are. */
 export const liveOutline = {

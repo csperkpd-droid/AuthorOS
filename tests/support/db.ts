@@ -53,3 +53,8 @@ export async function createAuthor(name = "Test Author") {
   const membership = await ensurePersonalWorkspace(user);
   return { userId: user.id, ...membership };
 }
+
+/** A pen-name story node, for creating pen names directly in tests. */
+export async function penNode(workspaceId: string) {
+  return db.storyNode.create({ data: { workspaceId, kind: "PEN_NAME" }, select: { id: true } });
+}

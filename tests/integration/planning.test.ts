@@ -7,7 +7,9 @@ import {
   calendarMonth,
   calendarRange,
   createEvent,
+  deadlinesFor,
   getEvent,
+  setDeadline,
   trashEvent,
 } from "@/modules/calendar";
 import { listConnections } from "@/modules/connections";
@@ -116,18 +118,12 @@ describe("tasks", () => {
 describe("calendar", () => {
   it("merges events, task due dates, book deadlines and words written per day", async () => {
     const book = await createBook(ctx, { title: "Harbour Lights" });
-    await updateBook(ctx, book.id, {
-      title: "Harbour Lights",
-      targetWordCount: null,
-      dueOn: "2026-10-15",
-    });
+    await updateBook(ctx, book.id, { title: "Harbour Lights", targetWordCount: null });
+    await setDeadline(ctx, book.id, "2026-10-15");
     const rose = await createPenName(ctx, { name: "Rose" });
     const roseBook = await createBook(ctx, { title: "Rose book", penNameId: rose.id });
-    await updateBook(ctx, roseBook.id, {
-      title: "Rose book",
-      targetWordCount: null,
-      dueOn: "2026-10-15",
-    });
+    await updateBook(ctx, roseBook.id, { title: "Rose book", targetWordCount: null });
+    await setDeadline(ctx, roseBook.id, "2026-10-15");
     const conf = await createEvent(ctx, {
       title: "Writers' conference",
       startsOn: "2026-10-14",
@@ -286,11 +282,8 @@ describe("writing progress", () => {
   it("paces books against their deadlines", async () => {
     const todayDate = localDate("UTC");
     const book = await createBook(ctx, { title: "On deadline" });
-    await updateBook(ctx, book.id, {
-      title: "On deadline",
-      targetWordCount: "1000",
-      dueOn: addDays(todayDate, 10),
-    });
+    await updateBook(ctx, book.id, { title: "On deadline", targetWordCount: "1000" });
+    await setDeadline(ctx, book.id, addDays(todayDate, 10));
     const scene = await sceneIn(book.id);
     await saveSceneContent(ctx, {
       sceneId: scene,
@@ -298,14 +291,11 @@ describe("writing progress", () => {
       baseVersion: 0,
     });
     const late = await createBook(ctx, { title: "Overdue" });
-    await updateBook(ctx, late.id, {
-      title: "Overdue",
-      targetWordCount: "500",
-      dueOn: addDays(todayDate, -1),
-    });
+    await updateBook(ctx, late.id, { title: "Overdue", targetWordCount: "500" });
+    await setDeadline(ctx, late.id, addDays(todayDate, -1));
     await createBook(ctx, { title: "No target" });
 
-    const pace = await bookPace(ctx, { penNameId: null });
+    const pace = await bookPace(ctx, { penNameId: null, deadlines: await deadlinesFor(ctx) });
     expect(pace.map((p) => [p.title, p.status])).toEqual([
       ["Overdue", "overdue"],
       ["On deadline", "behind"],

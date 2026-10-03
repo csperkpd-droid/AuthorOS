@@ -3,6 +3,7 @@ export {
   createPart,
   createScene,
   dissolvePart,
+  previewDissolvePart,
   getBookTree,
   moveChapter,
   movePart,

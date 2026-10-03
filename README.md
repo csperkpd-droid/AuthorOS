@@ -6,7 +6,7 @@ relationships, story structure, romance planning, notes, tasks and more.
 **Principles:** authors stay in control · AI suggests, never changes ·
 everything is connected · built to grow.
 
-> **Status:** the MVP is complete, plus Milestone 6 (JSON import, search languages, relationship roles). An architecture checkpoint precedes v1.1. See [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status:** the MVP is complete, plus Milestone 6 (JSON import, search languages, relationship roles) and Milestone 7 (Foundations: Story Object Registry, authorization, one model for dates, Story Graph integrity). See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Documentation
 

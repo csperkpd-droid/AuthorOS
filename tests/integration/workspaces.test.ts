@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { listPenNames } from "@/modules/pen-names";
 import { ensurePersonalWorkspace, findPrimaryMembership } from "@/modules/workspaces";
 
-import { createUser, resetDatabase } from "../support/db";
+import { createUser, penNode, resetDatabase } from "../support/db";
 
 beforeEach(resetDatabase);
 
@@ -67,11 +67,15 @@ describe("pen name constraints", () => {
     const { workspaceId } = await ensurePersonalWorkspace(user);
 
     await expect(
-      db.penName.create({ data: { workspaceId, name: "Second", isDefault: true } }),
+      db.penName.create({
+        data: { id: (await penNode(workspaceId)).id, workspaceId, name: "Second", isDefault: true },
+      }),
     ).rejects.toThrow();
 
     // Non-default pen names are unrestricted (multiple identities).
-    await db.penName.create({ data: { workspaceId, name: "J. A. Mystery" } });
+    await db.penName.create({
+      data: { id: (await penNode(workspaceId)).id, workspaceId, name: "J. A. Mystery" },
+    });
     expect(await db.penName.count({ where: { workspaceId } })).toBe(2);
   });
 

@@ -5,7 +5,7 @@
 export class DomainError extends Error {
   constructor(
     message: string,
-    readonly code: "NOT_FOUND" | "CONFLICT" | "INVALID",
+    readonly code: "NOT_FOUND" | "CONFLICT" | "INVALID" | "FORBIDDEN",
   ) {
     super(message);
     this.name = "DomainError";
@@ -29,5 +29,12 @@ export class ConflictError extends DomainError {
 export class RuleError extends DomainError {
   constructor(message: string) {
     super(message, "INVALID");
+  }
+}
+
+/** The author's role doesn't allow this (checked by `assertCan`, server/policy.ts). */
+export class ForbiddenError extends DomainError {
+  constructor(message = "You don’t have permission to do that in this workspace.") {
+    super(message, "FORBIDDEN");
   }
 }

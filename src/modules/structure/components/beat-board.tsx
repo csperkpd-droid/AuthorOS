@@ -19,12 +19,14 @@ import { Select } from "@/components/ui/select";
 import { SortableList } from "@/components/ui/sortable-list";
 import { Textarea } from "@/components/ui/textarea";
 import { useAction } from "@/hooks/use-action";
+import { ImpactDialog } from "@/modules/impact/ui";
 import { cn } from "@/lib/utils";
 
 import {
   addBeatAction,
   assignSceneAction,
   deleteBeatAction,
+  previewDeleteBeatAction,
   moveBeatAction,
   unassignSceneAction,
   updateBeatAction,
@@ -181,7 +183,8 @@ function BeatCard({
 }) {
   const assign = useAction(assignSceneAction);
   const unassign = useAction(unassignSceneAction);
-  const remove = useAction(deleteBeatAction);
+  // Removing a beat is reviewed first: its scene placements go (Change Impact).
+  const [removing, setRemoving] = useState(false);
   const series = books.length > 1;
   const available = bookScenes.filter((s) => !beat.scenes.some((p) => p.id === s.id));
   const placed = beat.scenes.length > 0;
@@ -265,7 +268,7 @@ function BeatCard({
               </li>
             )}
           </ul>
-          <FormError message={assign.error ?? unassign.error ?? remove.error} />
+          <FormError message={assign.error ?? unassign.error} />
         </div>
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
@@ -283,12 +286,20 @@ function BeatCard({
               <Pencil />
               Edit beat
             </DropdownMenuItem>
-            <DropdownMenuItem destructive onSelect={() => remove.run(beat.id)}>
+            <DropdownMenuItem destructive onSelect={() => setRemoving(true)}>
               <Trash2 />
               Remove beat
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <ImpactDialog
+          open={removing}
+          onOpenChange={setRemoving}
+          title={`Remove the beat “${beat.title}”?`}
+          loadReport={() => previewDeleteBeatAction(beat.id)}
+          onConfirm={(token) => deleteBeatAction(beat.id, token)}
+          confirmLabel="Remove beat"
+        />
       </div>
     </article>
   );

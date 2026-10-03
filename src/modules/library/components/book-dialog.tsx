@@ -12,7 +12,9 @@ import { Textarea } from "@/components/ui/textarea";
 import { BookStatus, HeatLevel } from "@/generated/prisma/enums";
 import { useAction } from "@/hooks/use-action";
 
-import { createBookAction, updateBookAction } from "../actions";
+import { ImpactReview, type ImpactReport } from "@/modules/impact/ui";
+
+import { createBookAction, previewBookSeriesAction, updateBookAction } from "../actions";
 import { BOOK_STATUS_LABELS, HEAT_LEVEL_LABELS, TROPE_SUGGESTIONS } from "../labels";
 
 type Option = { id: string; name: string };
@@ -27,7 +29,8 @@ export type EditableBook = {
   targetWordCount: number | null;
   tropes: string[];
   heatLevel: HeatLevel | null;
-  dueOn: Date | null;
+  /** The book's deadline ("YYYY-MM-DD"), a calendar entry about the book. */
+  dueOn: string | null;
   seriesId: string | null;
   penName: { id: string; name: string };
 };
@@ -56,6 +59,8 @@ export function BookDialog({
   const [seriesId, setSeriesId] = useState(book?.seriesId ?? defaultSeriesId ?? "");
   const create = useAction(createBookAction);
   const update = useAction(updateBookAction);
+  // Leaving a series is reviewed before saving (Change Impact).
+  const [review, setReview] = useState<{ report: ImpactReport; formData: FormData } | null>(null);
   const pending = create.pending || update.pending;
   const error = create.error ?? update.error;
   const series = seriesOptions.find((s) => s.id === seriesId);
@@ -79,15 +84,46 @@ export function BookDialog({
         if (!o) {
           create.setError(null);
           update.setError(null);
+          setReview(null);
         }
       }}
     >
       <DialogTrigger asChild>{trigger}</DialogTrigger>
-      <DialogContent title={book ? "Book details" : "New book"}>
+      <DialogContent title={review ? review.report.title : book ? "Book details" : "New book"}>
+        {review && book && (
+          <ImpactReview
+            report={review.report}
+            confirmLabel="Save"
+            pending={update.pending}
+            error={update.error}
+            onCancel={() => setReview(null)}
+            onConfirm={async () => {
+              review.formData.set("seriesToken", review.report.token);
+              if ((await update.run(book.id, review.formData)).ok) setOpen(false);
+            }}
+          />
+        )}
         <form
+          hidden={Boolean(review)}
           className="space-y-4"
           action={async (formData) => {
             if (book) {
+              const nextSeries = String(formData.get("seriesId") ?? "") || null;
+              if (nextSeries !== book.seriesId) {
+                const preview = await previewBookSeriesAction(book.id, nextSeries);
+                if (!preview.ok) {
+                  update.setError(preview.error);
+                  return;
+                }
+                const affects =
+                  preview.data.blockers.length > 0 ||
+                  preview.data.groups.some((g) => g.affected && g.count > 0);
+                if (affects) {
+                  setReview({ report: preview.data, formData });
+                  return;
+                }
+                formData.set("seriesToken", preview.data.token);
+              }
               if ((await update.run(book.id, formData)).ok) setOpen(false);
               return;
             }
@@ -173,7 +209,7 @@ export function BookDialog({
                   id={`${id}-due`}
                   name="dueOn"
                   type="date"
-                  defaultValue={book.dueOn ? book.dueOn.toISOString().slice(0, 10) : ""}
+                  defaultValue={book.dueOn ?? ""}
                   className="w-48"
                 />
               </Field>

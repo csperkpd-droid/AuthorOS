@@ -28,7 +28,7 @@ test.describe("Milestone 4", () => {
   test("a series-long romance arc spans books and shows in the Romance Center", async ({
     page,
   }) => {
-    test.slow();
+    test.setTimeout(180_000);
     await page.goto("/library");
     await page.getByRole("button", { name: "New series" }).click();
     const seriesDialog = page.getByRole("dialog", { name: "New series" });
@@ -112,6 +112,24 @@ test.describe("Milestone 4", () => {
     await expect(
       page.getByRole("list", { name: "Templates" }).first().getByText("Slow-burn duet"),
     ).toBeVisible();
+
+    // Ember leaves the series: reviewed first, nothing orphaned.
+    await page.goto(seriesUrl);
+    await page.getByRole("link", { name: /Ember/ }).first().click();
+    await expect(page.getByRole("heading", { level: 1, name: "Ember" })).toBeVisible();
+    const details = page.getByRole("dialog", { name: "Book details" });
+    await expect(async () => {
+      await page.getByRole("button", { name: "Details" }).click();
+      await expect(details).toBeVisible({ timeout: 2000 });
+    }).toPass();
+    await details.getByLabel("Series").selectOption({ label: "Standalone (no series)" });
+    await details.getByRole("button", { name: "Save" }).click();
+    const review = page.getByRole("dialog", { name: "Make “Ember” a standalone book?" });
+    await expect(review).toContainText("This will affect 2 items: 1 beat, 1 beat placement.");
+    await review.getByRole("button", { name: "Save" }).click();
+    await expect(review).toBeHidden();
+    await page.goto(arcUrl);
+    await expect(page.getByRole("article", { name: "Meet" })).toContainText("Not placed");
   });
 
   test("changing a book's pen name reviews and moves its story data", async ({ page }) => {

@@ -6,6 +6,7 @@ import { connect } from "@/modules/connections";
 import { createBook } from "@/modules/library";
 import { createStoryNode, liveIdea } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import { ideaInput, type IdeaInput } from "./schemas";
 
@@ -32,6 +33,7 @@ export async function getIdea(ctx: AuthorContext, id: string) {
 }
 
 export async function createIdea(ctx: AuthorContext, input: IdeaInput) {
+  assertCan(ctx, "edit", "storyBible");
   const data = ideaInput.parse(input);
   return db.$transaction(async (tx) => {
     const id = await createStoryNode(tx, ctx.workspaceId, "IDEA");
@@ -49,6 +51,7 @@ export async function createIdea(ctx: AuthorContext, input: IdeaInput) {
 }
 
 export async function updateIdea(ctx: AuthorContext, id: string, input: IdeaInput) {
+  assertCan(ctx, "edit", "storyBible");
   const data = ideaInput.parse(input);
   await getIdea(ctx, id);
   await db.idea.update({
@@ -66,6 +69,7 @@ export async function updateIdea(ctx: AuthorContext, id: string, input: IdeaInpu
  * connected back to the idea ("Inspired") and the idea is marked used.
  */
 export async function promoteIdeaToBook(ctx: AuthorContext, id: string) {
+  assertCan(ctx, "edit", "storyBible");
   const idea = await getIdea(ctx, id);
   const book = await createBook(ctx, { title: idea.title, description: idea.body ?? "" });
   await connect(ctx, { sourceId: idea.id, targetId: book.id, kind: "inspired" });
@@ -74,6 +78,7 @@ export async function promoteIdeaToBook(ctx: AuthorContext, id: string) {
 }
 
 export async function trashIdea(ctx: AuthorContext, id: string) {
+  assertCan(ctx, "edit", "storyBible");
   await getIdea(ctx, id);
   await db.idea.update({ where: { id }, data: { deletedAt: new Date() } });
 }

@@ -1,10 +1,9 @@
 import "server-only";
 
 import { Prisma } from "@/generated/prisma/client";
-import type { StoryNodeKind } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { searchConfigFor } from "@/lib/languages";
-import { resolveNodes, searchNodes, type NodeSummary } from "@/modules/story-graph";
+import { kindsWhere, resolveNodes, searchNodes, type NodeSummary } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 
 /**
@@ -31,16 +30,8 @@ export type SearchResult = {
   snippet: string | null;
 };
 
-const TITLE_KINDS: StoryNodeKind[] = [
-  "SERIES",
-  "BOOK",
-  "PART",
-  "CHAPTER",
-  "RELATIONSHIP",
-  "OUTLINE",
-  "TASK",
-  "EVENT",
-];
+/** Kinds matched by title (the others by full text), from the Story Object Registry. */
+const TITLE_KINDS = kindsWhere((t) => t.search === "title");
 
 const WORD = /[\p{L}\p{N}]+/gu;
 

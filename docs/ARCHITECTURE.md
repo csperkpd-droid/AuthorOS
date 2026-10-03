@@ -3,7 +3,7 @@
 AuthorOS is a **modular monolith**: one Next.js application, one PostgreSQL
 database, with the code split into domain modules that have strict boundaries.
 
-> Status: Milestone 6 (Import Engine, search languages, relationship roles). Sections marked
+> Status: Milestone 7 (Foundations: Story Object Registry, authorization, one model for dates, connectable pen names, Change Impact gaps, Story Graph integrity audit). Sections marked
 > _planned_ describe the agreed design for later milestones so that early code
 > doesn't block it.
 
@@ -176,10 +176,37 @@ Following Next.js 16 guidance, checks happen close to the data, not in layouts:
 Layouts fetch the user only to render the shell (layouts don't re-run on
 client navigation, so they can't be the security boundary).
 
-**Roles.** `WorkspaceMember.role` (OWNER / EDITOR / VIEWER) exists now. In the
-single-author MVP everyone is OWNER and no role checks are needed.
-Collaboration later adds a `can(ctx, action)` policy helper in `server/` that
-services call before writes.
+4. **Policy (M7).** Every service that changes author data calls
+   `assertCan(ctx, action, area)` (`src/server/policy.ts`) as its first
+   statement, so no route, page, action or future API can skip it. A test
+   (`tests/integration/authorization.test.ts`) calls every exported write
+   service of every module as a viewer and requires a refusal before
+   anything happens; a new write service fails the build until it checks.
+
+**Roles and grants.** Actions are `view`, `comment`, `suggest`, `edit` and
+`manage`; areas are the registry's (`identity`, `manuscript`, `storyBible`,
+`structure`, `planning`) plus `workspace`. `manage` covers workspace-level
+and irreversible operations: pen names, deleting forever, emptying the
+Trash, imports, the JSON backup, identity moves, deleting shared
+definitions (fields, templates).
+
+| Role   | Grants                                                                                  |
+| ------ | --------------------------------------------------------------------------------------- |
+| OWNER  | everything                                                                              |
+| EDITOR | view, comment, suggest, edit in every story area; view pen names and workspace settings |
+| VIEWER | view                                                                                    |
+
+Members are owners today. Co-authors, editors, beta readers and ARC
+readers join by granting, not by changing services: `can()` already takes a
+resource (`{ kind, id }`) for per-book sharing. Personal preferences
+(Writing as, daily goal, time zone) need no role. Reads are scoped by
+membership; resource-level read grants arrive with sharing.
+
+**Collaboration direction.** Comments, suggestions, controlled edits with
+review, and granular permissions, on the current storage model (whole
+ProseMirror documents with optimistic versions). Live co-editing would need
+a different text-storage architecture (a CRDT per document) and is only
+introduced as an explicit product decision.
 
 ## Multi-tenancy and identities
 
@@ -274,11 +301,28 @@ the item, its descendants and their revisions.
 
 ## Story Graph and Universal Connections
 
-**Identity.** Every story object (series, book, part, chapter, scene,
-character, relationship, outline, note, idea) has a row in `story_nodes`, and its
-typed row uses that id as its primary key, enforced by a composite foreign
-key and a kind-checking trigger. A trigger deletes the node when the typed
-row is deleted.
+**Identity.** Every story object (pen name, series, book, part, chapter,
+scene, character, relationship, structure, note, idea, task, event) has a
+row in `story_nodes`, and its typed row uses that id as its primary key,
+enforced by a composite foreign key and a kind-checking trigger. A trigger
+deletes the node when the typed row is deleted. Pen names joined in M7, so
+they can be connected like any object (a marketing task concerns a pen
+name; a note is about it); they are archived, never trashed.
+
+**The Story Object Registry (M7)** is the authoritative definition of every
+kind (`story-graph/kinds.ts`, client-safe): display names, area
+(authorization), identity rule (own column, via its book, via its members,
+via its owner, itself, or shared), place in the structural hierarchy,
+whether it owns structures or is placed on beats, connectable, custom-field
+eligible, searched by text or title, versioned, Trash or archive lifecycle,
+whether it moves with its identity (Change Impact), whether it can have
+dates, its table and its key in the export/import bundle. Its server half
+(`story-graph/adapters.ts`) has one adapter per kind: the loader (visible
+objects, by ids, title or identity) and the Trash operations (list, check,
+restore). Both are typed `Record<StoryNodeKind, …>`, so a missing kind is a
+compile error. The resolver, pickers, Trash, search, connections, custom
+fields, Change Impact, authorization, export, integrity check and import
+read the registry instead of keeping their own lists.
 
 **Structure stays explicit.** Book → Part → Chapter → Scene, a series' books,
 a relationship's members and a book's pen name are dedicated foreign
@@ -306,17 +350,31 @@ connection against it; the UI builds the "Connect" picker from it.
 | `related`     | any ↔ any (undirected) | Related to                         |                                                   |
 
 **Resolution.** `story-graph/resolve.ts` turns node ids into summaries
-(kind, title, context, link) with one loader per kind, each applying that
-kind's visibility rule (`story-graph/visibility.ts`: nothing trashed, nothing
+(kind, title, context, link) with the registry's adapter per kind, each
+applying that kind's visibility rule (`story-graph/visibility.ts`: nothing trashed, nothing
 inside something trashed). Connections to hidden objects are skipped, not
 deleted, so restoring brings them back. The same loaders power cross-kind
 search for the picker.
 
-**Adding a new object type** (e.g. Location): add the node kind and the
-table (with the two triggers), a resolver case (the switch is exhaustive, so
-TypeScript flags every place to update, including the Trash), and allow it
-in the registry kinds it should join. The Connections panel, picker, Trash
-and backlinks then work for it without new UI.
+**Adding a new object type** (e.g. a timeline event or a location): the
+enum value; its table with the two node triggers; one registry entry; one
+adapter (load, Trash); its bundle columns (export, `imports/bundle.ts`,
+plan/apply). TypeScript flags every missing piece; the integrity test
+(below) then checks it is found, searched, connected, exported, imported,
+trashed, restored and deleted with Change Impact. The Connections panel,
+picker, Trash, search and backlinks work without new UI.
+
+**Integrity audit (M7).** `auditGraph(ctx)` (`story-graph/audit.ts`,
+read-only) checks a workspace for what foreign keys can't express: nodes
+without their row, connections across pen names, series characters
+appearing outside their series, books or characters in a series of another
+pen name, relationships joining pen names, structure owners of another pen
+name, series beats planned for books outside the series, scenes placed on
+beats outside their structure, field values on the wrong kind, deadlines
+on objects that can't have dates, relationships with fewer than two
+members. `tests/integration/story-graph-integrity.test.ts` runs every kind
+in the registry through every capability it claims and requires a clean
+audit after each.
 
 **Four separate concepts.** (1) _Story objects_ are nodes. (2) _Structural
 objects_ are the manuscript tree (Book → Part → Chapter → Scene, explicit
@@ -406,6 +464,33 @@ Uses so far:
   that will be lost, and how many.
 - **Deleting a template:** kits that include it; structures made from it
   are listed as unchanged (applied templates are independent copies).
+- **A book leaving or changing series (M7):** beats of the old series'
+  structures planned for the book (they stay in the arc, unplanned) and
+  placements of the book's scenes on those beats (removed; the scenes
+  stay). Series characters appearing in the book's scenes block it. Joining
+  a series affects nothing and needs no review.
+- **Removing relationship members (M7):** the members removed, with the
+  roles that go, and the relationship's structures, which continue as the
+  arc of the remaining members. Adding members needs no review.
+- **Removing a beat (M7):** the scenes placed on it (placements go, scenes
+  stay).
+- **Removing a part, keeping its chapters (M7):** the chapters (moved to
+  the book's top level) and what is attached to the part itself (links,
+  field values, dates), via the shared `attachmentsOf()`.
+
+**Never silently (M7).** Applying goes through `assertReviewed(report,
+token)`: refused while there are blockers; refused without a review when
+the change affects anything, whichever path calls the service; refused
+when stale. A change that affects nothing applies directly.
+
+Audited and left as they are (M7): moving to the Trash and restoring
+(reversible); archiving a pen name (hides it from choices, work stays);
+moving chapters and scenes (only within their book); removing a single
+link, a deadline or a placement (the explicit action is the change);
+restoring a version (the current text is saved first); renaming; kit and
+template edits (never touch structures made from them); imports (their own
+review). Changing a character's series is refused while they appear in
+scenes outside the new series, with the count.
 
 First use: **identity moves.** Moving a standalone book (or a series, with
 all its books) to another pen name carries its associated story data: its
@@ -442,6 +527,23 @@ characters). A role belongs to the membership, never to the character:
 Elara can be the Heroine of one romance and the Rival in another. Roles are
 edited in the Members dialog, shown on the relationship page and in the
 Series Romance Center, kept when members change, and exported and imported.
+
+## Dates: one model (M7)
+
+Dates live in one place: calendar entries (`calendar_events`, story nodes).
+An entry is an event of its own (`purpose: EVENT`) or a date that belongs to
+another story object (`DEADLINE`, with `subject_id`; one live deadline per
+object, database-checked). A book's draft deadline is the book's DEADLINE
+entry, never a column on the book: the book page, the book dialog, the
+calendar, the dashboard pace and exports read the same row
+(`calendar.setDeadline` / `deadlinesFor`). Tasks are planner items whose
+due date is their own. Screens are views: the calendar merges entries,
+tasks and words per day; a deadline shows as its object ("Ember due") and
+follows "Writing as". Which kinds can have dates is the registry's `dated`
+(books, series, pen names now; editions and publishing milestones later).
+A deadline goes with its object (deleting the book deletes it; trashing it
+hides it). Recurrence and times with zones belong to the Planner / Life
+Planner roadmap; the model takes them as new columns, not a new table.
 
 ## Planning: tasks, calendar and progress
 
@@ -608,6 +710,18 @@ Revision `source` already distinguishes `AI_ACCEPTED` from author edits.
 - The user reviews a diff and accepts or rejects it. Accepting calls the
   owning module's normal update function with `source: AI_ACCEPTED`, which
   saves a revision first.
+
+## Background work (direction, M7)
+
+Imports, exports and builds run in the request today: imports in one
+transaction (up to 10 minutes), exports streamed as downloads. Nothing
+needs a job system yet, so none is built. The seam is in place: services
+are plain functions of `(ctx, input)` (the import's review and apply are
+already separate, token-checked steps), so a job runner (pg-boss on the same
+Postgres, the planned choice) can call them unchanged, with a job row the
+UI polls and files in object storage. It arrives with the first feature
+that needs it: large archives, formatting builds, EPUB/PDF, media
+processing, publishing packages.
 
 ## Deployment
 

@@ -31,6 +31,17 @@ the suggestion boundary).
 | Pen-name branding, links, publishing accounts | v1.1  | Pen names, archive, assignment and identity switching shipped in M1. |
 | More import sources (Scrivener, Plottr, DOCX) | Later | Import Engine (M6): a source parser produces a Workspace Bundle.     |
 
+## Milestone 7 checklist (Foundations)
+
+- [x] Story Object Registry: one definition per kind (display, area, identity, hierarchy, structure roles, connections, custom fields, search, lifecycle, Change Impact, dates, table, export/import key) with one server adapter per kind; resolver, Trash, search, connections, fields, Change Impact, authorization, export and import read it
+- [x] Authorization close to the data: `assertCan` first in every write service (roles × areas × actions), enforced by a test over every module's exports
+- [x] One model for dates: deadlines are calendar entries about their object; book due dates migrated; book page, calendar and dashboard pace read the same row
+- [x] Pen names are story nodes (connectable, searchable; archived, never trashed)
+- [x] Change Impact: a book leaving or changing series (series beats and placements), removing relationship members, removing a beat, removing a part; never silently (reviewed token required); character series changes refused while appearances would be stranded
+- [x] Story Graph integrity audit: `auditGraph()` plus a registry-driven test of every capability of every kind
+- [x] Export format version 2 with upgrades of version 1 files on import
+- [x] Deferred by decision: background jobs, richer field types, note/idea scopes, repeating tasks/events, live co-editing
+
 ## Milestone 6 checklist
 
 - [x] Import Engine: source registry (AuthorOS JSON available; Scrivener, Plottr, DOCX, EPUB shown as coming later), Workspace Bundle, whole-file validation before anything changes

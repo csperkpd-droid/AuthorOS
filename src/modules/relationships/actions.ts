@@ -5,6 +5,7 @@ import { requireAuthorContext } from "@/server/context";
 
 import {
   createRelationship,
+  previewRelationshipMembers,
   setRelationshipMembers,
   trashRelationship,
   updateRelationship,
@@ -43,8 +44,22 @@ export async function trashRelationshipAction(id: string) {
 export async function setRelationshipMembersAction(
   id: string,
   members: { characterId: string; role: string | null }[],
+  token?: string,
 ) {
-  return runAction(async () => setRelationshipMembers(await requireAuthorContext(), id, members));
+  return runAction(async () =>
+    setRelationshipMembers(await requireAuthorContext(), id, members, token),
+  );
+}
+
+/** "What will this affect?" for changing members. */
+export async function previewRelationshipMembersAction(
+  id: string,
+  members: { characterId: string; role: string | null }[],
+) {
+  return runAction(
+    async () => previewRelationshipMembers(await requireAuthorContext(), id, members),
+    { refresh: false },
+  );
 }
 
 /** Creates the relationship between some members of a group (e.g. one pair). */

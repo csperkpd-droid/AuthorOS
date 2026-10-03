@@ -33,3 +33,10 @@ export type EventInput = z.input<typeof eventInput>;
 
 /** "2026-10" */
 export const monthInput = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/, "Use a month like 2026-10.");
+
+/** A deadline ("YYYY-MM-DD"); empty or null removes it. */
+export const deadlineDate = z
+  .string()
+  .nullish()
+  .transform((v) => (v ? v : null))
+  .refine((v) => v === null || isDateString(v), "Use a valid date.");

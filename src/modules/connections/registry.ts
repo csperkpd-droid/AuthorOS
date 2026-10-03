@@ -1,4 +1,5 @@
 import type { StoryNodeKind } from "@/generated/prisma/enums";
+import { STORY_OBJECT_TYPES } from "@/modules/story-graph/ui";
 
 /**
  * The Universal Connection registry.
@@ -112,8 +113,9 @@ export function getKind(kind: ConnectionKind): ConnectionKindDef {
   return CONNECTION_KINDS[kind];
 }
 
+/** "*" = every kind the Story Object Registry marks connectable. */
 const allows = (set: StoryNodeKind[] | "*", kind: StoryNodeKind) =>
-  set === "*" || set.includes(kind);
+  STORY_OBJECT_TYPES[kind].connectable && (set === "*" || set.includes(kind));
 
 /**
  * Whether `kind` may join these two node kinds. Undirected kinds accept either

@@ -4,9 +4,11 @@ import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { NotFoundError, RuleError } from "@/lib/errors";
 import { planInsertAfter, positionAtEnd, sortByPosition, type Positioned } from "@/lib/ordering";
+import { assertReviewed, attachmentsOf, buildReport } from "@/modules/impact";
 import { getBook } from "@/modules/library";
 import { createStoryNode, purgeStoryNodes } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import { structureTitle } from "./schemas";
 
@@ -231,6 +233,7 @@ async function lockRow(
 
 /** Adds a part at the end of the book's top level. Default title: "Part N". */
 export async function createPart(ctx: AuthorContext, bookId: string, title?: string) {
+  assertCan(ctx, "edit", "manuscript");
   await getBook(ctx, bookId);
   const explicit = title === undefined ? undefined : structureTitle.parse(title);
   return db.$transaction(async (tx) => {
@@ -260,6 +263,7 @@ export async function createChapter(
   bookId: string,
   { title, partId = null }: { title?: string; partId?: string | null } = {},
 ) {
+  assertCan(ctx, "edit", "manuscript");
   await getBook(ctx, bookId);
   if (partId) {
     const part = await requirePart(ctx, partId);
@@ -289,6 +293,7 @@ export async function createChapter(
 
 /** Adds a scene at the end of a chapter. Default title: "Scene N" within the chapter. */
 export async function createScene(ctx: AuthorContext, chapterId: string, title?: string) {
+  assertCan(ctx, "edit", "manuscript");
   const chapter = await requireChapter(ctx, chapterId);
   const explicit = title === undefined ? undefined : structureTitle.parse(title);
   return db.$transaction(async (tx) => {
@@ -312,11 +317,13 @@ export async function createScene(ctx: AuthorContext, chapterId: string, title?:
 // ─── Renaming ───────────────────────────────────────────────────────────────
 
 export async function renamePart(ctx: AuthorContext, id: string, title: string) {
+  assertCan(ctx, "edit", "manuscript");
   await requirePart(ctx, id);
   await db.part.update({ where: { id }, data: { title: structureTitle.parse(title) } });
 }
 
 export async function renameChapter(ctx: AuthorContext, id: string, title: string) {
+  assertCan(ctx, "edit", "manuscript");
   await requireChapter(ctx, id);
   await db.chapter.update({ where: { id }, data: { title: structureTitle.parse(title) } });
 }
@@ -325,6 +332,7 @@ export async function renameChapter(ctx: AuthorContext, id: string, title: strin
 
 /** Moves a part within its book's top level, after `afterId` (a part or chapter; null = first). */
 export async function movePart(ctx: AuthorContext, id: string, afterId: string | null) {
+  assertCan(ctx, "edit", "manuscript");
   const part = await requirePart(ctx, id);
   const plan = planInsertAfter(await bookLevelSiblings(part.bookId, id), afterId);
   const partIds = await partIdsOf(part.bookId);
@@ -343,6 +351,7 @@ export async function moveChapter(
   id: string,
   { partId, afterId }: { partId: string | null; afterId: string | null },
 ) {
+  assertCan(ctx, "edit", "manuscript");
   const chapter = await requireChapter(ctx, id);
   if (partId) {
     const part = await requirePart(ctx, partId);
@@ -366,6 +375,7 @@ export async function moveScene(
   id: string,
   { chapterId, afterId }: { chapterId: string; afterId: string | null },
 ) {
+  assertCan(ctx, "edit", "manuscript");
   const scene = await requireScene(ctx, id);
   const chapter = await requireChapter(ctx, chapterId);
   if (chapter.bookId !== scene.bookId)
@@ -381,8 +391,40 @@ export async function moveScene(
  * Removes a part but keeps its chapters: they move to the book's top level,
  * in order, where the part was.
  */
-export async function dissolvePart(ctx: AuthorContext, id: string) {
+/**
+ * "What will this affect?" for removing a part: its chapters move to the
+ * book's top level; links, field values and dates of the part itself go.
+ */
+export async function previewDissolvePart(ctx: AuthorContext, id: string) {
   const part = await requirePart(ctx, id);
+  const [title, chapters, attached] = await Promise.all([
+    db.part.findUniqueOrThrow({ where: { id }, select: { title: true } }),
+    partSiblings(id),
+    attachmentsOf(ctx, [id]),
+  ]);
+  return buildReport({
+    title: `Remove the part “${title.title}”?`,
+    description: "Its chapters and scenes stay in the book, in the same order.",
+    groups: [
+      {
+        key: "CHAPTERS",
+        label: "Chapters of this part",
+        noun: { one: "chapter", many: "chapters" },
+        effect: "Move to the book’s top level, in order",
+        affected: false,
+        count: chapters.length,
+        items: [],
+      },
+      ...attached,
+    ],
+    extra: [id, part.bookId],
+  });
+}
+
+export async function dissolvePart(ctx: AuthorContext, id: string, token?: string) {
+  assertCan(ctx, "edit", "manuscript");
+  const part = await requirePart(ctx, id);
+  assertReviewed(await previewDissolvePart(ctx, id), token);
   const chapters = sortByPosition(await partSiblings(id));
   const siblings = sortByPosition(await bookLevelSiblings(part.bookId));
   const index = siblings.findIndex((s) => s.id === id);
@@ -425,16 +467,19 @@ async function applyRebalance(
 
 /** Moves a part, with its chapters and scenes, to the Trash. */
 export async function trashPart(ctx: AuthorContext, id: string) {
+  assertCan(ctx, "edit", "manuscript");
   await requirePart(ctx, id);
   await db.part.update({ where: { id }, data: { deletedAt: new Date() } });
 }
 
 export async function trashChapter(ctx: AuthorContext, id: string) {
+  assertCan(ctx, "edit", "manuscript");
   await requireChapter(ctx, id);
   await db.chapter.update({ where: { id }, data: { deletedAt: new Date() } });
 }
 
 export async function trashScene(ctx: AuthorContext, id: string) {
+  assertCan(ctx, "edit", "manuscript");
   await requireScene(ctx, id);
   await db.scene.update({ where: { id }, data: { deletedAt: new Date() } });
 }

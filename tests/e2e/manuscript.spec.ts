@@ -58,6 +58,9 @@ test.describe("desktop writing loop", () => {
 
     // Remove the part but keep its chapter
     await binderMenu(page, "Part 1", "Remove part, keep chapters");
+    const review = page.getByRole("dialog", { name: "Remove the part “Part 1”?" });
+    await expect(review).toContainText("This doesn’t affect anything else.");
+    await review.getByRole("button", { name: "Remove part" }).click();
     await expect(page.getByRole("list", { name: "Chapters in Part 1" })).toHaveCount(0);
     await expect.poll(() => sceneTitles(page, "Chapter 2")).toEqual(["Scene 1"]);
   });

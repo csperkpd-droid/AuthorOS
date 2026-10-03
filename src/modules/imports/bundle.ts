@@ -3,6 +3,7 @@ import { z } from "zod";
 import {
   ArcRole,
   BookStatus,
+  CalendarPurpose,
   CharacterRole,
   FieldType,
   HeatLevel,
@@ -119,6 +120,7 @@ const book = z.object({
     .nullable()
     .optional()
     .transform((v) => v ?? null),
+  /** Version 1 files only: becomes the book's deadline entry (see upgrade.ts). */
   dueOn: optDate,
   ...softDeleted,
 });
@@ -220,6 +222,9 @@ const calendarEvent = z.object({
     .nullable()
     .optional()
     .transform((v) => v ?? null),
+  /** Version 2: a date of its own, or one that belongs to `subjectId` (a deadline). */
+  purpose: z.enum(CalendarPurpose).optional().default("EVENT"),
+  subjectId: ref,
   ...softDeleted,
 });
 
@@ -354,6 +359,8 @@ const contentRevision = z.object({
 });
 
 export const workspaceBundle = z.object({
+  /** Format version of the file (upgraded to the current one after parsing). */
+  version: z.number().int().min(1).max(2),
   /** "standard" backups have no version history; "archive" ones do. */
   kind: z.enum(["standard", "archive"]).optional().default("standard"),
   exportedAt: optDate,

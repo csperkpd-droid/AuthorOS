@@ -3,8 +3,10 @@ import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { ConflictError, NotFoundError, RuleError } from "@/lib/errors";
+import { assertReviewed, buildReport } from "@/modules/impact";
 import { createStoryNode, liveCharacter, liveRelationship } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import { relationshipTitle } from "./labels";
 import {
@@ -106,6 +108,7 @@ const duplicate = (error: unknown) =>
 
 /** Creates a relationship between two or more characters. */
 export async function createRelationship(ctx: AuthorContext, input: NewRelationshipInput) {
+  assertCan(ctx, "edit", "storyBible");
   const data = newRelationshipInput.parse(input);
   if (data.characterIds.length < 2)
     throw new RuleError("Choose at least two different characters.");
@@ -149,17 +152,86 @@ export async function createRelationship(ctx: AuthorContext, input: NewRelations
  * with each member's optional role in it. Members given as plain ids keep
  * their current role.
  */
+type MemberInput = string | { characterId: string; role?: string | null };
+
+/**
+ * "What will this affect?" for changing members. Adding members affects
+ * nothing else; removing members takes them (and their roles) out of the
+ * relationship, and its structures (e.g. a romance arc) continue as the arc
+ * of the remaining members.
+ */
+export async function previewRelationshipMembers(
+  ctx: AuthorContext,
+  id: string,
+  members: MemberInput[],
+) {
+  const current = await getRelationship(ctx, id);
+  const ids = new Set(members.map((m) => (typeof m === "string" ? m : m.characterId)));
+  const removed = current.members.filter((m) => !ids.has(m.id));
+  const remaining = current.members.filter((m) => ids.has(m.id));
+  const arcs = removed.length
+    ? await db.outline.findMany({
+        where: { workspaceId: ctx.workspaceId, relationshipId: id, deletedAt: null },
+        select: { id: true, title: true },
+      })
+    : [];
+  const newNames = await db.character.findMany({
+    where: { id: { in: [...ids] } },
+    select: { name: true },
+  });
+  return buildReport({
+    title: `Change the members of “${current.title}”?`,
+    description: removed.length
+      ? "Removed members leave this relationship; they and their other relationships stay."
+      : "Adding members changes nothing else.",
+    groups: [
+      {
+        key: "REMOVED",
+        label: "Members removed",
+        noun: { one: "member", many: "members" },
+        effect: "Leave the relationship",
+        items: removed.map((m) => ({
+          id: m.id,
+          title: m.name,
+          href: `/characters/${m.id}`,
+          ...(m.role ? { note: `role “${m.role}” removed` } : {}),
+        })),
+      },
+      {
+        key: "ARCS",
+        label: "Structures of this relationship",
+        noun: { one: "structure", many: "structures" },
+        effect: `Continue as the arc of ${relationshipTitle(newNames.map((c) => c.name))}`,
+        items: arcs.map((o) => ({ id: o.id, title: o.title, href: `/structure/${o.id}` })),
+      },
+      {
+        key: "KEPT",
+        label: "Members who stay",
+        noun: { one: "member", many: "members" },
+        effect: "Stay, with their roles",
+        affected: false,
+        items: remaining.map((m) => ({ id: m.id, title: m.name, href: `/characters/${m.id}` })),
+      },
+    ],
+    extra: [id, [...ids].sort()],
+  });
+}
+
 export async function setRelationshipMembers(
   ctx: AuthorContext,
   id: string,
-  members: (string | { characterId: string; role?: string | null })[],
+  members: MemberInput[],
+  /** The reviewed report's token; required when members are removed. */
+  token?: string,
 ) {
+  assertCan(ctx, "edit", "storyBible");
   const list = members.map((m) => (typeof m === "string" ? { characterId: m } : m));
   const characterIds = list.map((m) => m.characterId);
   const ids = [...new Set(characterIds)];
   if (ids.length < 2) throw new RuleError("A relationship needs at least two characters.");
   const current = await getRelationship(ctx, id);
   await requireMembers(ctx, ids);
+  assertReviewed(await previewRelationshipMembers(ctx, id, members), token);
   const roleOf = (characterId: string) => {
     const given = list.find((m) => m.characterId === characterId);
     return given && "role" in given
@@ -263,6 +335,7 @@ export async function setMemberRole(
   characterId: string,
   role: string | null,
 ) {
+  assertCan(ctx, "edit", "storyBible");
   const rel = await getRelationship(ctx, id);
   if (!rel.members.some((m) => m.id === characterId)) throw new NotFoundError("Member");
   await db.relationshipMember.update({
@@ -276,6 +349,7 @@ export async function updateRelationship(
   id: string,
   input: RelationshipDetails,
 ) {
+  assertCan(ctx, "edit", "storyBible");
   const data = relationshipDetails.parse(input);
   await getRelationship(ctx, id);
   await db.relationship.update({
@@ -285,6 +359,7 @@ export async function updateRelationship(
 }
 
 export async function trashRelationship(ctx: AuthorContext, id: string) {
+  assertCan(ctx, "edit", "storyBible");
   await getRelationship(ctx, id);
   await db.relationship.update({ where: { id }, data: { deletedAt: new Date() } });
 }

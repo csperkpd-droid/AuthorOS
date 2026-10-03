@@ -10,9 +10,10 @@ import { getCharacter, listCharacters } from "@/modules/characters";
 import { getBook, getSeries, listLibrary } from "@/modules/library";
 import { getBookTree } from "@/modules/manuscript";
 import { getRelationship, listRelationships, relationshipTitle } from "@/modules/relationships";
-import { buildReport } from "@/modules/impact";
+import { assertReviewed, buildReport } from "@/modules/impact";
 import { createStoryNode, liveOutline, liveScene } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import { STRUCTURE_KIND_LABELS } from "./labels";
 import {
@@ -77,6 +78,7 @@ async function requireOwnTemplate(ctx: AuthorContext, id: string) {
  * keep which book (1st, 2nd…) they were planned for.
  */
 export async function saveAsTemplate(ctx: AuthorContext, outlineId: string, input: TemplateInput) {
+  assertCan(ctx, "edit", "structure");
   const prepared = await prepareTemplate(ctx, outlineId, input);
   return db.$transaction((tx) => prepared.insert(tx));
 }
@@ -134,6 +136,7 @@ export async function prepareTemplate(ctx: AuthorContext, outlineId: string, inp
 }
 
 export async function renameTemplate(ctx: AuthorContext, id: string, input: TemplateInput) {
+  assertCan(ctx, "edit", "structure");
   const data = templateInput.parse(input);
   await requireOwnTemplate(ctx, id);
   await db.structureTemplate.update({
@@ -196,6 +199,7 @@ export async function previewDeleteTemplate(ctx: AuthorContext, id: string) {
  * beats (they were copies); only the "made from" reference is cleared.
  */
 export async function deleteTemplate(ctx: AuthorContext, id: string, token?: string) {
+  assertCan(ctx, "manage", "structure");
   await requireOwnTemplate(ctx, id);
   if (token !== undefined && (await previewDeleteTemplate(ctx, id)).token !== token) {
     throw new ConflictError("Where this template is used changed. Review again.");
@@ -279,6 +283,7 @@ function assertSameScope(owner: { penNameId: string; seriesId: string | null }, 
  * beats are planned for the matching books of the series.
  */
 export async function createOutline(ctx: AuthorContext, input: NewOutlineInput) {
+  assertCan(ctx, "edit", "structure");
   const prepared = await prepareOutline(ctx, input);
   return db.$transaction((tx) => prepared.insert(tx));
 }
@@ -510,18 +515,21 @@ export async function getOutline(ctx: AuthorContext, id: string) {
 }
 
 export async function renameOutline(ctx: AuthorContext, id: string, title: string) {
+  assertCan(ctx, "edit", "structure");
   await requireOutline(ctx, id);
   await db.outline.update({ where: { id }, data: { title: outlineTitle.parse(title) } });
 }
 
 /** Main or secondary couple (romance arcs only). */
 export async function setArcRole(ctx: AuthorContext, id: string, arcRole: ArcRole) {
+  assertCan(ctx, "edit", "structure");
   const outline = await requireOutline(ctx, id);
   if (outline.kind !== "ROMANCE") throw new RuleError("Only romance arcs have a couple role.");
   await db.outline.update({ where: { id }, data: { arcRole } });
 }
 
 export async function trashOutline(ctx: AuthorContext, id: string) {
+  assertCan(ctx, "edit", "structure");
   await requireOutline(ctx, id);
   await db.outline.update({ where: { id }, data: { deletedAt: new Date() } });
 }
@@ -559,6 +567,7 @@ async function plannedBook(
 }
 
 export async function addBeat(ctx: AuthorContext, outlineId: string, input: BeatInput) {
+  assertCan(ctx, "edit", "structure");
   const data = beatInput.parse(input);
   const outline = await requireOutline(ctx, outlineId);
   const bookId = await plannedBook(ctx, outline, data.bookId);
@@ -585,6 +594,7 @@ export async function addBeat(ctx: AuthorContext, outlineId: string, input: Beat
 }
 
 export async function updateBeat(ctx: AuthorContext, beatId: string, input: BeatInput) {
+  assertCan(ctx, "edit", "structure");
   const data = beatInput.parse(input);
   const beat = await requireBeat(ctx, beatId);
   const bookId =
@@ -602,6 +612,7 @@ export async function updateBeat(ctx: AuthorContext, beatId: string, input: Beat
 
 /** Reorders a beat: place it after `afterBeatId` (null = first). */
 export async function moveBeat(ctx: AuthorContext, beatId: string, afterBeatId: string | null) {
+  assertCan(ctx, "edit", "structure");
   const beat = await requireBeat(ctx, beatId);
   const plan = planInsertAfter(await beatSiblings(beat.outlineId, beatId), afterBeatId);
   await db.$transaction([
@@ -613,8 +624,39 @@ export async function moveBeat(ctx: AuthorContext, beatId: string, afterBeatId: 
 }
 
 /** Removes a beat from the outline (its scene placements go with it; scenes are untouched). */
-export async function deleteBeat(ctx: AuthorContext, beatId: string) {
-  await requireBeat(ctx, beatId);
+/** "What will this affect?" for removing a beat: its scene placements go; the scenes stay. */
+export async function previewDeleteBeat(ctx: AuthorContext, beatId: string) {
+  const beat = await requireBeat(ctx, beatId);
+  const [row, placements] = await Promise.all([
+    db.outlineBeat.findUniqueOrThrow({ where: { id: beatId }, select: { title: true } }),
+    db.beatScene.findMany({
+      where: { workspaceId: ctx.workspaceId, beatId },
+      select: { scene: { select: { id: true, title: true, bookId: true } } },
+    }),
+  ]);
+  return buildReport({
+    title: `Remove the beat “${row.title}”?`,
+    description: `The beat is removed from “${beat.outline.title}”. Scenes are never deleted.`,
+    groups: [
+      {
+        key: "PLACEMENTS",
+        label: "Scenes placed on this beat",
+        noun: { one: "beat placement", many: "beat placements" },
+        effect: "Removed; the scenes stay",
+        items: placements.map((p) => ({
+          id: p.scene.id,
+          title: p.scene.title,
+          href: `/books/${p.scene.bookId}/scenes/${p.scene.id}`,
+        })),
+      },
+    ],
+    extra: [beatId],
+  });
+}
+
+export async function deleteBeat(ctx: AuthorContext, beatId: string, token?: string) {
+  assertCan(ctx, "edit", "structure");
+  assertReviewed(await previewDeleteBeat(ctx, beatId), token);
   await db.outlineBeat.delete({ where: { id: beatId } });
 }
 
@@ -625,6 +667,7 @@ export async function deleteBeat(ctx: AuthorContext, beatId: string) {
  * of any book in its series.
  */
 export async function assignScene(ctx: AuthorContext, beatId: string, sceneId: string) {
+  assertCan(ctx, "edit", "structure");
   const beat = await requireBeat(ctx, beatId);
   const scene = await db.scene.findFirst({
     where: { id: sceneId, workspaceId: ctx.workspaceId, ...liveScene },
@@ -652,6 +695,7 @@ export async function assignScene(ctx: AuthorContext, beatId: string, sceneId: s
 }
 
 export async function unassignScene(ctx: AuthorContext, beatId: string, sceneId: string) {
+  assertCan(ctx, "edit", "structure");
   await requireBeat(ctx, beatId);
   await db.beatScene.deleteMany({ where: { beatId, sceneId, workspaceId: ctx.workspaceId } });
 }

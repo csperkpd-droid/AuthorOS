@@ -1,3 +1,5 @@
+import { db } from "@/lib/db";
+import { deadlinesFor, setDeadline } from "@/modules/calendar";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { NotFoundError, RuleError } from "@/lib/errors";
@@ -105,20 +107,19 @@ describe("series and books", () => {
       updateBook(ctx, book.id, { title: "Loose", targetWordCount: null, penNameId: other.id }),
     ).rejects.toThrow(/Change pen name/);
 
-    await updateBook(ctx, book.id, {
-      title: "Loose",
-      targetWordCount: "80000",
-      dueOn: "2027-01-31",
-    });
-    let b = await getBook(ctx, book.id);
-    expect(b.targetWordCount).toBe(80000);
-    expect(b.dueOn?.toISOString().slice(0, 10)).toBe("2027-01-31");
-    // Absent leaves the deadline alone; empty clears it.
     await updateBook(ctx, book.id, { title: "Loose", targetWordCount: "80000" });
-    expect((await getBook(ctx, book.id)).dueOn).not.toBeNull();
-    await updateBook(ctx, book.id, { title: "Loose", targetWordCount: "80000", dueOn: "" });
-    b = await getBook(ctx, book.id);
-    expect(b.dueOn).toBeNull();
+    expect((await getBook(ctx, book.id)).targetWordCount).toBe(80000);
+    // The deadline is a calendar entry about the book: set, moved, removed.
+    await setDeadline(ctx, book.id, "2027-01-31");
+    expect((await deadlinesFor(ctx, [book.id])).get(book.id)).toBe("2027-01-31");
+    await setDeadline(ctx, book.id, "2027-02-28");
+    expect((await deadlinesFor(ctx, [book.id])).get(book.id)).toBe("2027-02-28");
+    expect(
+      await db.calendarEvent.count({ where: { subjectId: book.id, purpose: "DEADLINE" } }),
+    ).toBe(1);
+    await setDeadline(ctx, book.id, "");
+    expect((await deadlinesFor(ctx, [book.id])).has(book.id)).toBe(false);
+    expect(await db.calendarEvent.count({ where: { subjectId: book.id } })).toBe(0);
   });
 
   it("filters the library by identity", async () => {

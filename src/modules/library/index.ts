@@ -6,6 +6,7 @@ export {
   listLibrary,
   listSeriesOptions,
   moveBookInSeries,
+  previewBookSeries,
   setBookSeries,
   trashBook,
   trashSeries,

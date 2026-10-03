@@ -14,6 +14,7 @@ import {
   groupDynamics,
   groupsIncluding,
   listRelationships,
+  previewRelationshipMembers,
   setMemberRole,
   setRelationshipMembers,
 } from "@/modules/relationships";
@@ -88,9 +89,14 @@ describe("group relationships", () => {
       type: "Romance",
     });
     await createRelationship(ctx, { characterIds: [elara, kael], type: "Romance" });
-    await expect(setRelationshipMembers(ctx, group.id, [kael, elara])).rejects.toBeInstanceOf(
-      ConflictError,
+    // Removing a member is reviewed first (Change Impact).
+    await expect(setRelationshipMembers(ctx, group.id, [kael, elara])).rejects.toThrow(
+      /Review what this change affects/,
     );
+    const review = await previewRelationshipMembers(ctx, group.id, [kael, elara]);
+    await expect(
+      setRelationshipMembers(ctx, group.id, [kael, elara], review.token),
+    ).rejects.toBeInstanceOf(ConflictError);
     await expect(setRelationshipMembers(ctx, group.id, [kael])).rejects.toBeInstanceOf(RuleError);
     const rose = await createPenName(ctx, { name: "Rose" });
     const ivy = (await createCharacter(ctx, { name: "Ivy", penNameId: rose.id })).id;

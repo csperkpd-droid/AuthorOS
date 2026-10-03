@@ -2,20 +2,33 @@ import "server-only";
 
 import { addDays, fromDbDate, startOfMonthGrid, toDbDate, type DateString } from "@/lib/dates";
 import { db } from "@/lib/db";
-import { NotFoundError } from "@/lib/errors";
+import { NotFoundError, RuleError } from "@/lib/errors";
 import { createPlannedConnection, planConnection } from "@/modules/connections";
-import { visibleBookWhere } from "@/modules/library";
 import { writingDays } from "@/modules/progress";
-import { createStoryNode, liveEvent } from "@/modules/story-graph";
+import {
+  createStoryNode,
+  liveEvent,
+  purgeStoryNodes,
+  resolveNode,
+  resolveNodes,
+  storyObjectType,
+} from "@/modules/story-graph";
 import { listTasks } from "@/modules/tasks";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
-import { eventInput, monthInput, type EventInput } from "./schemas";
+import { deadlineDate, eventInput, monthInput, type EventInput } from "./schemas";
 
 /**
- * The author's calendar: their own events, plus what other modules put on a
- * date (task due dates, book deadlines, words written per day). Events are
- * story nodes, so they can concern books and other story objects.
+ * The author's calendar, and the one place dates live.
+ *
+ * Every dated entry is a calendar event (a story node). An entry is either
+ * an event of its own (`purpose: EVENT`) or a date that belongs to another
+ * story object (`DEADLINE`, with `subjectId`): a book's deadline is the
+ * book's DEADLINE entry, never a column on the book, so the book page, the
+ * calendar, the dashboard pace and exports all read the same row. Tasks are
+ * planner items whose due date is their own. The calendar is a view over
+ * entries, tasks and words written per day.
  */
 
 const eventSelect = {
@@ -25,6 +38,8 @@ const eventSelect = {
   startsOn: true,
   endsOn: true,
   startTime: true,
+  purpose: true,
+  subjectId: true,
 } as const;
 
 function toView(e: {
@@ -34,6 +49,8 @@ function toView(e: {
   startsOn: Date;
   endsOn: Date | null;
   startTime: string | null;
+  purpose: "EVENT" | "DEADLINE";
+  subjectId: string | null;
 }) {
   return {
     ...e,
@@ -56,6 +73,7 @@ export async function createEvent(
   ctx: AuthorContext,
   input: EventInput & { concernsId?: string | null },
 ) {
+  assertCan(ctx, "edit", "planning");
   const data = eventInput.parse(input);
   return db.$transaction(async (tx) => {
     const id = await createStoryNode(tx, ctx.workspaceId, "EVENT");
@@ -82,9 +100,16 @@ export async function createEvent(
   });
 }
 
+/** Dates that belong to another object are changed there (e.g. the book's deadline). */
+function assertOwnEvent(event: EventView) {
+  if (event.purpose !== "EVENT")
+    throw new RuleError("This date belongs to another item. Change it from there.");
+}
+
 export async function updateEvent(ctx: AuthorContext, id: string, input: EventInput) {
+  assertCan(ctx, "edit", "planning");
   const data = eventInput.parse(input);
-  await getEvent(ctx, id);
+  assertOwnEvent(await getEvent(ctx, id));
   await db.calendarEvent.update({
     where: { id },
     data: {
@@ -98,7 +123,8 @@ export async function updateEvent(ctx: AuthorContext, id: string, input: EventIn
 }
 
 export async function trashEvent(ctx: AuthorContext, id: string) {
-  await getEvent(ctx, id);
+  assertCan(ctx, "edit", "planning");
+  assertOwnEvent(await getEvent(ctx, id));
   await db.calendarEvent.update({ where: { id }, data: { deletedAt: new Date() } });
 }
 
@@ -118,7 +144,7 @@ export async function calendarRange(
   ctx: AuthorContext,
   { from, to, penNameId }: { from: DateString; to: DateString; penNameId: string | null },
 ): Promise<CalendarDay[]> {
-  const [events, tasks, books, words] = await Promise.all([
+  const [events, tasks, words] = await Promise.all([
     db.calendarEvent.findMany({
       where: {
         workspaceId: ctx.workspaceId,
@@ -133,23 +159,30 @@ export async function calendarRange(
       select: eventSelect,
     }),
     listTasks(ctx, { status: "all", dueFrom: from, dueTo: to }),
-    db.book.findMany({
-      where: {
-        workspaceId: ctx.workspaceId,
-        ...visibleBookWhere,
-        ...(penNameId ? { penNameId } : {}),
-        dueOn: { gte: toDbDate(from), lte: toDbDate(to) },
-      },
-      select: { id: true, title: true, dueOn: true },
-    }),
     writingDays(ctx, from, to),
   ]);
+  // Deadlines show as their object ("Ember due") and follow "Writing as".
+  const subjects = await resolveNodes(
+    ctx,
+    events.flatMap((e) => (e.subjectId ? [e.subjectId] : [])),
+  );
 
   const days = new Map<DateString, CalendarDay>();
   for (let d = from; d <= to; d = addDays(d, 1)) {
     days.set(d, { date: d, entries: [], words: words.get(d) ?? 0 });
   }
   for (const e of events.map(toView)) {
+    if (e.purpose === "DEADLINE") {
+      const subject = subjects.get(e.subjectId!);
+      if (!subject || (penNameId && subject.penNameId && subject.penNameId !== penNameId)) continue;
+      days.get(e.startsOn)?.entries.push({
+        type: "deadline",
+        id: e.id,
+        title: e.title === DEADLINE_TITLE ? `${subject.title} due` : `${subject.title}: ${e.title}`,
+        href: subject.href,
+      });
+      continue;
+    }
     // Multi-day events show on each of their days in range.
     for (
       let d = e.startsOn < from ? from : e.startsOn;
@@ -164,14 +197,6 @@ export async function calendarRange(
         href: `/calendar/events/${e.id}`,
       });
     }
-  }
-  for (const b of books) {
-    days.get(fromDbDate(b.dueOn!))?.entries.push({
-      type: "deadline",
-      id: b.id,
-      title: `${b.title} due`,
-      href: `/books/${b.id}`,
-    });
   }
   for (const t of tasks) {
     days.get(t.dueOn!)?.entries.push({
@@ -206,4 +231,63 @@ export async function upcoming(
 ) {
   const range = await calendarRange(ctx, { from, to: addDays(from, days - 1), penNameId });
   return range.filter((d) => d.entries.length > 0);
+}
+
+// ─── Dates that belong to other objects ─────────────────────────────────────
+
+const DEADLINE_TITLE = "Deadline";
+
+/**
+ * Sets (or with `date: null`, removes) the deadline of a story object that
+ * can have dates (registry: `dated`), e.g. a book's draft deadline. One
+ * deadline per object; it shows on the calendar and drives the pace.
+ */
+export async function setDeadline(ctx: AuthorContext, subjectId: string, date: string | null) {
+  assertCan(ctx, "edit", "planning");
+  const day = deadlineDate.parse(date);
+  const subject = await resolveNode(ctx, subjectId);
+  if (!subject || !storyObjectType(subject.kind).dated) throw new NotFoundError("Item");
+  const current = await db.calendarEvent.findFirst({
+    where: { workspaceId: ctx.workspaceId, subjectId, purpose: "DEADLINE", deletedAt: null },
+    select: { id: true },
+  });
+  if (!day) {
+    // Removing the date removes the entry (it was an attribute of the object).
+    if (current) await db.$transaction((tx) => purgeStoryNodes(tx, ctx.workspaceId, [current.id]));
+    return;
+  }
+  if (current) {
+    await db.calendarEvent.update({ where: { id: current.id }, data: { startsOn: toDbDate(day) } });
+    return;
+  }
+  await db.$transaction(async (tx) => {
+    const id = await createStoryNode(tx, ctx.workspaceId, "EVENT");
+    await tx.calendarEvent.create({
+      data: {
+        id,
+        workspaceId: ctx.workspaceId,
+        title: DEADLINE_TITLE,
+        startsOn: toDbDate(day),
+        purpose: "DEADLINE",
+        subjectId,
+      },
+    });
+  });
+}
+
+/** Deadlines of these objects (all visible ones when omitted): subject id → date. */
+export async function deadlinesFor(
+  ctx: AuthorContext,
+  subjectIds?: string[],
+): Promise<Map<string, DateString>> {
+  const rows = await db.calendarEvent.findMany({
+    where: {
+      workspaceId: ctx.workspaceId,
+      ...liveEvent,
+      purpose: "DEADLINE",
+      ...(subjectIds ? { subjectId: { in: subjectIds } } : {}),
+    },
+    select: { subjectId: true, startsOn: true },
+  });
+  return new Map(rows.map((r) => [r.subjectId!, fromDbDate(r.startsOn)]));
 }

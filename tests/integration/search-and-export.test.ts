@@ -2,6 +2,7 @@ import JSZip from "jszip";
 import { beforeEach, describe, expect, it } from "vitest";
 
 import { db } from "@/lib/db";
+import { setDeadline } from "@/modules/calendar";
 import { RuleError } from "@/lib/errors";
 import { createCharacter, trashCharacter, updateProfileField } from "@/modules/characters";
 import { connect } from "@/modules/connections";
@@ -253,11 +254,8 @@ describe("workspace JSON export", () => {
     const roseBook = await createBook(ctx, { title: "Rose book", penNameId: rose.id });
     const roseOnly = await createNote(ctx, { title: "Rose research", aboutId: roseBook.id });
     const loose = await createNote(ctx, { title: "Loose idea" });
-    await updateBook(ctx, book.id, {
-      title: "Ember",
-      targetWordCount: "90000",
-      dueOn: "2027-03-01",
-    });
+    await updateBook(ctx, book.id, { title: "Ember", targetWordCount: "90000" });
+    await setDeadline(ctx, book.id, "2027-03-01");
     await createKit(ctx, { name: "Kit", templateIds: ["00000000-0000-7000-8000-000000000a02"] });
     return { rose, series, book, sceneId, group, arc, sharedNote, roseBook, roseOnly, loose };
   }
@@ -273,7 +271,7 @@ describe("workspace JSON export", () => {
     expect(filename).toMatch(/^authoros-workspace-archive-\d{4}-\d{2}-\d{2}\.json$/);
     expect(data).toMatchObject({
       format: "authoros.workspace",
-      version: 1,
+      version: 2,
       scope: { kind: "workspace" },
     });
     expect(checkExportIntegrity(data)).toEqual([]);
@@ -293,7 +291,8 @@ describe("workspace JSON export", () => {
     expect(data.templateKits[0].items).toHaveLength(1);
     expect(data.contentRevisions).toBeDefined();
     expect(data.storyNodes.length).toBe(
-      data.series.length +
+      data.penNames.length +
+        data.series.length +
         data.books.length +
         data.parts.length +
         data.chapters.length +

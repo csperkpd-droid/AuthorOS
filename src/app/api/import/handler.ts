@@ -29,7 +29,10 @@ export async function handleImport(
     if (error instanceof ImportFileError)
       return json({ error: error.message, problems: error.problems }, 400);
     if (error instanceof DomainError)
-      return json({ error: error.message }, error.code === "CONFLICT" ? 409 : 400);
+      return json(
+        { error: error.message },
+        error.code === "CONFLICT" ? 409 : error.code === "FORBIDDEN" ? 403 : 400,
+      );
     if (error instanceof ZodError) return json({ error: "Check the import options." }, 400);
     throw error;
   }

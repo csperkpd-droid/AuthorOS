@@ -7,6 +7,7 @@ import { NotFoundError } from "@/lib/errors";
 import { createPlannedConnection, planConnection } from "@/modules/connections";
 import { createStoryNode, liveTask, resolveNodes, type NodeSummary } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import { taskInput, taskStatus, type TaskInput } from "./schemas";
 
@@ -105,6 +106,7 @@ export async function createTask(
   ctx: AuthorContext,
   input: TaskInput & { concernsId?: string | null },
 ) {
+  assertCan(ctx, "edit", "planning");
   const data = taskInput.parse(input);
   return db.$transaction(async (tx) => {
     const id = await createStoryNode(tx, ctx.workspaceId, "TASK");
@@ -131,6 +133,7 @@ export async function createTask(
 }
 
 export async function updateTask(ctx: AuthorContext, id: string, input: TaskInput) {
+  assertCan(ctx, "edit", "planning");
   const data = taskInput.parse(input);
   await getTask(ctx, id);
   await db.task.update({
@@ -146,6 +149,7 @@ export async function updateTask(ctx: AuthorContext, id: string, input: TaskInpu
 
 /** Marks a task to do, in progress or done (done records when). */
 export async function setTaskStatus(ctx: AuthorContext, id: string, status: TaskStatus) {
+  assertCan(ctx, "edit", "planning");
   const next = taskStatus.parse(status);
   const task = await getTask(ctx, id);
   if (task.status === next) return;
@@ -156,6 +160,7 @@ export async function setTaskStatus(ctx: AuthorContext, id: string, status: Task
 }
 
 export async function trashTask(ctx: AuthorContext, id: string) {
+  assertCan(ctx, "edit", "planning");
   await getTask(ctx, id);
   await db.task.update({ where: { id }, data: { deletedAt: new Date() } });
 }

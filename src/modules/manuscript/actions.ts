@@ -10,6 +10,7 @@ import {
   createPart,
   createScene,
   dissolvePart,
+  previewDissolvePart,
   moveChapter,
   movePart,
   moveScene,
@@ -57,8 +58,12 @@ export async function moveSceneAction(id: string, chapterId: string, afterId: st
   return runAction(async () => moveScene(await ctx(), id, { chapterId, afterId }));
 }
 
-export async function dissolvePartAction(id: string) {
-  return runAction(async () => dissolvePart(await ctx(), id));
+export async function previewDissolvePartAction(id: string) {
+  return runAction(async () => previewDissolvePart(await ctx(), id), { refresh: false });
+}
+
+export async function dissolvePartAction(id: string, token: string) {
+  return runAction(async () => dissolvePart(await ctx(), id, token));
 }
 
 export async function trashPartAction(id: string) {

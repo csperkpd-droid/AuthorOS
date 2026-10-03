@@ -10,6 +10,15 @@ are decided after review.
 Each recommendation is marked **R1…R14** and summarized with a proposed
 order at the end.
 
+> **Status after Milestone 7 (Foundations):** R3 (Story Object Registry),
+> R4 (authorization in services), R13 (one model for dates), R14 (pen names
+> connectable) and the Change Impact / orphan findings of §5 are
+> implemented; the Story Graph integrity audit is automated. R1 (background
+> jobs) was deliberately not built (decision 85). R8 is decided: comments,
+> suggestions and reviewed edits; no live co-editing (decision 79). R10,
+> R11 and note/idea scopes stay on the roadmap (decision 86). Others (R2,
+> R5, R6, R7, R9, R12) remain as listed, timed with their features.
+
 ---
 
 ## 1. What is implemented

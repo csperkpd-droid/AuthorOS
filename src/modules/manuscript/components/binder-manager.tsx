@@ -33,6 +33,7 @@ import {
   addPartAction,
   addSceneAction,
   dissolvePartAction,
+  previewDissolvePartAction,
   moveChapterAction,
   movePartAction,
   moveSceneAction,
@@ -42,6 +43,8 @@ import {
   trashPartAction,
   trashSceneAction,
 } from "../actions";
+import { ImpactDialog } from "@/modules/impact/ui";
+
 import { SCENE_STATUS_LABELS } from "../labels";
 import type { BookLevelItem, ChapterItem, PartItem, SceneItem } from "../structure";
 import { InlineTitleInput } from "./inline-title";
@@ -58,6 +61,8 @@ export function BinderManager({ bookId, items }: { bookId: string; items: BookLe
   const [error, setError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [moveTarget, setMoveTarget] = useState<MoveTarget | null>(null);
+  // Removing a part is reviewed first (Change Impact).
+  const [dissolving, setDissolving] = useState<string | null>(null);
 
   /** Runs an action and surfaces its error in the binder. */
   async function act(promise: Promise<Result>) {
@@ -73,6 +78,7 @@ export function BinderManager({ bookId, items }: { bookId: string; items: BookLe
     renaming,
     setRenaming,
     setMoveTarget,
+    setDissolving,
   };
 
   return (
@@ -126,6 +132,14 @@ export function BinderManager({ bookId, items }: { bookId: string; items: BookLe
         />
       )}
 
+      <ImpactDialog
+        open={dissolving !== null}
+        onOpenChange={(o) => !o && setDissolving(null)}
+        title="Remove this part?"
+        loadReport={() => previewDissolvePartAction(dissolving!)}
+        onConfirm={(token) => dissolvePartAction(dissolving!, token)}
+        confirmLabel="Remove part"
+      />
       <MoveDialog
         target={moveTarget}
         items={items}
@@ -143,10 +157,11 @@ type Shared = {
   renaming: string | null;
   setRenaming: (id: string | null) => void;
   setMoveTarget: (t: MoveTarget) => void;
+  setDissolving: (partId: string) => void;
 };
 
 function PartBlock({ part, handle, ...shared }: { part: PartItem; handle: ReactNode } & Shared) {
-  const { bookId, act, renaming, setRenaming } = shared;
+  const { bookId, act, renaming, setRenaming, setDissolving } = shared;
   return (
     <div className="rounded-xl border border-border bg-muted/40 p-2">
       <Row
@@ -175,7 +190,7 @@ function PartBlock({ part, handle, ...shared }: { part: PartItem; handle: ReactN
               <BookPlus />
               Add chapter
             </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => act(dissolvePartAction(part.id))}>
+            <DropdownMenuItem onSelect={() => setDissolving(part.id)}>
               <FolderOutput />
               Remove part, keep chapters
             </DropdownMenuItem>

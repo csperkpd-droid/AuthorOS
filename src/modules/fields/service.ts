@@ -9,6 +9,7 @@ import { getPenName, requireAssignablePenName } from "@/modules/pen-names";
 import { buildReport } from "@/modules/impact";
 import { resolveNode, resolveNodes } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import { fieldLabel, fieldValue, newFieldInput, type NewFieldInput } from "./schemas";
 
@@ -142,6 +143,7 @@ export async function fieldScopeOptions(ctx: AuthorContext, context: FieldContex
 }
 
 export async function createFieldDefinition(ctx: AuthorContext, input: NewFieldInput) {
+  assertCan(ctx, "edit", "storyBible");
   const data = newFieldInput.parse(input);
   if (data.penNameId) await requireAssignablePenName(ctx, data.penNameId);
   if (data.seriesId) await getSeries(ctx, data.seriesId);
@@ -184,6 +186,7 @@ async function requireDefinition(ctx: AuthorContext, id: string) {
 }
 
 export async function renameFieldDefinition(ctx: AuthorContext, id: string, label: string) {
+  assertCan(ctx, "edit", "storyBible");
   await requireDefinition(ctx, id);
   await db.fieldDefinition.update({ where: { id }, data: { label: fieldLabel.parse(label) } });
 }
@@ -237,6 +240,7 @@ export async function previewDeleteField(ctx: AuthorContext, id: string) {
  * report's `token`, refused if the values changed since.
  */
 export async function deleteFieldDefinition(ctx: AuthorContext, id: string, token?: string) {
+  assertCan(ctx, "manage", "storyBible");
   await requireDefinition(ctx, id);
   if (token !== undefined && (await previewDeleteField(ctx, id)).token !== token) {
     throw new ConflictError("This field’s values changed since you reviewed them. Review again.");
@@ -263,6 +267,7 @@ export async function setFieldValue(
   fieldId: string,
   value: string,
 ) {
+  assertCan(ctx, "edit", "storyBible");
   const text = fieldValue.parse(value);
   const [node, def] = await Promise.all([
     resolveNode(ctx, nodeId),

@@ -4,6 +4,7 @@ import { EXPORT_FORMAT, EXPORT_VERSION } from "@/modules/exports";
 
 import { workspaceBundle } from "../bundle";
 import { ImportFileError } from "../errors";
+import { upgradeBundle } from "../upgrade";
 import type { ImportParser } from "./types";
 
 /**
@@ -40,7 +41,8 @@ export const parseAuthorOsJson: ImportParser = ({ bytes }) => {
       }),
     );
   }
-  const bundle = parsed.data;
+  // Older versions are upgraded to the current format before anything else.
+  const bundle = upgradeBundle(parsed.data);
   return {
     bundle,
     info: {

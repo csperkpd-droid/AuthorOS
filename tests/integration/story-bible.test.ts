@@ -214,6 +214,10 @@ describe("trash across story bible kinds", () => {
     await trashIdea(ctx, i.id);
     expect((await listTrash(ctx)).map((t) => t.kind).sort()).toEqual(["CHARACTER", "IDEA", "NOTE"]);
     expect(await emptyTrash(ctx)).toBe(3);
-    expect(await db.storyNode.count({ where: { workspaceId: ctx.workspaceId } })).toBe(0);
+    expect(
+      await db.storyNode.count({
+        where: { workspaceId: ctx.workspaceId, kind: { not: "PEN_NAME" } },
+      }),
+    ).toBe(0);
   });
 });

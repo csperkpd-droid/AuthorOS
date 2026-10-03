@@ -5,15 +5,16 @@ Scope details: [MVP.md](MVP.md). Schema: [DATABASE.md](DATABASE.md).
 
 ## MVP
 
-|     | Milestone                                                                                                                              | Status                          |
-| --- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
-| 0   | Foundations: repo, database architecture, auth, shell, docs                                                                            | ✅ Complete                     |
-| 1   | Writing loop + author identities: series/books/parts/chapters/scenes, editor, revisions, Trash, pen names, Story Graph extension point | ✅ Complete                     |
-| 2   | Story bible + Universal Connections: characters, relationships, notes, ideas, connections                                              | ✅ Complete                     |
-| 3   | Structure and romance: beat templates, outlines, romance arcs (outlines become story nodes)                                            | ✅ Complete                     |
-| 4   | Getting work done: tasks, calendar, writing sessions, goals, dashboard; series arcs, Change Impact                                     | ✅ Complete                     |
-| 5   | Ownership: search, manuscript export, workspace export; group relationships, template kits, Change Impact for deletions                | ✅ Complete                     |
-| 6   | Import Engine: JSON restore and move between accounts; search languages per pen name; relationship roles; complete archive export      | ✅ Complete (awaiting approval) |
+|     | Milestone                                                                                                                                                  | Status                          |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
+| 0   | Foundations: repo, database architecture, auth, shell, docs                                                                                                | ✅ Complete                     |
+| 1   | Writing loop + author identities: series/books/parts/chapters/scenes, editor, revisions, Trash, pen names, Story Graph extension point                     | ✅ Complete                     |
+| 2   | Story bible + Universal Connections: characters, relationships, notes, ideas, connections                                                                  | ✅ Complete                     |
+| 3   | Structure and romance: beat templates, outlines, romance arcs (outlines become story nodes)                                                                | ✅ Complete                     |
+| 4   | Getting work done: tasks, calendar, writing sessions, goals, dashboard; series arcs, Change Impact                                                         | ✅ Complete                     |
+| 5   | Ownership: search, manuscript export, workspace export; group relationships, template kits, Change Impact for deletions                                    | ✅ Complete                     |
+| 6   | Import Engine: JSON restore and move between accounts; search languages per pen name; relationship roles; complete archive export                          | ✅ Complete                     |
+| 7   | Foundations: Story Object Registry, authorization in services, one model for dates, connectable pen names, Change Impact gaps, Story Graph integrity audit | ✅ Complete (awaiting approval) |
 
 **Why this order:** the editor and binder are used every day, so they come
 first. The story bible needs scenes to link to. Structure maps onto scenes
@@ -25,8 +26,9 @@ manuscript. Export closes the MVP with the "you own your data" promise.
 ### Architecture checkpoint (before v1.1)
 
 Findings and recommendations in
-[ARCHITECTURE-CHECKPOINT.md](ARCHITECTURE-CHECKPOINT.md); the v1.1 order is
-decided after it is reviewed.
+[ARCHITECTURE-CHECKPOINT.md](ARCHITECTURE-CHECKPOINT.md). Milestone 7
+(Foundations) implemented the approved direction; the v1.1 order is decided
+after Foundations is reviewed (Timeline is the expected next feature).
 
 ### v1.1: Timeline, publishing, pen-name branding
 

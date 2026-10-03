@@ -2,6 +2,7 @@ import "server-only";
 
 import type { WorkspaceRole } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { createStoryNode } from "@/modules/story-graph";
 
 export type Membership = {
   workspaceId: string;
@@ -40,9 +41,17 @@ export async function ensurePersonalWorkspace(user: NewAuthor): Promise<Membersh
       data: {
         name: `${displayName}'s workspace`,
         members: { create: { userId: user.id, role: "OWNER" } },
-        penNames: { create: { name: displayName, isDefault: true } },
       },
       select: { id: true },
+    });
+    // The default pen name is a story node like every pen name.
+    await tx.penName.create({
+      data: {
+        id: await createStoryNode(tx, workspace.id, "PEN_NAME"),
+        workspaceId: workspace.id,
+        name: displayName,
+        isDefault: true,
+      },
     });
     return { workspaceId: workspace.id, role: "OWNER" as const, activePenNameId: null };
   });

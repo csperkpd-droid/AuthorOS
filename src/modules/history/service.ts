@@ -4,8 +4,9 @@ import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { countWords, docSchema, docToText } from "@/lib/text";
-import { resolveNode } from "@/modules/story-graph";
+import { resolveNode, storyObjectType } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 import { z } from "zod";
 
 import { isVersionedKind, versioned, type VersionedKind } from "./versioned";
@@ -23,6 +24,13 @@ export const revisionLabel = z
 export type SaveResult = { version: number; wordCount: number; savedAt: Date };
 
 /** A visible, versioned story object in this workspace. */
+/** A versioned object the author may edit (the area comes from its kind). */
+async function requireEditable(ctx: AuthorContext, nodeId: string): Promise<VersionedKind> {
+  const kind = await requireVersioned(ctx, nodeId);
+  assertCan(ctx, "edit", storyObjectType(kind).area);
+  return kind;
+}
+
 async function requireVersioned(ctx: AuthorContext, nodeId: string): Promise<VersionedKind> {
   const node = await resolveNode(ctx, nodeId);
   if (!node || !isVersionedKind(node.kind)) throw new NotFoundError("Item");
@@ -52,7 +60,8 @@ export async function saveContent(
     ) => Promise<void>;
   } = {},
 ): Promise<SaveResult> {
-  const kind = await requireVersioned(ctx, nodeId);
+  assertCan(ctx, "edit", "any");
+  const kind = await requireEditable(ctx, nodeId);
   const doc = docSchema.parse(content);
   const text = docToText(doc);
   const wordCount = countWords(text);
@@ -165,7 +174,8 @@ export async function getRevision(ctx: AuthorContext, revisionId: string) {
 
 /** Saves the current content as a named version the author chose to keep. */
 export async function saveVersion(ctx: AuthorContext, nodeId: string, label?: string | null) {
-  const kind = await requireVersioned(ctx, nodeId);
+  assertCan(ctx, "edit", "any");
+  const kind = await requireEditable(ctx, nodeId);
   const parsed = revisionLabel.parse(label);
   return db.$transaction((tx) =>
     snapshot(tx, ctx, kind, nodeId, { source: "MANUAL", label: parsed }),
@@ -177,8 +187,9 @@ export async function saveVersion(ctx: AuthorContext, nodeId: string, label?: st
  * "before restore" revision first, so a restore can always be undone.
  */
 export async function restoreRevision(ctx: AuthorContext, revisionId: string): Promise<SaveResult> {
+  assertCan(ctx, "edit", "any");
   const revision = await getRevision(ctx, revisionId);
-  const kind = await requireVersioned(ctx, revision.nodeId);
+  const kind = await requireEditable(ctx, revision.nodeId);
   const full = await db.contentRevision.findUniqueOrThrow({
     where: { id: revisionId },
     select: { content: true, contentText: true, wordCount: true },

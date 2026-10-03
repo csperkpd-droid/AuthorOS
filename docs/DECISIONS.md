@@ -676,3 +676,103 @@ role on the character (it isn't a property of the person).
 The standard backup holds all story data without version history; the
 complete archive adds every saved version of scenes and notes. Both use the
 same format, recorded in the file (`kind`), and both import.
+
+## Milestone 7 (Foundations)
+
+### 77. A Story Object Registry defines every kind — Accepted (M7)
+
+One entry per kind (`story-graph/kinds.ts`, client-safe) states what the
+kind is and supports: names, area, identity rule, hierarchy, structure
+roles, connectable, fieldable, search mode, versioned, Trash or archive,
+moves with its identity, can have dates, table, bundle key. Its server
+half holds one adapter per kind (loader, Trash operations). Both are
+`Record<StoryNodeKind, …>`, so a missing kind is a compile error. The
+resolver, Trash, search, connections, fields, Change Impact, authorization,
+export, integrity check and import read it instead of their own lists.
+Per-kind SQL (table columns, export queries) stays explicit where kinds
+genuinely differ. **Rejected:** a generic table for every kind (loses typed
+columns and constraints); code generation (more machinery than the problem).
+
+### 78. Authorization is checked first in every write service — Accepted (M7)
+
+`assertCan(ctx, action, area)` is the first statement of every service
+that changes data; a test calls every exported write service as a viewer
+and requires a refusal before anything happens. Roles grant actions
+(`view`, `comment`, `suggest`, `edit`, `manage`) per area. Owners can do
+everything; editors contribute to the story but don't manage the
+workspace; viewers view. `can()` takes a resource for future per-book
+sharing (beta readers, ARC). **Rejected:** checks in routes or actions only
+(any new caller would skip them); a database-level policy (row security)
+for now: services already scope every query, and grants by action and
+area are application rules.
+
+### 79. Collaboration means comments, suggestions and reviewed edits — Accepted (M7)
+
+The architecture keeps whole-document storage with optimistic versions.
+Collaboration grows through comments, suggestions, controlled edits with
+review and granular grants. Live co-editing would require a different
+text-storage architecture (a CRDT per document) and is only introduced as
+an explicit product decision.
+
+### 80. Dates live in calendar entries — Accepted (M7)
+
+A date that belongs to an object (a book's deadline) is a calendar entry
+about it (`purpose: DEADLINE`, `subject_id`, one per object), not a column.
+Every screen (book, calendar, dashboard pace) is a view of the same row.
+Tasks keep their own due date (a task is a dated planner item). Which kinds
+can have dates is the registry's `dated`. `books.due_on` was migrated and
+dropped. **Rejected:** syncing a column and an event (two sources of
+truth); a separate deadlines table (a second date model beside events).
+
+### 81. Pen names are story nodes — Accepted (M7)
+
+Pen names join `story_nodes` (same ids, migrated), so they are found,
+searched and connected like other objects (tasks and notes about a pen
+name, later branding and publishing links). They keep their lifecycle
+(archive, never Trash), their identity rule (a pen name is its own
+identity: it links to its own work and to shared objects), and the default
+pen name rules. The connection picker for pen names is not built yet.
+
+### 82. Consequential changes are refused unless reviewed — Accepted (M7)
+
+`assertReviewed(report, token)` applies every Change Impact: blockers stop
+it, a change that affects anything needs the reviewed token whichever path
+calls it, and a stale token is refused. Added: a book leaving or changing
+series (its series beats and placements, previously left behind
+silently), removing relationship members, removing a beat with placements,
+removing a part (its links and values). Changing a character's series is
+refused while they appear outside the new series. Operations that are
+reversible or are themselves the explicit change are left as they are.
+
+### 83. The Story Graph is audited, not assumed — Accepted (M7)
+
+`auditGraph()` checks a workspace for orphaned and rule-breaking references
+that foreign keys can't express. A registry-driven test runs every kind
+through every capability its entry claims (found, searched, connected,
+exported, imported, trashed/archived, restored, deleted with Change Impact)
+and requires a clean audit after each, plus both node triggers on every
+kind's table.
+
+### 84. Export format version 2, with upgrades on import — Accepted (M7)
+
+Version 2 lists pen names as story nodes and dates as calendar entries with
+a purpose and subject. The importer upgrades older files step by step
+(`imports/upgrade.ts`) before validation; ids it has to create are derived
+from the file's own ids, so the review and the import plan the same rows.
+
+### 85. No job system until a feature needs one — Accepted (M7)
+
+Imports and exports run in the request; services are plain functions of
+`(ctx, input)` that a job runner (pg-boss, planned) can call unchanged. The
+runner, job table and object storage arrive with the first feature that
+needs them (large archives, formatting builds, EPUB/PDF, media).
+
+### 86. Field types and note scopes stay on the roadmap — Accepted (M7)
+
+Custom fields stay text and long text; the registry's `fieldable` and the
+`field_type` enum leave room for number, date, checkbox, select,
+multi-select and object references (a reference field will be a
+connection, to keep one linking mechanism). Notes and ideas stay shared by
+default; optional scopes (All Identities, Pen Name, Series, Book) remain
+designed, not built. Repeating tasks and events stay on the Planner / Life
+Planner roadmap.

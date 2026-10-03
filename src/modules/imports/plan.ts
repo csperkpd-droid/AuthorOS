@@ -153,6 +153,8 @@ export async function planImport(
   type NodeAction = "create" | "existing" | "conflict";
   const nodeAction = new Map<string, NodeAction>();
   for (const n of b.storyNodes) {
+    // Pen names are matched by id or name below, never conflicts.
+    if (n.kind === "PEN_NAME") continue;
     const label = NODE_KIND_LABELS[n.kind].one;
     if (!keep) {
       map.set(n.id, uuidv7());
@@ -403,7 +405,6 @@ export async function planImport(
       targetWordCount: r.targetWordCount,
       tropes: r.tropes,
       heatLevel: r.heatLevel,
-      dueOn: r.dueOn,
       ...soft(r),
     }),
     { fixed: ["penNameId"] },
@@ -603,14 +604,53 @@ export async function planImport(
     completedAt: r.completedAt,
     ...soft(r),
   }));
-  nodes("calendarEvents", "Events", b.calendarEvents, exEvents, (r) => ({
-    title: r.title,
-    description: r.description,
-    startsOn: r.startsOn,
-    endsOn: r.endsOn,
-    startTime: r.startTime,
-    ...soft(r),
-  }));
+  // A deadline for an object that already has one here: one deadline per
+  // object, so the file's date updates it (replace) or is skipped.
+  const newDeadlines = b.calendarEvents.filter(
+    (e) => e.purpose === "DEADLINE" && !e.deletedAt && nodeAction.get(e.id) === "create",
+  );
+  const currentDeadlines = new Map(
+    (
+      await client.calendarEvent.findMany({
+        where: {
+          workspaceId: ws,
+          purpose: "DEADLINE",
+          deletedAt: null,
+          subjectId: { in: newDeadlines.map((e) => to(e.subjectId!)) },
+        },
+        select: { id: true, subjectId: true, startsOn: true },
+      })
+    ).map((e) => [e.subjectId!, e]),
+  );
+  const matchedDeadlines = new Set<string>();
+  for (const e of newDeadlines) {
+    const current = currentDeadlines.get(to(e.subjectId!));
+    if (!current) continue;
+    matchedDeadlines.add(e.id);
+    map.set(e.id, current.id);
+    const action = replace && !same(current.startsOn, e.startsOn) ? "update" : "skip";
+    if (action === "update")
+      ops.calendarEvents.update.push({ id: current.id, data: { startsOn: e.startsOn } });
+    count("calendarEvents", "Events", action);
+    decisions.push(["deadline", e.id, action, current.id]);
+  }
+  nodes(
+    "calendarEvents",
+    "Events",
+    b.calendarEvents.filter((e) => !matchedDeadlines.has(e.id)),
+    exEvents,
+    (r) => ({
+      title: r.title,
+      description: r.description,
+      startsOn: r.startsOn,
+      endsOn: r.endsOn,
+      startTime: r.startTime,
+      purpose: r.purpose,
+      subjectId: toRef(r.subjectId),
+      ...soft(r),
+    }),
+    { fixed: ["purpose", "subjectId"] },
+  );
 
   // ── Templates (the author's), then structures ───────────────────────────
   const builtIns = new Set(
@@ -1087,6 +1127,7 @@ export async function planImport(
   const created = (rows: Row[], kind: StoryNodeKind) =>
     rows.map((r) => ({ id: r.id as string, kind }));
   ops.nodes = [
+    ...created(ops.penNames.create, "PEN_NAME"),
     ...created(ops.series.create, "SERIES"),
     ...created(ops.books.create, "BOOK"),
     ...created(ops.parts.create, "PART"),
@@ -1259,6 +1300,7 @@ function nodeTitles(b: WorkspaceBundle) {
     b.outlines,
   ])
     for (const r of rows) titles.set(r.id, r.title);
+  for (const p of b.penNames) titles.set(p.id, p.name);
   for (const c of b.characters) titles.set(c.id, c.name);
   const names = new Map(b.characters.map((c) => [c.id, c.name]));
   for (const r of b.relationships)

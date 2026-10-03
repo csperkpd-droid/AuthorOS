@@ -6,6 +6,7 @@ export {
   listRelationships,
   memberKey,
   setMemberRole,
+  previewRelationshipMembers,
   setRelationshipMembers,
   trashRelationship,
   updateRelationship,

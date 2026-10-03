@@ -2,6 +2,7 @@ import "server-only";
 
 import { canConnect, getKind, isConnectionKind } from "@/modules/connections";
 import { checkExportIntegrity } from "@/modules/exports";
+import { STORY_KINDS, storyObjectType } from "@/modules/story-graph";
 
 import type { WorkspaceBundle } from "./bundle";
 
@@ -21,20 +22,8 @@ export function validateBundle(b: WorkspaceBundle): string[] {
     if (nodeKind.has(n.id)) problems.push(`story node ${n.id} appears twice`);
     nodeKind.set(n.id, n.kind);
   }
-  const typed = [
-    b.series,
-    b.books,
-    b.parts,
-    b.chapters,
-    b.scenes,
-    b.characters,
-    b.relationships,
-    b.notes,
-    b.ideas,
-    b.tasks,
-    b.calendarEvents,
-    b.outlines,
-  ];
+  // The kinds and where their rows are come from the Story Object Registry.
+  const typed = STORY_KINDS.map((kind) => b[storyObjectType(kind).bundle] as { id: string }[]);
   const seen = new Set<string>();
   for (const rows of typed)
     for (const r of rows) {
@@ -169,10 +158,20 @@ export function validateBundle(b: WorkspaceBundle): string[] {
     valueKeys.add(key);
   }
 
-  // ── Calendar ──
-  for (const e of b.calendarEvents)
+  // ── Calendar: dates of their own, or dates that belong to an object ──
+  const deadlines = new Set<string>();
+  for (const e of b.calendarEvents) {
     if (e.endsOn && e.endsOn < e.startsOn)
       problems.push(`event “${e.title}” ends before it starts`);
+    if (e.purpose !== "DEADLINE") continue;
+    const kind = nodeKind.get(e.subjectId ?? "") as
+      Parameters<typeof storyObjectType>[0] | undefined;
+    if (!kind || !storyObjectType(kind).dated)
+      problems.push(`deadline ${e.id} belongs to nothing that can have a deadline`);
+    else if (!e.deletedAt && deadlines.has(e.subjectId!))
+      problems.push(`${storyObjectType(kind).noun.one} ${e.subjectId} has two deadlines`);
+    else if (!e.deletedAt) deadlines.add(e.subjectId!);
+  }
 
   return [...new Set(problems)];
 }
@@ -184,6 +183,7 @@ export function validateBundle(b: WorkspaceBundle): string[] {
  */
 export function penLookup(b: WorkspaceBundle): (id: string) => string | null {
   const pen = new Map<string, string>();
+  for (const x of b.penNames) pen.set(x.id, x.id);
   for (const x of b.series) pen.set(x.id, x.penNameId);
   for (const x of b.books) pen.set(x.id, x.penNameId);
   for (const x of b.characters) pen.set(x.id, x.penNameId);

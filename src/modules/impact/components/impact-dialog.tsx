@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { FormError } from "@/components/ui/field";
@@ -23,17 +23,27 @@ export function ImpactDialog({
   onConfirm,
   confirmLabel,
   navigateTo,
+  open: controlledOpen,
+  onOpenChange,
 }: {
-  trigger: ReactNode;
+  /** Omitted when opened by its parent (`open`), e.g. from a menu item. */
+  trigger?: ReactNode;
   /** Shown while the report loads. */
   title: string;
   loadReport: () => Promise<Result<ImpactReport>>;
   onConfirm: (token: string) => Promise<Result<unknown>>;
   confirmLabel: string;
   navigateTo?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }) {
   const router = useRouter();
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = controlledOpen ?? ownOpen;
+  const setOpen = (o: boolean) => {
+    setOwnOpen(o);
+    onOpenChange?.(o);
+  };
   const [report, setReport] = useState<ImpactReport | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -46,15 +56,33 @@ export function ImpactDialog({
     else setError(result.error);
   }
 
+  // Opened by the parent: load the report then.
+  useEffect(() => {
+    if (!controlledOpen) return;
+    let cancelled = false;
+    void loadReport().then((result) => {
+      if (cancelled) return;
+      if (result.ok) {
+        setReport(result.data);
+        setError(null);
+      } else setError(result.error);
+    });
+    return () => {
+      cancelled = true;
+      setReport(null);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [controlledOpen]);
+
   return (
     <Dialog
       open={open}
       onOpenChange={(o) => {
         setOpen(o);
-        if (o) void load();
+        if (o && controlledOpen === undefined) void load();
       }}
     >
-      <DialogTrigger asChild>{trigger}</DialogTrigger>
+      {trigger && <DialogTrigger asChild>{trigger}</DialogTrigger>}
       <DialogContent title={report?.title ?? title} className="max-w-xl">
         {report ? (
           <ImpactReview

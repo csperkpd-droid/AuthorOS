@@ -5,6 +5,7 @@ import type { Doc } from "@/lib/text";
 import { saveContent, type SaveResult } from "@/modules/history";
 import { recordEditorWords, today } from "@/modules/progress";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import { sceneDetailsInput, type SceneDetailsInput } from "./schemas";
 import { getBookTree, requireScene } from "./structure";
@@ -47,6 +48,7 @@ export async function saveSceneContent(
   ctx: AuthorContext,
   { sceneId, content, baseVersion }: { sceneId: string; content: unknown; baseVersion: number },
 ): Promise<SaveResult> {
+  assertCan(ctx, "edit", "manuscript");
   const scene = await requireScene(ctx, sceneId);
   const date = await today(ctx);
   return saveContent(
@@ -60,6 +62,7 @@ export async function saveSceneContent(
 }
 
 export async function updateSceneDetails(ctx: AuthorContext, id: string, input: SceneDetailsInput) {
+  assertCan(ctx, "edit", "manuscript");
   const data = sceneDetailsInput.parse(input);
   await requireScene(ctx, id);
   await db.scene.update({

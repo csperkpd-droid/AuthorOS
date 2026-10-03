@@ -28,13 +28,14 @@ export async function applyPlan(tx: Tx, ctx: AuthorContext, ops: ImportOps) {
     for (const u of table.update) await write(u as { id: string; data: never });
   };
 
-  await insert(ops.penNames.create, (data) => tx.penName.createMany({ data }));
-  await update(ops.penNames, ({ id, data }) => tx.penName.update({ where: { id }, data }));
-
+  // Story nodes first: every typed row, pen names included, uses one.
   await insert(
     ops.nodes.map((n) => ({ ...n, workspaceId: ws })),
     (data) => tx.storyNode.createMany({ data }),
   );
+
+  await insert(ops.penNames.create, (data) => tx.penName.createMany({ data }));
+  await update(ops.penNames, ({ id, data }) => tx.penName.update({ where: { id }, data }));
 
   await insert(ops.series.create, (data) => tx.series.createMany({ data }));
   await update(ops.series, ({ id, data }) => tx.series.update({ where: { id }, data }));

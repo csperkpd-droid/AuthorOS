@@ -1,8 +1,10 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { createStoryNode } from "@/modules/story-graph";
 import { NotFoundError, RuleError } from "@/lib/errors";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import { penNameInput, type PenNameInput } from "./schemas";
 
@@ -100,16 +102,20 @@ export async function createPenName(
   ctx: AuthorContext,
   input: PenNameInput,
 ): Promise<PenNameSummary> {
+  assertCan(ctx, "manage", "identity");
   const data = penNameInput.parse(input);
-  return db.penName.create({
-    data: {
-      workspaceId: ctx.workspaceId,
-      name: data.name,
-      bio: data.bio ?? null,
-      language: data.language ?? null,
-    },
-    select: penNameSelect,
-  });
+  return db.$transaction(async (tx) =>
+    tx.penName.create({
+      data: {
+        id: await createStoryNode(tx, ctx.workspaceId, "PEN_NAME"),
+        workspaceId: ctx.workspaceId,
+        name: data.name,
+        bio: data.bio ?? null,
+        language: data.language ?? null,
+      },
+      select: penNameSelect,
+    }),
+  );
 }
 
 export async function updatePenName(
@@ -117,6 +123,7 @@ export async function updatePenName(
   id: string,
   input: PenNameInput,
 ): Promise<PenNameSummary> {
+  assertCan(ctx, "manage", "identity");
   const data = penNameInput.parse(input);
   await getPenName(ctx, id);
   return db.penName.update({
@@ -131,6 +138,7 @@ export async function updatePenName(
 }
 
 export async function setDefaultPenName(ctx: AuthorContext, id: string): Promise<void> {
+  assertCan(ctx, "manage", "identity");
   const penName = await getPenName(ctx, id);
   if (penName.archivedAt)
     throw new RuleError("Restore this pen name before making it the default.");
@@ -151,6 +159,7 @@ export async function setDefaultPenName(ctx: AuthorContext, id: string): Promise
  * keep their attribution and stay visible under All identities.
  */
 export async function archivePenName(ctx: AuthorContext, id: string): Promise<void> {
+  assertCan(ctx, "manage", "identity");
   const penName = await getPenName(ctx, id);
   if (penName.isDefault) {
     throw new RuleError("Choose another default pen name before archiving this one.");
@@ -167,6 +176,7 @@ export async function archivePenName(ctx: AuthorContext, id: string): Promise<vo
 }
 
 export async function restorePenName(ctx: AuthorContext, id: string): Promise<void> {
+  assertCan(ctx, "manage", "identity");
   await getPenName(ctx, id);
   await db.penName.update({ where: { id }, data: { archivedAt: null } });
 }

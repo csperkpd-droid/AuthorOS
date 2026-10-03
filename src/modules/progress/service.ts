@@ -14,6 +14,7 @@ import { NotFoundError, RuleError } from "@/lib/errors";
 import { uuidv7 } from "@/lib/ids";
 import { getBook, listLibrary, wordCountsByBook } from "@/modules/library";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import { dailyGoalInput, timeZoneInput, writingLogInput, type WritingLogInput } from "./schemas";
 
@@ -81,6 +82,7 @@ export async function recordEditorWords(
 
 /** Logs words written elsewhere (on paper, in another app). */
 export async function logWriting(ctx: AuthorContext, input: WritingLogInput) {
+  assertCan(ctx, "edit", "planning");
   const data = writingLogInput.parse(input);
   if (data.bookId) await getBook(ctx, data.bookId);
   if (data.date > (await today(ctx))) throw new RuleError("You can’t log words for a future day.");
@@ -101,6 +103,7 @@ export async function logWriting(ctx: AuthorContext, input: WritingLogInput) {
 
 /** Removes a logged entry. Automatic rows can't be removed (they mirror real edits). */
 export async function deleteWritingLog(ctx: AuthorContext, id: string) {
+  assertCan(ctx, "edit", "planning");
   const row = await db.writingSession.findFirst({
     where: { id, workspaceId: ctx.workspaceId, userId: ctx.userId, source: "MANUAL" },
     select: { id: true },
@@ -234,15 +237,19 @@ export type BookPace = {
 
 /**
  * Deadline pace for books being written (planning, drafting or revising),
- * optionally of one identity.
+ * optionally of one identity. `deadlines` are the books' deadlines from the
+ * calendar (the one source of truth for dates): book id → date.
  */
 export async function bookPace(
   ctx: AuthorContext,
-  { penNameId }: { penNameId: string | null },
+  { penNameId, deadlines }: { penNameId: string | null; deadlines: Map<string, DateString> },
 ): Promise<BookPace[]> {
   const library = await listLibrary(ctx, { penNameId });
   const books = [...library.series.flatMap((s) => s.books), ...library.standalone].filter(
-    (b) => b.status !== "COMPLETE" && b.status !== "PUBLISHED" && (b.targetWordCount || b.dueOn),
+    (b) =>
+      b.status !== "COMPLETE" &&
+      b.status !== "PUBLISHED" &&
+      (b.targetWordCount || deadlines.has(b.id)),
   );
   if (books.length === 0) return [];
   const todayDate = await today(ctx);
@@ -268,7 +275,7 @@ export async function bookPace(
   return books
     .map((b): BookPace => {
       const words = counts.get(b.id) ?? 0;
-      const dueOn = b.dueOn ? fromDbDate(b.dueOn) : null;
+      const dueOn = deadlines.get(b.id) ?? null;
       const daysLeft = dueOn ? daysBetween(todayDate, dueOn) : null;
       const remaining = b.targetWordCount ? Math.max(b.targetWordCount - words, 0) : null;
       const neededPerDay =

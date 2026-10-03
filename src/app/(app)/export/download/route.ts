@@ -58,7 +58,7 @@ export async function GET(request: Request) {
           ? (error.issues[0]?.message ?? "Check the export options.")
           : error.message;
       return new Response(message, {
-        status: 400,
+        status: error instanceof DomainError && error.code === "FORBIDDEN" ? 403 : 400,
         headers: { "Content-Type": "text/plain; charset=utf-8" },
       });
     }

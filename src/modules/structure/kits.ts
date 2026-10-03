@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { NotFoundError, RuleError } from "@/lib/errors";
 import { liveOutline } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import { applyKitInput, kitInput, type ApplyKitInput, type KitInput } from "./schemas";
 import { prepareOutline, prepareTemplate } from "./service";
@@ -65,6 +66,7 @@ async function requireTemplates(ctx: AuthorContext, ids: string[]) {
 }
 
 export async function createKit(ctx: AuthorContext, input: KitInput) {
+  assertCan(ctx, "edit", "structure");
   const data = kitInput.parse(input);
   await requireTemplates(ctx, data.templateIds);
   return db.templateKit.create({
@@ -80,6 +82,7 @@ export async function createKit(ctx: AuthorContext, input: KitInput) {
 
 /** Renames a kit and replaces its templates. */
 export async function updateKit(ctx: AuthorContext, id: string, input: KitInput) {
+  assertCan(ctx, "edit", "structure");
   const data = kitInput.parse(input);
   await getKit(ctx, id);
   await requireTemplates(ctx, data.templateIds);
@@ -100,6 +103,7 @@ export async function updateKit(ctx: AuthorContext, id: string, input: KitInput)
 
 /** Deletes a kit. Its templates, and anything made from them, stay. */
 export async function deleteKit(ctx: AuthorContext, id: string) {
+  assertCan(ctx, "edit", "structure");
   await getKit(ctx, id);
   await db.templateKit.delete({ where: { id } });
 }
@@ -112,6 +116,7 @@ export async function saveStructuresAsKit(
   ctx: AuthorContext,
   { bookId, seriesId, name }: { bookId?: string; seriesId?: string; name: string },
 ) {
+  assertCan(ctx, "edit", "structure");
   const outlines = await db.outline.findMany({
     where: {
       workspaceId: ctx.workspaceId,
@@ -146,6 +151,7 @@ export async function saveStructuresAsKit(
  * character arcs). Everything is validated first and created together.
  */
 export async function applyKit(ctx: AuthorContext, input: ApplyKitInput) {
+  assertCan(ctx, "edit", "structure");
   const data = applyKitInput.parse(input);
   const kit = await getKit(ctx, data.kitId);
   const target = { bookId: data.bookId, seriesId: data.seriesId };

@@ -1,7 +1,9 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { STORY_KINDS, storyObjectType } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import { resolveScope } from "./scope";
 import type { ExportScopeInput } from "./schemas";
@@ -27,7 +29,13 @@ import type { ExportScopeInput } from "./schemas";
  */
 
 export const EXPORT_FORMAT = "authoros.workspace";
-export const EXPORT_VERSION = 1;
+/**
+ * Version 2 (M7): pen names are story nodes (listed in `storyNodes`), and
+ * dates that belong to an object are calendar events (`purpose`,
+ * `subjectId`) instead of columns (books no longer have `dueOn`). The
+ * import upgrades version 1 files.
+ */
+export const EXPORT_VERSION = 2;
 
 /**
  * "standard": the backup (all story data, no version history).
@@ -39,6 +47,7 @@ export async function exportWorkspaceJson(
   ctx: AuthorContext,
   { scope, kind = "standard" }: { scope: ExportScopeInput; kind?: ExportKind },
 ) {
+  assertCan(ctx, "manage", "workspace");
   const resolved = await resolveScope(ctx, scope);
   const ws = ctx.workspaceId;
   const pens = resolved.penNameIds;
@@ -82,6 +91,7 @@ export async function exportWorkspaceJson(
 
   // Identity objects in scope, then shared objects unless linked only elsewhere.
   const identityIds = new Set<string>([
+    ...penNames.map((p) => p.id),
     ...seriesIds,
     ...bookIds,
     ...parts.map((p) => p.id),
@@ -91,9 +101,14 @@ export async function exportWorkspaceJson(
     ...relationshipIds,
     ...outlineIds,
   ]);
-  const sharedIds = [...notes, ...ideas, ...tasks, ...events].map((x) => x.id);
+  // A date that belongs to an object (a deadline) goes where its object goes.
+  const ownEvents = events.filter((e) => !e.subjectId);
+  const sharedIds = [...notes, ...ideas, ...tasks, ...ownEvents].map((x) => x.id);
   const allConnections = await db.connection.findMany({ where: { workspaceId: ws } });
   let included = new Set<string>([...identityIds, ...sharedIds]);
+  const datesOf = (set: Set<string>) =>
+    events.filter((e) => e.subjectId && set.has(e.subjectId)).map((e) => e.id);
+  included = new Set([...included, ...datesOf(included)]);
   if (pens) {
     const shared = new Set(sharedIds);
     const keep = new Set<string>();
@@ -110,6 +125,7 @@ export async function exportWorkspaceJson(
     }
     const sharedIncluded = sharedIds.filter((id) => keep.has(id) || !linkedOutside.has(id));
     included = new Set([...identityIds, ...sharedIncluded]);
+    included = new Set([...included, ...datesOf(included)]);
   }
   const has = (id: string) => included.has(id);
   const connections = allConnections.filter((c) => has(c.sourceId) && has(c.targetId));
@@ -228,7 +244,7 @@ export type IntegrityInput = {
   notes: Id[];
   ideas: Id[];
   tasks: Id[];
-  calendarEvents: Id[];
+  calendarEvents: (Id & { subjectId?: Ref })[];
   connections: { sourceId: string; targetId: string }[];
   outlines: (Id & {
     bookId: Ref;
@@ -275,24 +291,13 @@ export function checkExportIntegrity(data: IntegrityInput): string[] {
   const fields = ids(data.fieldDefinitions);
   const templates = new Set([...ids(data.structureTemplates), ...ids(data.builtInTemplates)]);
 
-  const typed: [string, { id: string }[], string][] = [
-    ["series", data.series, "SERIES"],
-    ["book", data.books, "BOOK"],
-    ["part", data.parts, "PART"],
-    ["chapter", data.chapters, "CHAPTER"],
-    ["scene", data.scenes, "SCENE"],
-    ["character", data.characters, "CHARACTER"],
-    ["relationship", data.relationships, "RELATIONSHIP"],
-    ["note", data.notes, "NOTE"],
-    ["idea", data.ideas, "IDEA"],
-    ["task", data.tasks, "TASK"],
-    ["event", data.calendarEvents, "EVENT"],
-    ["structure", data.outlines, "OUTLINE"],
-  ];
-  for (const [label, rows, kind] of typed) {
-    for (const r of rows)
-      if (nodes.get(r.id) !== kind) problems.push(`${label} ${r.id} has no ${kind} story node`);
+  // Every story object has a node of its kind (kinds from the registry).
+  for (const kind of STORY_KINDS) {
+    const { bundle, noun } = storyObjectType(kind);
+    for (const r of data[bundle] as { id: string }[])
+      if (nodes.get(r.id) !== kind) problems.push(`${noun.one} ${r.id} has no ${kind} story node`);
   }
+  for (const e of data.calendarEvents) need("event.subject", e.subjectId, nodes);
   for (const s of data.series) need("series.penName", s.penNameId, penNames);
   for (const b of data.books) {
     need("book.penName", b.penNameId, penNames);

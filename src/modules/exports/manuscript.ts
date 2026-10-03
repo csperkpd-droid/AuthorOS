@@ -19,6 +19,7 @@ import type { DocNode } from "@/lib/text";
 import { getBook } from "@/modules/library";
 import { getBookTree } from "@/modules/manuscript";
 import type { AuthorContext } from "@/server/context";
+import { assertCan } from "@/server/policy";
 
 import { booksInScope, resolveScope } from "./scope";
 import type { ExportScopeInput } from "./schemas";
@@ -92,6 +93,7 @@ export async function exportMarkdown(
   ctx: AuthorContext,
   { scope, bookIds }: { scope: ExportScopeInput; bookIds?: string[] },
 ) {
+  assertCan(ctx, "edit", "manuscript");
   const { resolved, books } = await manuscripts(ctx, scope, bookIds);
   const out: string[] = [];
   for (const book of books) {
@@ -245,6 +247,7 @@ export async function exportDocx(
   ctx: AuthorContext,
   { scope, bookIds }: { scope: ExportScopeInput; bookIds?: string[] },
 ) {
+  assertCan(ctx, "edit", "manuscript");
   const { resolved, books } = await manuscripts(ctx, scope, bookIds);
   const list = (
     reference: string,

@@ -1,5 +1,6 @@
 "use server";
 
+import { setDeadline } from "@/modules/calendar";
 import { field, runAction } from "@/server/action";
 import { requireAuthorContext } from "@/server/context";
 
@@ -7,6 +8,7 @@ import {
   createBook,
   createSeries,
   moveBookInSeries,
+  previewBookSeries,
   setBookSeries,
   trashBook,
   trashSeries,
@@ -61,6 +63,13 @@ export async function createBookAction(formData: FormData) {
   }, NAVIGATES);
 }
 
+/** "What will this affect?" for changing a book's series. */
+export async function previewBookSeriesAction(id: string, seriesId: string | null) {
+  return runAction(async () => previewBookSeries(await requireAuthorContext(), id, seriesId), {
+    refresh: false,
+  });
+}
+
 export async function updateBookAction(id: string, formData: FormData) {
   return runAction(async () => {
     const ctx = await requireAuthorContext();
@@ -70,7 +79,6 @@ export async function updateBookAction(id: string, formData: FormData) {
       description: field(formData, "description"),
       status: field(formData, "status") as BookInput["status"],
       targetWordCount: field(formData, "targetWordCount"),
-      ...(formData.has("dueOn") && { dueOn: field(formData, "dueOn") }),
       ...(formData.has("tropes") && { tropes: field(formData, "tropes") }),
       ...(formData.has("heatLevel") && {
         heatLevel: field(formData, "heatLevel") as BookInput["heatLevel"],
@@ -80,9 +88,17 @@ export async function updateBookAction(id: string, formData: FormData) {
     // Series membership first: it decides whether the book may pick its own pen name.
     if (formData.has("seriesId")) {
       const seriesId = field(formData, "seriesId");
-      await setBookSeries(ctx, id, seriesId === "" ? null : seriesId);
+      // Leaving a series is reviewed first (Change Impact); the token is the review's.
+      await setBookSeries(
+        ctx,
+        id,
+        seriesId === "" ? null : seriesId,
+        optional(field(formData, "seriesToken")) ?? undefined,
+      );
     }
     await updateBook(ctx, id, input);
+    // The deadline is a calendar entry about the book (one source of truth for dates).
+    if (formData.has("dueOn")) await setDeadline(ctx, id, field(formData, "dueOn"));
     return null;
   });
 }

@@ -4,6 +4,7 @@ export {
   beatsForScene,
   createOutline,
   deleteBeat,
+  previewDeleteBeat,
   deleteTemplate,
   getOutline,
   listOutlines,
