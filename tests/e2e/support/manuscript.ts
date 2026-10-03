@@ -68,4 +68,7 @@ export async function switchIdentity(page: Page, label: string) {
   const saved = page.waitForResponse((r) => r.request().method() === "POST");
   await page.getByLabel("Writing as").selectOption({ label });
   await saved;
+  // Other requests (e.g. the one-time time-zone detection) may also POST:
+  // wait until everything has settled.
+  await page.waitForLoadState("networkidle");
 }

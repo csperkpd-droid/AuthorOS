@@ -117,11 +117,12 @@ describe("relationships", () => {
     await updateRelationship(ctx, rel.id, { type: "Romance", description: "Slow burn" });
     const [r] = await listRelationships(ctx, { characterId: a });
     expect(r).toMatchObject({ type: "Romance", description: "Slow burn" });
-    expect([r.characterA.name, r.characterB.name].sort()).toEqual(["Ada", "Ben"]);
+    expect(r.members.map((m) => m.name)).toEqual(["Ben", "Ada"]);
+    expect(r.title).toBe("Ben & Ada");
 
-    // The ordered pair is a database rule too.
+    // One relationship per set of members is a database rule too.
     const row = await db.relationship.findUniqueOrThrow({ where: { id: rel.id } });
-    expect(row.characterAId < row.characterBId).toBe(true);
+    expect(row.memberKey).toBe([a, b].sort().join(","));
   });
 
   it("is a story node that other things can connect to", async () => {

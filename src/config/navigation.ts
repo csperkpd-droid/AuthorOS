@@ -1,11 +1,13 @@
 import {
   CalendarDays,
+  Download,
   ChartGantt,
   HeartHandshake,
   LayoutDashboard,
   Library,
   Lightbulb,
   Rocket,
+  Search,
   SquareCheck,
   StickyNote,
   Trash2,
@@ -54,6 +56,13 @@ export const navigation: NavGroup[] = [
         description: "Series, books, parts, chapters and scenes, with the manuscript editor.",
         availability: { status: "available" },
         matches: ["/books"],
+      },
+      {
+        label: "Search",
+        href: "/search",
+        icon: Search,
+        description: "Find anything: words in scenes and notes, characters, books, structures.",
+        availability: { status: "available" },
       },
       {
         label: "Pen names",
@@ -119,6 +128,13 @@ export const navigation: NavGroup[] = [
         href: "/calendar",
         icon: CalendarDays,
         description: "Deadlines, events, due tasks and the words you wrote, in one view.",
+        availability: { status: "available" },
+      },
+      {
+        label: "Export",
+        href: "/export",
+        icon: Download,
+        description: "Manuscripts (Word, Markdown) and a full structured backup.",
         availability: { status: "available" },
       },
       {

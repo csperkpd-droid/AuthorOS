@@ -6,7 +6,7 @@ relationships, story structure, romance planning, notes, tasks and more.
 **Principles:** authors stay in control · AI suggests, never changes ·
 everything is connected · built to grow.
 
-> **Status:** Milestone 4 (tasks, calendar, writing progress, series arcs, Change Impact) is complete. See [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status:** the MVP is complete: Milestone 5 (search, exports, group relationships, template kits) is done. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Documentation
 

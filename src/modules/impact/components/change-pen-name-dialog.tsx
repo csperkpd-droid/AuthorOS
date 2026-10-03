@@ -56,6 +56,7 @@ export function ChangePenNameDialog({
           <ImpactReview
             report={report}
             confirmLabel="Move everything"
+            pendingLabel="Moving…"
             pending={apply.pending}
             error={apply.error}
             onCancel={() => reset(false)}

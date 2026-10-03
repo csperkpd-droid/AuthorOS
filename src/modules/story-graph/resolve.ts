@@ -195,34 +195,48 @@ async function load(
         where: {
           ...ws,
           ...liveRelationship,
-          ...(penNameId ? { characterA: pen } : {}),
-          ...(query
-            ? {
-                OR: [
-                  { type: contains(query) },
-                  { characterA: { name: contains(query) } },
-                  { characterB: { name: contains(query) } },
-                ],
-              }
-            : {}),
+          AND: [
+            ...(penNameId ? [{ members: { some: { character: pen } } }] : []),
+            ...(query
+              ? [
+                  {
+                    OR: [
+                      { type: contains(query) },
+                      { members: { some: { character: { name: contains(query) } } } },
+                    ],
+                  },
+                ]
+              : []),
+          ],
         },
         select: {
           id: true,
           type: true,
-          characterA: { select: { name: true, penNameId: true, seriesId: true } },
-          characterB: { select: { name: true } },
+          members: {
+            orderBy: { position: "asc" },
+            select: { character: { select: { name: true, penNameId: true, seriesId: true } } },
+          },
         },
         ...page,
       });
-      return rows.map((r) => ({
-        id: r.id,
-        kind,
-        title: `${r.characterA.name} & ${r.characterB.name}`,
-        context: r.type,
-        href: `/relationships/${r.id}`,
-        penNameId: r.characterA.penNameId,
-        seriesId: r.characterA.seriesId,
-      }));
+      return rows.map((r) => {
+        const members = r.members.map((m) => m.character);
+        const names = members.map((m) => m.name);
+        const series = new Set(members.map((m) => m.seriesId));
+        return {
+          id: r.id,
+          kind,
+          title:
+            names.length <= 2
+              ? names.join(" & ")
+              : `${names.slice(0, -1).join(", ")} & ${names.at(-1)}`,
+          context: r.type,
+          href: `/relationships/${r.id}`,
+          // Members share one pen name; a series only if they all share it.
+          penNameId: members[0]?.penNameId ?? null,
+          seriesId: series.size === 1 ? [...series][0] : null,
+        };
+      });
     }
     case "OUTLINE": {
       const rows = await db.outline.findMany({

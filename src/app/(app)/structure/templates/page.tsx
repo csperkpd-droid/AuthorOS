@@ -2,15 +2,18 @@ import type { Metadata } from "next";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/shell/page-header";
-import { listTemplates } from "@/modules/structure";
-import { TemplateList } from "@/modules/structure/ui";
+import { Boxes } from "lucide-react";
+
+import { Button } from "@/components/ui/button";
+import { listKits, listTemplates } from "@/modules/structure";
+import { KitDialog, KitList, TemplateList } from "@/modules/structure/ui";
 import { requireAuthorContext } from "@/server/context";
 
 export const metadata: Metadata = { title: "Structure templates" };
 
 export default async function TemplatesPage() {
   const ctx = await requireAuthorContext();
-  const templates = await listTemplates(ctx);
+  const [templates, kits] = await Promise.all([listTemplates(ctx), listKits(ctx)]);
   const yours = templates.filter((t) => !t.builtIn);
   const builtIn = templates.filter((t) => t.builtIn);
 
@@ -25,6 +28,30 @@ export default async function TemplatesPage() {
         title="Templates"
         description="Applying a template creates a new structure with its own beats; editing either never changes the other."
       />
+      <section aria-labelledby="kits-heading" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="kits-heading" className="font-serif text-xl">
+            Template kits
+          </h2>
+          <KitDialog
+            templates={templates}
+            trigger={
+              <Button variant="outline" size="sm">
+                <Boxes />
+                New kit
+              </Button>
+            }
+          />
+        </div>
+        {kits.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            A kit applies several templates at once, such as a main plot, a romance arc and a
+            character arc. Create one here, or use “Save as kit” on a book.
+          </p>
+        ) : (
+          <KitList kits={kits} templates={templates} />
+        )}
+      </section>
       <section aria-labelledby="yours-heading" className="space-y-3">
         <h2 id="yours-heading" className="font-serif text-xl">
           Your templates

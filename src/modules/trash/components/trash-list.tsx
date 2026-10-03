@@ -4,14 +4,20 @@ import { ArchiveRestore, Trash2 } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormError } from "@/components/ui/field";
 import type { StoryNodeKind } from "@/generated/prisma/enums";
 import { useAction } from "@/hooks/use-action";
+import { ImpactDialog } from "@/modules/impact/ui";
 import { NODE_KIND_LABELS } from "@/modules/story-graph/ui";
 import { formatDateTime } from "@/lib/format";
 
-import { deleteForeverAction, emptyTrashAction, restoreAction } from "../actions";
+import {
+  deleteForeverAction,
+  emptyTrashAction,
+  previewDeleteForeverAction,
+  previewEmptyTrashAction,
+  restoreAction,
+} from "../actions";
 
 const kindLabel = (kind: StoryNodeKind) => NODE_KIND_LABELS[kind].one;
 
@@ -31,8 +37,7 @@ export function TrashList({ items }: { items: Item[] }) {
       <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center">
         <p className="font-serif text-lg">The Trash is empty</p>
         <p className="mt-1 text-sm text-muted-foreground">
-          Deleted series, books, parts, chapters and scenes wait here until you restore them or
-          delete them forever.
+          Deleted work waits here until you restore it or delete it forever.
         </p>
       </div>
     );
@@ -41,7 +46,7 @@ export function TrashList({ items }: { items: Item[] }) {
   return (
     <div className="space-y-4">
       <div className="flex justify-end">
-        <ConfirmDialog
+        <ImpactDialog
           trigger={
             <Button variant="outline" size="sm">
               <Trash2 />
@@ -49,10 +54,9 @@ export function TrashList({ items }: { items: Item[] }) {
             </Button>
           }
           title="Empty the Trash?"
-          description={`This permanently deletes ${items.length} item${items.length === 1 ? "" : "s"} and everything inside them, including their history. This can’t be undone.`}
+          loadReport={previewEmptyTrashAction}
+          onConfirm={emptyTrashAction}
           confirmLabel="Delete forever"
-          destructive
-          onConfirm={() => emptyTrashAction()}
         />
       </div>
       <FormError message={restore.error} />
@@ -78,17 +82,16 @@ export function TrashList({ items }: { items: Item[] }) {
                 <ArchiveRestore />
                 Restore
               </Button>
-              <ConfirmDialog
+              <ImpactDialog
                 trigger={
-                  <Button size="sm" variant="ghost" className="text-destructive">
+                  <Button size="sm" variant="ghost" aria-label={`Delete ${item.title} forever`}>
                     Delete forever
                   </Button>
                 }
                 title={`Delete “${item.title}” forever?`}
-                description="It will be permanently deleted with everything inside it, including its history. This can’t be undone."
+                loadReport={previewDeleteForeverAction.bind(null, item.kind, item.id)}
+                onConfirm={deleteForeverAction.bind(null, item.kind, item.id)}
                 confirmLabel="Delete forever"
-                destructive
-                onConfirm={() => deleteForeverAction(item.kind, item.id)}
               />
             </div>
           </li>

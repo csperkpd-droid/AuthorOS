@@ -3,13 +3,21 @@
 import { field, runAction } from "@/server/action";
 import { requireAuthorContext } from "@/server/context";
 
-import { createRelationship, trashRelationship, updateRelationship } from "./service";
+import {
+  createRelationship,
+  setRelationshipMembers,
+  trashRelationship,
+  updateRelationship,
+} from "./service";
 
 export async function createRelationshipAction(formData: FormData) {
   return runAction(async () =>
     createRelationship(await requireAuthorContext(), {
-      characterId: field(formData, "characterId"),
-      otherCharacterId: field(formData, "otherCharacterId"),
+      characterIds: [
+        field(formData, "characterId"),
+        field(formData, "otherCharacterId"),
+        ...formData.getAll("moreCharacterIds").map(String),
+      ].filter(Boolean),
       type: field(formData, "type"),
       description: field(formData, "description"),
     }),
@@ -29,4 +37,17 @@ export async function trashRelationshipAction(id: string) {
   return runAction(async () => trashRelationship(await requireAuthorContext(), id), {
     refresh: false,
   });
+}
+
+export async function setRelationshipMembersAction(id: string, characterIds: string[]) {
+  return runAction(async () =>
+    setRelationshipMembers(await requireAuthorContext(), id, characterIds),
+  );
+}
+
+/** Creates the relationship between some members of a group (e.g. one pair). */
+export async function createWithinGroupAction(characterIds: string[], type: string) {
+  return runAction(async () =>
+    createRelationship(await requireAuthorContext(), { characterIds, type }),
+  );
 }

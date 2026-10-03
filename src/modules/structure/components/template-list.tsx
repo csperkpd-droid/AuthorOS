@@ -5,15 +5,19 @@ import { useState } from "react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Field, FormError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import type { StructureKind } from "@/generated/prisma/enums";
 import { useAction } from "@/hooks/use-action";
+import { ImpactDialog } from "@/modules/impact/ui";
 
-import { deleteTemplateAction, renameTemplateAction } from "../actions";
+import {
+  deleteTemplateAction,
+  previewDeleteTemplateAction,
+  renameTemplateAction,
+} from "../actions";
 import { STRUCTURE_KIND_LABELS } from "../labels";
 
 type Template = {
@@ -61,17 +65,16 @@ export function TemplateList({ templates }: { templates: Template[] }) {
                 >
                   <Pencil />
                 </Button>
-                <ConfirmDialog
+                <ImpactDialog
                   trigger={
                     <Button variant="ghost" size="sm" aria-label={`Delete ${t.name}`}>
                       <Trash2 />
                     </Button>
                   }
                   title={`Delete the template “${t.name}”?`}
-                  description="Structures made from it keep their beats; they were copies."
-                  confirmLabel="Delete template"
-                  destructive
+                  loadReport={previewDeleteTemplateAction.bind(null, t.id)}
                   onConfirm={deleteTemplateAction.bind(null, t.id)}
+                  confirmLabel="Delete template"
                 />
               </div>
             )}

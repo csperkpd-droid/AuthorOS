@@ -1,16 +1,16 @@
 import "server-only";
 
-import { createHash } from "node:crypto";
-
 import type { Prisma, StoryNodeKind } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { ConflictError, NotFoundError, RuleError } from "@/lib/errors";
 import { formatCount } from "@/lib/format";
 import { positionAtEnd } from "@/lib/ordering";
 import { requireAssignablePenName } from "@/modules/pen-names";
+import { relationshipTitle } from "@/modules/relationships";
 import type { AuthorContext } from "@/server/context";
 
-import type { ImpactBlocker, ImpactGroup, ImpactItem, ImpactReport } from "./types";
+import { buildReport } from "./report";
+import type { ImpactBlocker, ImpactItem, ImpactReport } from "./types";
 
 /**
  * Change Impact for identity moves: giving a standalone book, or a series,
@@ -190,10 +190,7 @@ async function planIdentityMove(
       const rels = await client.relationship.findMany({
         where: {
           workspaceId: ws,
-          OR: [
-            { characterAId: { in: rows.map((r) => r.id) } },
-            { characterBId: { in: rows.map((r) => r.id) } },
-          ],
+          members: { some: { characterId: { in: rows.map((r) => r.id) } } },
         },
         select: { id: true },
       });
@@ -205,21 +202,21 @@ async function planIdentityMove(
         select: {
           id: true,
           deletedAt: true,
-          characterAId: true,
-          characterBId: true,
-          characterA: { select: { name: true, penNameId: true } },
-          characterB: { select: { name: true } },
+          members: {
+            orderBy: { position: "asc" },
+            select: { character: { select: { id: true, name: true, penNameId: true } } },
+          },
         },
       });
       pendingRelationships.clear();
       for (const r of rows) {
-        if (relationships.has(r.id) || r.characterA.penNameId !== fromPenNameId) continue;
-        const title = `${r.characterA.name} & ${r.characterB.name}`;
+        const members = r.members.map((m) => m.character);
+        if (relationships.has(r.id) || members[0]?.penNameId !== fromPenNameId) continue;
+        const title = relationshipTitle(members.map((m) => m.name));
         relationships.set(r.id, { id: r.id, title, deletedAt: r.deletedAt });
         titleOf.set(r.id, title);
         frontier.push(r.id);
-        for (const c of [r.characterAId, r.characterBId])
-          if (!characters.has(c)) pendingCharacters.add(c);
+        for (const m of members) if (!characters.has(m.id)) pendingCharacters.add(m.id);
       }
     }
     if (pendingCharacters.size) continue;
@@ -303,108 +300,109 @@ async function planIdentityMove(
   // 5. The report.
   const sortItems = (items: ImpactItem[]) => items.sort((a, b) => a.title.localeCompare(b.title));
   const effect = `Moves to ${toPen.name}`;
-  const groups: ImpactGroup[] = [
-    {
-      key: "BOOK",
-      label: move.kind === "SERIES" ? "Series and books" : "Book",
-      effect,
-      items: [
-        ...(seriesId
-          ? [{ id: seriesId, title: rootTitle, href: `/library/series/${seriesId}` }]
-          : []),
-        ...books.map((b) => ({
-          id: b.id,
-          title: b.title,
-          href: `/books/${b.id}`,
-          ...inTrash(b.deletedAt),
+  const bookItems = books.map((b) => ({
+    id: b.id,
+    title: b.title,
+    href: `/books/${b.id}`,
+    ...inTrash(b.deletedAt),
+  }));
+  const report = buildReport({
+    title: `Move “${rootTitle}” to ${toPen.name}?`,
+    description: `${rootTitle} moves from ${fromPenName} to ${toPen.name}, with the story data connected to it. Identities stay separate, so nothing stays linked across pen names.`,
+    groups: [
+      ...(seriesId
+        ? [
+            {
+              key: "SERIES",
+              label: "Series",
+              noun: { one: "series", many: "series" },
+              effect,
+              items: [{ id: seriesId, title: rootTitle, href: `/library/series/${seriesId}` }],
+            },
+          ]
+        : []),
+      {
+        key: "BOOK",
+        label: "Books",
+        noun: { one: "book", many: "books" },
+        effect,
+        items: bookItems,
+        detail: [
+          formatCount(chapters.length, "chapter"),
+          formatCount(scenes.length, "scene"),
+          ...(parts.length ? [formatCount(parts.length, "part")] : []),
+        ].join(" · "),
+      },
+      {
+        key: "CHARACTER",
+        label: "Characters",
+        noun: { one: "character", many: "characters" },
+        effect,
+        items: sortItems(
+          [...characters.values()].map((c) => ({
+            id: c.id,
+            title: c.name,
+            href: `/characters/${c.id}`,
+            ...inTrash(c.deletedAt),
+          })),
+        ),
+      },
+      {
+        key: "RELATIONSHIP",
+        label: "Relationships",
+        noun: { one: "relationship", many: "relationships" },
+        effect,
+        items: sortItems(
+          [...relationships.values()].map((r) => ({
+            id: r.id,
+            title: r.title,
+            href: `/relationships/${r.id}`,
+            ...inTrash(r.deletedAt),
+          })),
+        ),
+      },
+      {
+        key: "OUTLINE",
+        label: "Story structures and romance arcs",
+        noun: { one: "structure", many: "structures" },
+        effect,
+        items: sortItems(
+          outlines.map((o) => ({
+            id: o.id,
+            title: o.title,
+            href: `/structure/${o.id}`,
+            ...inTrash(o.deletedAt),
+          })),
+        ),
+      },
+      {
+        key: "FIELD",
+        label: `Custom fields limited to ${fromPenName}`,
+        noun: { one: "custom field", many: "custom fields" },
+        effect: `Values kept; the field is copied to ${toPen.name}`,
+        items: fields.map((f) => ({
+          id: f.id,
+          title: f.label,
+          href: null,
+          note: formatCount(f.nodeIds.length, "value"),
         })),
-      ],
-      summary: [
-        formatCount(chapters.length, "chapter"),
-        formatCount(scenes.length, "scene"),
-        ...(parts.length ? [formatCount(parts.length, "part")] : []),
-      ].join(" · "),
-    },
-    {
-      key: "CHARACTER",
-      label: "Characters",
-      effect,
-      items: sortItems(
-        [...characters.values()].map((c) => ({
-          id: c.id,
-          title: c.name,
-          href: `/characters/${c.id}`,
-          ...inTrash(c.deletedAt),
-        })),
-      ),
-    },
-    {
-      key: "RELATIONSHIP",
-      label: "Relationships",
-      effect,
-      items: sortItems(
-        [...relationships.values()].map((r) => ({
-          id: r.id,
-          title: r.title,
-          href: `/relationships/${r.id}`,
-          ...inTrash(r.deletedAt),
-        })),
-      ),
-    },
-    {
-      key: "OUTLINE",
-      label: "Story structures and romance arcs",
-      effect,
-      items: sortItems(
-        outlines.map((o) => ({
-          id: o.id,
-          title: o.title,
-          href: `/structure/${o.id}`,
-          ...inTrash(o.deletedAt),
-        })),
-      ),
-    },
-    {
-      key: "FIELD",
-      label: `Custom fields limited to ${fromPenName}`,
-      effect: `Values kept; the field is copied to ${toPen.name}`,
-      items: fields.map((f) => ({
-        id: f.id,
-        title: f.label,
-        href: null,
-        note: formatCount(f.nodeIds.length, "value"),
-      })),
-    },
-    {
-      key: "SHARED",
-      label: "Shared notes, ideas, tasks and events",
-      effect: "Stay shared and keep their links",
-      items: [],
-      summary: sharedLinked.size ? formatCount(sharedLinked.size, "linked item") : undefined,
-    },
-  ].filter((g) => g.items.length > 0 || g.summary) as ImpactGroup[];
-
-  const token = createHash("sha256")
-    .update(
-      JSON.stringify({
-        to: toPen.id,
-        from: fromPenNameId,
-        groups: groups.map((g) => [g.key, g.items.map((i) => i.id).sort()]),
-        blockers: blockers.map((b) => b.title).sort(),
-        structural: [...structural].sort(),
-      }),
-    )
-    .digest("hex")
-    .slice(0, 32);
+      },
+      {
+        key: "SHARED",
+        label: "Shared notes, ideas, tasks and events",
+        noun: { one: "linked item", many: "linked items" },
+        effect: "Stay shared and keep their links",
+        affected: false,
+        count: sharedLinked.size,
+        items: [],
+      },
+    ],
+    blockers,
+    extra: [toPen.id, fromPenNameId, [...structural].sort()],
+  });
 
   return {
-    report: {
-      title: `Move “${rootTitle}” to ${toPen.name}?`,
-      description: `${rootTitle} moves from ${fromPenName} to ${toPen.name}, with the story data connected to it. Identities stay separate, so nothing is left linked across pen names.`,
-      groups,
-      blockers,
-      token,
-    },
+    report,
     fromPenNameId,
     toPenNameId: toPen.id,
     bookIds,

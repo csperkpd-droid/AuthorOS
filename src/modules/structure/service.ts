@@ -9,7 +9,8 @@ import { planInsertAfter, positionAtEnd, sortByPosition } from "@/lib/ordering";
 import { getCharacter, listCharacters } from "@/modules/characters";
 import { getBook, getSeries, listLibrary } from "@/modules/library";
 import { getBookTree } from "@/modules/manuscript";
-import { getRelationship, listRelationships } from "@/modules/relationships";
+import { getRelationship, listRelationships, relationshipTitle } from "@/modules/relationships";
+import { buildReport } from "@/modules/impact";
 import { createStoryNode, liveOutline, liveScene } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 
@@ -76,6 +77,12 @@ async function requireOwnTemplate(ctx: AuthorContext, id: string) {
  * keep which book (1st, 2nd…) they were planned for.
  */
 export async function saveAsTemplate(ctx: AuthorContext, outlineId: string, input: TemplateInput) {
+  const prepared = await prepareTemplate(ctx, outlineId, input);
+  return db.$transaction((tx) => prepared.insert(tx));
+}
+
+/** Reads a structure's beats and returns how to insert them as a template. */
+export async function prepareTemplate(ctx: AuthorContext, outlineId: string, input: TemplateInput) {
   const data = templateInput.parse(input);
   const outline = await requireOutline(ctx, outlineId);
   const [beats, seriesBooks] = await Promise.all([
@@ -95,7 +102,7 @@ export async function saveAsTemplate(ctx: AuthorContext, outlineId: string, inpu
   const ordered = sortByPosition(beats);
   const keys = ordered.length ? generateNKeysBetween(null, null, ordered.length) : [];
 
-  return db.$transaction(async (tx) => {
+  const insert = async (tx: Prisma.TransactionClient) => {
     const template = await tx.structureTemplate.create({
       data: {
         workspaceId: ctx.workspaceId,
@@ -122,7 +129,8 @@ export async function saveAsTemplate(ctx: AuthorContext, outlineId: string, inpu
       });
     }
     return template;
-  });
+  };
+  return { insert };
 }
 
 export async function renameTemplate(ctx: AuthorContext, id: string, input: TemplateInput) {
@@ -135,11 +143,63 @@ export async function renameTemplate(ctx: AuthorContext, id: string, input: Temp
 }
 
 /**
+ * "What will this affect?" for deleting a template: structures made from it
+ * keep all their beats (they were copies), and kits that include it lose it.
+ */
+export async function previewDeleteTemplate(ctx: AuthorContext, id: string) {
+  await requireOwnTemplate(ctx, id);
+  const template = await db.structureTemplate.findUniqueOrThrow({
+    where: { id },
+    select: { name: true },
+  });
+  const [made, kits] = await Promise.all([
+    db.outline.findMany({
+      where: { workspaceId: ctx.workspaceId, templateId: id },
+      select: { id: true, title: true, deletedAt: true },
+    }),
+    db.templateKit.findMany({
+      where: { workspaceId: ctx.workspaceId, items: { some: { templateId: id } } },
+      select: { id: true, name: true },
+    }),
+  ]);
+  return buildReport({
+    title: `Delete the template “${template.name}”?`,
+    description:
+      "Structures made from this template are independent copies: they keep all their beats and scene placements.",
+    groups: [
+      {
+        key: "KITS",
+        label: "Template kits that include it",
+        noun: { one: "kit", many: "kits" },
+        effect: "Removed from the kit",
+        items: kits.map((k) => ({ id: k.id, title: k.name, href: "/structure/templates" })),
+      },
+      {
+        key: "MADE",
+        label: "Structures made from it",
+        noun: { one: "structure", many: "structures" },
+        effect: "Unchanged; they keep their beats",
+        affected: false,
+        items: made.map((o) => ({
+          id: o.id,
+          title: o.title,
+          href: `/structure/${o.id}`,
+          ...(o.deletedAt ? { note: "in the Trash" } : {}),
+        })),
+      },
+    ],
+  });
+}
+
+/**
  * Deletes one of the author's templates. Structures made from it keep their
  * beats (they were copies); only the "made from" reference is cleared.
  */
-export async function deleteTemplate(ctx: AuthorContext, id: string) {
+export async function deleteTemplate(ctx: AuthorContext, id: string, token?: string) {
   await requireOwnTemplate(ctx, id);
+  if (token !== undefined && (await previewDeleteTemplate(ctx, id)).token !== token) {
+    throw new ConflictError("Where this template is used changed. Review again.");
+  }
   await db.structureTemplate.delete({ where: { id } });
 }
 
@@ -151,8 +211,7 @@ const outlineRefs = {
   relationship: {
     select: {
       id: true,
-      characterA: { select: { name: true } },
-      characterB: { select: { name: true } },
+      members: { orderBy: { position: "asc" }, select: { character: { select: { name: true } } } },
     },
   },
   character: { select: { id: true, name: true } },
@@ -174,6 +233,13 @@ async function requireOutline(ctx: AuthorContext, id: string) {
   });
   if (!outline) throw new NotFoundError("Structure");
   return outline;
+}
+
+/** A structure's owning relationship as { id, title }. */
+function relationshipRef(
+  r: { id: string; members: { character: { name: string } }[] } | null,
+): { id: string; title: string } | null {
+  return r ? { id: r.id, title: relationshipTitle(r.members.map((m) => m.character.name)) } : null;
 }
 
 /** Ids of a series' visible books, in reading order. */
@@ -213,6 +279,16 @@ function assertSameScope(owner: { penNameId: string; seriesId: string | null }, 
  * beats are planned for the matching books of the series.
  */
 export async function createOutline(ctx: AuthorContext, input: NewOutlineInput) {
+  const prepared = await prepareOutline(ctx, input);
+  return db.$transaction((tx) => prepared.insert(tx));
+}
+
+/**
+ * Validates a new structure (scope, owner, template) and returns how to
+ * insert it in a caller's transaction, so several structures (a template
+ * kit) can be created together or not at all.
+ */
+export async function prepareOutline(ctx: AuthorContext, input: NewOutlineInput) {
   const data = newOutlineInput.parse(input);
   const scope = await resolveScope(ctx, data);
 
@@ -223,13 +299,10 @@ export async function createOutline(ctx: AuthorContext, input: NewOutlineInput) 
     if (!data.relationshipId)
       throw new RuleError("Choose the relationship this romance arc follows.");
     const rel = await getRelationship(ctx, data.relationshipId);
-    const a = await db.character.findUniqueOrThrow({
-      where: { id: rel.characterA.id },
-      select: { penNameId: true, seriesId: true },
-    });
-    assertSameScope(a, scope);
+    // Every member must belong to the structure's identity (and series).
+    for (const member of rel.members) assertSameScope(member, scope);
     relationshipId = rel.id;
-    ownerName = `${rel.characterA.name} & ${rel.characterB.name}`;
+    ownerName = rel.title;
   } else if (data.kind === "CHARACTER_ARC") {
     if (!data.characterId) throw new RuleError("Choose the character whose arc this is.");
     const character = await getCharacter(ctx, data.characterId);
@@ -281,7 +354,7 @@ export async function createOutline(ctx: AuthorContext, input: NewOutlineInput) 
   const keys = beats.length ? generateNKeysBetween(null, null, beats.length) : [];
   const books = data.seriesId ? await seriesBookIds(ctx, data.seriesId) : [];
 
-  return db.$transaction(async (tx) => {
+  const insert = async (tx: Prisma.TransactionClient) => {
     const id = await createStoryNode(tx, ctx.workspaceId, "OUTLINE");
     await tx.outline.create({
       data: {
@@ -312,7 +385,8 @@ export async function createOutline(ctx: AuthorContext, input: NewOutlineInput) 
       });
     }
     return { id };
-  });
+  };
+  return { insert };
 }
 
 /** Structures with progress (how many beats are placed in scenes). */
@@ -360,8 +434,9 @@ export async function listOutlines(
       beats: { select: { _count: { select: { scenes: { where: { scene: liveScene } } } } } },
     },
   });
-  return rows.map(({ beats, ...o }) => ({
+  return rows.map(({ beats, relationship, ...o }) => ({
     ...o,
+    relationship: relationshipRef(relationship),
     beatCount: beats.length,
     placedCount: beats.filter((b) => b._count.scenes > 0).length,
   }));
@@ -420,6 +495,7 @@ export async function getOutline(ctx: AuthorContext, id: string) {
 
   return {
     ...outline,
+    relationship: relationshipRef(outline.relationship),
     books: bookIds.map((b, i) => ({ id: b, title: titles.get(b) ?? "", number: i + 1 })),
     beats: sortByPosition(beats).map(({ scenes, ...b }) => ({
       ...b,
@@ -642,8 +718,10 @@ export async function seriesRomance(ctx: AuthorContext, seriesId: string) {
         select: {
           id: true,
           type: true,
-          characterA: { select: { id: true, name: true } },
-          characterB: { select: { id: true, name: true } },
+          members: {
+            orderBy: { position: "asc" },
+            select: { character: { select: { id: true, name: true } } },
+          },
         },
       },
       beats: {
@@ -702,10 +780,19 @@ export async function seriesRomance(ctx: AuthorContext, seriesId: string) {
 
   const relationships = [...byRelationship.values()]
     .sort((a, b) => (a.arcRole === b.arcRole ? 0 : a.arcRole === "MAIN" ? -1 : 1))
-    .map((r) => ({
-      ...r,
-      books: series.books.map((b) => ({ bookId: b.id, beats: r.books.get(b.id) ?? [] })),
-    }));
+    .map((r) => {
+      const members = r.relationship.members.map((m) => m.character);
+      return {
+        ...r,
+        relationship: {
+          id: r.relationship.id,
+          type: r.relationship.type,
+          members,
+          title: relationshipTitle(members.map((m) => m.name)),
+        },
+        books: series.books.map((b) => ({ bookId: b.id, beats: r.books.get(b.id) ?? [] })),
+      };
+    });
 
   return {
     series: { id: series.id, title: series.title, penNameId: series.penName.id },
@@ -742,7 +829,7 @@ export async function newStructureOptions(
       .map((s) => ({ id: s.id, label: s.title })),
     relationships: relationships.map((r) => ({
       id: r.id,
-      label: `${r.characterA.name} & ${r.characterB.name}`,
+      label: r.title,
     })),
     characters: characters.map((c) => ({ id: c.id, label: c.name })),
     templates,

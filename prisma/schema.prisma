@@ -102,6 +102,7 @@ model Workspace {
   penNames   PenName[]
   storyNodes StoryNode[]
   templates  StructureTemplate[]
+  kits       TemplateKit[]
   writing    WritingSession[]
 
   @@map("workspaces")
@@ -450,12 +451,11 @@ model Character {
   updatedAt   DateTime      @updatedAt @map("updated_at")
   deletedAt   DateTime?     @map("deleted_at")
 
-  node           StoryNode      @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  penName        PenName        @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
-  series         Series?        @relation(fields: [seriesId], references: [id], onDelete: SetNull)
-  relationshipsA Relationship[] @relation("RelationshipCharacterA")
-  relationshipsB Relationship[] @relation("RelationshipCharacterB")
-  outlines       Outline[]
+  node        StoryNode            @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  penName     PenName              @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
+  series      Series?              @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  memberships RelationshipMember[]
+  outlines    Outline[]
 
   @@unique([id, workspaceId])
   @@index([workspaceId])
@@ -467,27 +467,45 @@ model Character {
 /// A relationship between two characters. It is a story node itself, so
 /// notes, scenes ("develops_in") and future romance arcs can connect to it.
 /// The pair is stored in id order (CHECK) and is unique.
+/// A relationship between two or more characters (a couple, a triangle, a
+/// Why Choose/reverse-harem group, a family). Members are rows in
+/// relationship_members; the relationships between individual members of a
+/// group are relationships of their own.
 model Relationship {
-  id           String    @id @db.Uuid
-  workspaceId  String    @map("workspace_id") @db.Uuid
-  characterAId String    @map("character_a_id") @db.Uuid
-  characterBId String    @map("character_b_id") @db.Uuid
-  type         String
-  description  String?
-  createdAt    DateTime  @default(now()) @map("created_at")
-  updatedAt    DateTime  @updatedAt @map("updated_at")
-  deletedAt    DateTime? @map("deleted_at")
+  id          String    @id @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  /// Sorted member ids joined by ","; one relationship per exact set of members.
+  memberKey   String    @map("member_key")
+  type        String
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
 
-  node       StoryNode @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  characterA Character @relation("RelationshipCharacterA", fields: [characterAId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  characterB Character @relation("RelationshipCharacterB", fields: [characterBId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  outlines   Outline[]
+  node     StoryNode            @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  members  RelationshipMember[]
+  outlines Outline[]
 
-  @@unique([characterAId, characterBId])
   @@unique([id, workspaceId])
-  @@index([characterBId])
+  @@unique([workspaceId, memberKey])
   @@index([workspaceId])
   @@map("relationships")
+}
+
+model RelationshipMember {
+  workspaceId    String   @map("workspace_id") @db.Uuid
+  relationshipId String   @map("relationship_id") @db.Uuid
+  characterId    String   @map("character_id") @db.Uuid
+  /// Display order of the members.
+  position       Int
+  createdAt      DateTime @default(now()) @map("created_at")
+
+  relationship Relationship @relation(fields: [relationshipId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  character    Character    @relation(fields: [characterId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+
+  @@id([relationshipId, characterId])
+  @@index([characterId])
+  @@map("relationship_members")
 }
 
 model Note {
@@ -595,8 +613,9 @@ model StructureTemplate {
   createdAt   DateTime      @default(now()) @map("created_at")
   updatedAt   DateTime      @default(now()) @updatedAt @map("updated_at")
 
-  workspace Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace Workspace?        @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   beats     TemplateBeat[]
+  kitItems  TemplateKitItem[]
   outlines  Outline[]
 
   @@index([workspaceId])
@@ -854,4 +873,46 @@ model WritingSession {
   @@index([workspaceId, userId, date])
   @@index([bookId])
   @@map("writing_sessions")
+}
+
+// ─── Milestone 5: template kits ─────────────────────────────────────────────
+
+enum KitItemType {
+  /// A structure template (plot, romance, character arc, subplot, custom).
+  STRUCTURE
+
+  @@map("kit_item_type")
+}
+
+/// A named set of templates applied together ("My Romantasy Book Kit").
+/// Applying a kit creates independent new structures, like each template.
+model TemplateKit {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  name        String
+  description String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  workspace Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  items     TemplateKitItem[]
+
+  @@index([workspaceId])
+  @@map("template_kits")
+}
+
+model TemplateKitItem {
+  id         String      @id @default(uuid(7)) @db.Uuid
+  kitId      String      @map("kit_id") @db.Uuid
+  /// Room for other kinds of templates (e.g. publishing workflows, v1.1).
+  itemType   KitItemType @default(STRUCTURE) @map("item_type")
+  templateId String      @map("template_id") @db.Uuid
+  position   Int
+
+  kit      TemplateKit       @relation(fields: [kitId], references: [id], onDelete: Cascade)
+  template StructureTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+
+  @@index([kitId])
+  @@index([templateId])
+  @@map("template_kit_items")
 }

@@ -11,8 +11,8 @@ type Row = {
   relationship: {
     id: string;
     type: string;
-    characterA: { id: string; name: string };
-    characterB: { id: string; name: string };
+    members: { id: string; name: string }[];
+    title: string;
   };
   arcRole: ArcRole;
   arcs: { id: string; title: string; seriesWide: boolean; bookId: string | null }[];
@@ -22,7 +22,7 @@ type Row = {
 
 /**
  * The Series Romance Center: every romance in a series (main and secondary
- * couples, triangles, multi-partner romances as their relationships), each
+ * couples, triangles, Why Choose groups), each
  * shown as its progression book by book. A beat appears under the books its
  * scenes are in, or else the book it is planned for.
  */
@@ -36,7 +36,7 @@ export function RomanceProgression({
   return (
     <div className="space-y-6">
       {relationships.map((r) => {
-        const couple = `${r.relationship.characterA.name} & ${r.relationship.characterB.name}`;
+        const couple = r.relationship.title;
         return (
           <section
             key={r.relationship.id}

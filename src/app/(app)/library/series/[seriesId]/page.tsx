@@ -10,8 +10,13 @@ import { getSeries, listSeriesOptions } from "@/modules/library";
 import { BookDialog, SeriesBookOrder, SeriesDialog, trashSeriesAction } from "@/modules/library/ui";
 import { ChangePenNameDialog } from "@/modules/impact/ui";
 import { listPenNames } from "@/modules/pen-names";
-import { listOutlines, newStructureOptions } from "@/modules/structure";
-import { NewStructureDialog, OutlineList } from "@/modules/structure/ui";
+import { listKits, listOutlines, newStructureOptions } from "@/modules/structure";
+import {
+  ApplyKitDialog,
+  NewStructureDialog,
+  OutlineList,
+  SaveKitDialog,
+} from "@/modules/structure/ui";
 import { requireAuthorContext } from "@/server/context";
 import { orNotFound } from "@/server/not-found";
 
@@ -27,11 +32,12 @@ export default async function SeriesPage({ params }: PageProps<"/library/series/
   const { seriesId } = await params;
   const ctx = await requireAuthorContext();
   const series = await orNotFound(getSeries(ctx, seriesId));
-  const [penNames, seriesOptions, outlines, structureOptions] = await Promise.all([
+  const [penNames, seriesOptions, outlines, structureOptions, kits] = await Promise.all([
     listPenNames(ctx),
     listSeriesOptions(ctx),
     listOutlines(ctx, { seriesId }),
     newStructureOptions(ctx, { penNameId: series.penName.id }),
+    listKits(ctx),
   ]);
   const penOptions = penNames.map((p) => ({ id: p.id, name: p.name }));
   const totalWords = series.books.reduce((n, b) => n + b.wordCount, 0);
@@ -129,6 +135,17 @@ export default async function SeriesPage({ params }: PageProps<"/library/series/
               <Heart />
               Romance Center
             </Link>
+            {outlines.some((o) => o.series?.id === series.id) && (
+              <SaveKitDialog target={{ seriesId: series.id }} defaultName={`${series.title} kit`} />
+            )}
+            {series.books.length > 0 && (
+              <ApplyKitDialog
+                kits={kits}
+                target={{ seriesId: series.id }}
+                relationships={structureOptions.relationships}
+                characters={structureOptions.characters}
+              />
+            )}
             {series.books.length > 0 && (
               <NewStructureDialog
                 {...structureOptions}

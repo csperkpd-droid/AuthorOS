@@ -28,10 +28,10 @@ export const liveScene = {
 
 export const liveCharacter = { deletedAt: null } satisfies Prisma.CharacterWhereInput;
 
+/** A relationship is visible while it and every member are. */
 export const liveRelationship = {
   deletedAt: null,
-  characterA: { deletedAt: null },
-  characterB: { deletedAt: null },
+  members: { every: { character: { deletedAt: null } } },
 } satisfies Prisma.RelationshipWhereInput;
 
 export const liveNote = { deletedAt: null } satisfies Prisma.NoteWhereInput;

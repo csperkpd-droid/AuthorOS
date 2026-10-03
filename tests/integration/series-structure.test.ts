@@ -169,7 +169,7 @@ describe("Series Romance Center", () => {
 
     const center = await seriesRomance(ctx, seriesId);
     expect(center.books.map((b) => b.title)).toEqual(["Ember", "Flame", "Ash"]);
-    expect(center.relationships.map((r) => [r.relationship.characterA.name, r.arcRole])).toEqual([
+    expect(center.relationships.map((r) => [r.relationship.title, r.arcRole])).toEqual([
       [expect.any(String), "MAIN"],
       [expect.any(String), "SECONDARY"],
     ]);

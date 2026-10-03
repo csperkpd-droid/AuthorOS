@@ -1,5 +1,6 @@
 "use client";
 
+import { Plus } from "lucide-react";
 import { useId, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
@@ -16,8 +17,9 @@ import { RELATIONSHIP_TYPE_SUGGESTIONS } from "../schemas";
 type Character = { id: string; name: string };
 
 /**
- * Create a relationship between two characters (optionally starting from
- * `fromCharacter`), or edit one (`relationship`).
+ * Create a relationship between two or more characters (optionally starting
+ * from `fromCharacter`; "Add another character" makes it a group such as a
+ * triangle or a Why Choose romance), or edit one (`relationship`).
  */
 export function RelationshipDialog({
   characters,
@@ -35,6 +37,7 @@ export function RelationshipDialog({
   const update = useAction(updateRelationshipAction);
   const id = useId();
   const others = characters.filter((c) => c.id !== fromCharacter?.id);
+  const [extra, setExtra] = useState(0);
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -82,6 +85,37 @@ export function RelationshipDialog({
                   ))}
                 </Select>
               </Field>
+              {Array.from({ length: extra }, (_, i) => (
+                <Field key={i} label={`And (${i + 3})`} htmlFor={`${id}-extra-${i}`}>
+                  <Select id={`${id}-extra-${i}`} name="moreCharacterIds" required defaultValue="">
+                    <option value="" disabled>
+                      Choose…
+                    </option>
+                    {others.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </Select>
+                </Field>
+              ))}
+              {others.length > extra + 1 && extra < 10 && (
+                <div className="sm:col-span-2">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setExtra((n) => n + 1)}
+                  >
+                    <Plus />
+                    Add another character
+                  </Button>
+                  <p className="text-xs text-muted-foreground">
+                    For a love triangle, a Why Choose romance or a family: one relationship for the
+                    whole group. Pairs within it can be relationships of their own.
+                  </p>
+                </div>
+              )}
             </div>
           )}
           <Field

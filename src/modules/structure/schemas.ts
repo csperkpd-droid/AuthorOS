@@ -52,3 +52,35 @@ export const templateInput = z.object({
   description: optionalText(2000),
 });
 export type TemplateInput = z.input<typeof templateInput>;
+
+export const kitInput = z.object({
+  name: z.string().trim().min(1, "Name the kit.").max(200),
+  description: optionalText(2000),
+  templateIds: z.array(z.uuid()).min(1, "Choose at least one template.").max(30),
+});
+export type KitInput = z.input<typeof kitInput>;
+
+/**
+ * Applying a kit to a book or series. Romance templates apply once per chosen
+ * relationship, character-arc templates once per chosen character; choosing
+ * none skips that template.
+ */
+export const applyKitInput = z
+  .object({
+    kitId: z.uuid(),
+    bookId: optionalId,
+    seriesId: optionalId,
+    owners: z
+      .record(
+        z.uuid(),
+        z.object({
+          relationshipIds: z.array(z.uuid()).optional(),
+          characterIds: z.array(z.uuid()).optional(),
+        }),
+      )
+      .default({}),
+  })
+  .refine((v) => (v.bookId === null) !== (v.seriesId === null), {
+    message: "Choose a book or a series.",
+  });
+export type ApplyKitInput = z.input<typeof applyKitInput>;

@@ -68,12 +68,15 @@ describe("moving a standalone book to another pen name", () => {
     expect(report.title).toBe("Move “Harbour Lights” to Rose?");
     expect(report.blockers).toEqual([]);
     expect(titles(report, "BOOK")).toEqual(["Harbour Lights"]);
-    expect(group(report, "BOOK")?.summary).toBe("1 chapter · 1 scene");
+    expect(group(report, "BOOK")?.detail).toBe("1 chapter · 1 scene");
     expect(titles(report, "CHARACTER")).toEqual(["Mara", "Theo"]);
     expect(titles(report, "RELATIONSHIP")).toEqual(["Mara & Theo"]);
     expect(group(report, "OUTLINE")?.items.map((i) => i.id)).toEqual([arc.id]);
     expect(titles(report, "FIELD")).toEqual(["Magic"]);
-    expect(group(report, "SHARED")?.summary).toBe("1 linked item");
+    expect(group(report, "SHARED")?.count).toBe(1);
+    expect(report.summary).toBe(
+      "This will affect 6 items: 1 book, 2 characters, 1 relationship, 1 structure, 1 custom field.",
+    );
 
     // Nothing has changed yet.
     expect((await getCharacter(ctx, mara.id)).penNameId).toBe(jane);
@@ -151,7 +154,8 @@ describe("moving a series to another pen name", () => {
 
     const move: IdentityMove = { kind: "SERIES", id: series.id, toPenNameId: rose };
     const report = await previewIdentityMove(ctx, move);
-    expect(titles(report, "BOOK")).toEqual(["Saga", "Saga 1", "Saga 2"]);
+    expect(titles(report, "SERIES")).toEqual(["Saga"]);
+    expect(titles(report, "BOOK")).toEqual(["Saga 1", "Saga 2"]);
     expect(titles(report, "CHARACTER")).toEqual(["Guest", "Hero"]);
     expect(group(report, "OUTLINE")?.items.map((i) => i.id)).toEqual([arc.id]);
 

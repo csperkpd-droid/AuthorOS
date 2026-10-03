@@ -24,8 +24,13 @@ import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
 import { NewNoteDialog } from "@/modules/notes/ui";
 import { TaskDialog } from "@/modules/tasks/ui";
-import { listOutlines, newStructureOptions } from "@/modules/structure";
-import { NewStructureDialog, OutlineList } from "@/modules/structure/ui";
+import { listKits, listOutlines, newStructureOptions } from "@/modules/structure";
+import {
+  ApplyKitDialog,
+  NewStructureDialog,
+  OutlineList,
+  SaveKitDialog,
+} from "@/modules/structure/ui";
 import { requireAuthorContext } from "@/server/context";
 import { orNotFound } from "@/server/not-found";
 
@@ -41,7 +46,7 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
   const { bookId } = await params;
   const ctx = await requireAuthorContext();
   const book = await orNotFound(getBook(ctx, bookId));
-  const [tree, penNames, seriesOptions, connections, outlines, structureOptions] =
+  const [tree, penNames, seriesOptions, connections, outlines, structureOptions, kits] =
     await Promise.all([
       orNotFound(getBookTree(ctx, bookId)),
       listPenNames(ctx),
@@ -49,6 +54,7 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
       orNotFound(listConnections(ctx, bookId)),
       listOutlines(ctx, { bookId }),
       newStructureOptions(ctx, { penNameId: book.penName.id }),
+      listKits(ctx),
     ]);
   const firstScene = tree.sceneOrder[0];
 
@@ -183,18 +189,29 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
           <h2 id="structures-heading" className="font-serif text-xl">
             Structures
           </h2>
-          <NewStructureDialog
-            {...structureOptions}
-            books={[{ id: book.id, label: book.title }]}
-            series={book.series ? [{ id: book.series.id, label: book.series.title }] : []}
-            defaults={{ bookId: book.id }}
-            trigger={
-              <Button variant="outline" size="sm">
-                <Plus />
-                New structure
-              </Button>
-            }
-          />
+          <div className="flex flex-wrap gap-2">
+            {outlines.some((o) => o.book?.id === book.id) && (
+              <SaveKitDialog target={{ bookId: book.id }} defaultName={`${book.title} kit`} />
+            )}
+            <ApplyKitDialog
+              kits={kits}
+              target={{ bookId: book.id }}
+              relationships={structureOptions.relationships}
+              characters={structureOptions.characters}
+            />
+            <NewStructureDialog
+              {...structureOptions}
+              books={[{ id: book.id, label: book.title }]}
+              series={book.series ? [{ id: book.series.id, label: book.series.title }] : []}
+              defaults={{ bookId: book.id }}
+              trigger={
+                <Button variant="outline" size="sm">
+                  <Plus />
+                  New structure
+                </Button>
+              }
+            />
+          </div>
         </div>
         {outlines.length === 0 ? (
           <p className="text-sm text-muted-foreground">

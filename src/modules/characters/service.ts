@@ -160,7 +160,7 @@ export async function updateCharacter(ctx: AuthorContext, id: string, input: Cha
 async function isLinked(id: string) {
   const [connections, relationships, outlines] = await Promise.all([
     db.connection.count({ where: { OR: [{ sourceId: id }, { targetId: id }] } }),
-    db.relationship.count({ where: { OR: [{ characterAId: id }, { characterBId: id }] } }),
+    db.relationshipMember.count({ where: { characterId: id } }),
     db.outline.count({ where: { characterId: id } }),
   ]);
   return connections + relationships + outlines > 0;

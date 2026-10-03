@@ -294,7 +294,7 @@ Task → story item, Research → Scene, Inspiration → Character, Song → Sce
 JSON rather than a column) is covered by registry validation and the POV
 partial index.
 
-### 35. Relationships are story nodes with a structural pair — Accepted (M2)
+### 35. Relationships are story nodes with a structural pair — Superseded by 61 (M5)
 
 A relationship is a node with explicit `character_a_id`/`character_b_id`
 (ordered pair, unique), not a character ↔ character connection. **Why:** a
@@ -520,3 +520,80 @@ As the M0 plan said: what a task or event is for is a set of connections,
 not fixed foreign keys, so any story object can have tasks and dates and
 shows them in its Connections panel. Book deadlines are a column on books
 (`due_on`), merged into the calendar with events and task due dates.
+
+## Milestone 5
+
+### 61. Relationships have two or more members — Accepted (M5)
+
+A relationship's members are rows of `relationship_members`; pairs,
+triangles, Why Choose/reverse-harem groups and families are the same kind of
+object, and each can own a romance arc. The M2 pair columns were migrated
+into members (data kept). One relationship per exact set of members
+(`member_key`, unique), so a group and the pairs within it coexist: each
+dynamic is a relationship of its own and develops on its own. Database
+rules (deferred constraint triggers): at least two members, and the key
+matches the members. Deleting a character forever ends every relationship
+they're in. **Rejected:** groups as several unrelated pairs (the group has
+no arc of its own); a polymorphic "group" object beside pairs (two models
+for one idea).
+
+### 62. Change Impact covers deletions; reports are factual — Accepted (M5)
+
+Deleting forever, emptying the Trash, deleting a custom field in use and
+deleting a template all show "What will this affect?" first, built with one
+helper so every report has the same shape: a summary with concrete counts
+("This will affect 7 items: 3 characters, 2 relationships, 1 romance arc, 1
+note."), groups with what happens to each, unchanged items listed as such,
+and a token so only what was reviewed is applied. No warning language: the
+author has the information and decides. Deleting a template never touches
+structures made from it.
+
+### 63. Template kits apply several templates as independent copies — Accepted (M5)
+
+A kit is an ordered list of templates. Applying it validates every
+structure first (owners in the book's or series' identity), then creates
+them all in one transaction. Romance templates ask for the relationship(s)
+(pairs or groups; one arc each), character-arc templates for the
+character(s); none skips the template. Kits reference templates; templates
+are copied into new structures, so projects never share live records.
+`item_type` leaves room for other template types (publishing workflows).
+
+### 64. Search: Postgres full-text on expression indexes — Accepted (M5)
+
+'simple' configuration (no stemming, so any language works), every word as
+a prefix, ranked, with highlighted snippets; expression GIN indexes rather
+than generated columns (no schema noise, no drift in Prisma). Titles of
+other kinds via the Story Graph's search. Results resolve through the Story
+Graph, so Trash and "Writing as" apply. **Later:** language-aware
+configurations per pen name if authors ask for stemming.
+
+### 65. Manuscript exports are rendered from one block model — Accepted (M5)
+
+`lib/doc-blocks.ts` flattens ProseMirror JSON into styled blocks; Markdown
+and DOCX (the `docx` library, standard manuscript format) render from them,
+and EPUB/PDF can later. Exports include only the visible manuscript.
+
+### 66. The JSON export is the backup, designed for import — Accepted (M5)
+
+Format `authoros.workspace` v1: every story object with its original id and
+story-node kind, the hierarchy with positions, content as ProseMirror JSON,
+relationships with members, connections with attributes, structures, beats
+and beat assignments, templates, kits, fields, tasks, events, writing
+sessions, pen names; version history optional; Trash included. Built-in
+templates are referenced by their fixed ids. `checkExportIntegrity()`
+proves every reference resolves inside the file; a future import validates
+with it and rebuilds the Story Graph with the same ids. DOCX/Markdown never
+replace it.
+
+### 67. Exports by identity never leak other identities — Accepted (M5)
+
+Scopes: current pen name, selected pen names, entire workspace. A pen-name
+export includes those identities' objects, shared objects (notes, ideas,
+tasks, events) unless linked only to other identities, and only links whose
+two ends are both included.
+
+### 68. Exports are read-only — Accepted (M5)
+
+Exports read through services and never write; a test checksums every story
+table before and after. Downloads are a route handler that calls
+`requireAuthorContext()` like every page.

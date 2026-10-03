@@ -5,6 +5,7 @@ export {
   fieldScopeOptions,
   getFieldValues,
   listFieldDefinitions,
+  previewDeleteField,
   renameFieldDefinition,
   setFieldValue,
 } from "./service";

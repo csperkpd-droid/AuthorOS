@@ -75,9 +75,13 @@ test.describe("desktop writing loop", () => {
     await expect(page.getByTestId("word-count")).toHaveText("7 words");
 
     // Scene details save on change
+    let saved = page.waitForResponse((r) => r.request().method() === "POST");
     await page.getByLabel("Scene status").selectOption({ label: "Revised" });
+    await saved;
+    saved = page.waitForResponse((r) => r.request().method() === "POST");
     await page.getByLabel("Scene title").fill("Storm");
     await page.getByLabel("Scene title").press("Enter");
+    await saved;
 
     await page.reload();
     await expect(editorText(page)).toHaveText("It was a dark and stormy night.");
@@ -181,8 +185,11 @@ test.describe("desktop writing loop", () => {
     await page.getByRole("dialog").getByRole("button", { name: "Move to Trash" }).click();
     await expect(page).toHaveURL(/\/library$/);
     await page.goto("/trash");
-    await page.getByRole("button", { name: "Delete forever" }).click();
-    await page.getByRole("dialog").getByRole("button", { name: "Delete forever" }).click();
+    await page.getByRole("button", { name: "Delete Trashy forever" }).click();
+    // What will this affect? The book, its chapter and scene, and their history.
+    const confirm = page.getByRole("dialog", { name: "Delete “Trashy” forever?" });
+    await expect(confirm.getByRole("status")).toContainText("1 book, 1 chapter, 1 scene");
+    await confirm.getByRole("button", { name: "Delete forever" }).click();
     await expect(page.getByText("The Trash is empty")).toBeVisible();
   });
 

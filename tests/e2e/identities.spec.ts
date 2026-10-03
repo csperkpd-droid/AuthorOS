@@ -65,6 +65,7 @@ test("shows every identity's work in All identities", async ({ page }) => {
   const dialog = page.getByRole("dialog", { name: "New pen name" });
   await dialog.getByLabel("Name").fill("Night Writer");
   await dialog.getByRole("button", { name: "Create pen name" }).click();
+  await expect(dialog).toBeHidden();
   await switchIdentity(page, "Night Writer");
   await createBook(page, "Theirs");
 

@@ -136,8 +136,9 @@ test.describe("Milestone 4", () => {
     await dialog.getByLabel("New pen name").selectOption({ label: "Rose Hart" });
     await dialog.getByRole("button", { name: "Review impact" }).click();
     dialog = page.getByRole("dialog", { name: "Move “Harbour Lights” to Rose Hart?" });
-    const affected = dialog.getByRole("list", { name: "Affected story data" });
-    await expect(affected).toContainText("Characters(1)");
+    const affected = dialog.getByRole("list", { name: "What will this affect?" });
+    await expect(affected).toContainText("Characters (1)");
+    await expect(dialog.getByRole("status")).toContainText("1 book, 1 character");
     await expect(dialog.getByRole("link", { name: "Mara Quinn" })).toHaveCount(0);
     await dialog.getByRole("button", { name: "Review changes" }).click();
     await expect(dialog.getByRole("link", { name: "Mara Quinn" })).toBeVisible();

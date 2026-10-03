@@ -18,7 +18,7 @@ the suggestion boundary).
 | **2: Story bible + Universal Connections** ✅ | Characters (profile, role, series scope, scene cast with POV); relationships (story nodes with their own scenes and notes); notes (rich text, about anything); ideas (capture, promote to book); Universal Connections (registry, panel, picker, backlinks); Trash for every new kind                                                                                               | From any scene you can see who is in it and what notes are about it; from any character, where they appear; anything can be connected to anything. |
 | **3: Structure and romance** ✅               | Built-in beat templates; outlines per book (plot, romance arc per relationship, character arc, subplot, custom); beats placed in real scenes (many-to-many, no copies); notes version history; characters scoped to pen names; custom fields; tropes and heat level                                                                                                                 | An author can lay a beat sheet over the manuscript and see gaps.                                                                                   |
 | **4: Getting work done** ✅                   | Tasks; calendar (events, due dates, deadlines, words per day); automatic writing sessions and logged words; daily goal, streak, deadline pace on the dashboard; plus series-long structures and the Series Romance Center, Save as template, Change Impact for pen-name moves, scoped custom fields                                                                                 | An author can plan their week and track daily words.                                                                                               |
-| **5: Ownership**                              | Global search; export manuscript (DOCX, Markdown); export the whole workspace (JSON)                                                                                                                                                                                                                                                                                                | An author can find anything and take all their data with them.                                                                                     |
+| **5: Ownership** ✅                           | Global search; DOCX and Markdown manuscript export; full workspace JSON export (current, selected or all pen names); plus group relationships, template kits, Change Impact for deleting forever, fields and templates                                                                                                                                                              | An author can find anything and take all their data with them.                                                                                     |
 
 ## Out of MVP scope (and where it goes)
 
@@ -30,6 +30,15 @@ the suggestion boundary).
 | Collaboration                                 | v1.3+ | Workspaces, memberships and roles exist; database sessions.          |
 | Pen-name branding, links, publishing accounts | v1.1  | Pen names, archive, assignment and identity switching shipped in M1. |
 | Imports (DOCX, Scrivener)                     | Later | Revisions record `IMPORT` source.                                    |
+
+## Milestone 5 checklist
+
+- [x] Group relationships: two or more members (pairs, triangles, Why Choose/RH), one per set of members (database-checked), with the pairs inside a group as relationships of their own; group romance arcs; members editable
+- [x] Template kits: create, edit, delete; "Save as kit" from a book or series; apply to a book or series, choosing relationship(s) for romance templates and character(s) for arcs; all or nothing; independent copies
+- [x] Change Impact for deleting forever, emptying the Trash, deleting a custom field in use and deleting a template; factual summaries ("This will affect 7 items: …"); stale reviews refused
+- [x] Search: full-text over scenes, notes, ideas and characters (prefix matching, highlighted snippets), titles of everything else; Trash and "Writing as" respected
+- [x] Export wizard: current pen name, selected pen names or entire workspace; DOCX (standard manuscript format) and Markdown manuscripts; full JSON backup preserving ids, hierarchy, relationships, connections and beat assignments, with an integrity check for a future import; read-only
+- [x] Tests: integration tests for every rule above (incl. database triggers, export integrity and read-only); end-to-end flows on desktop and phone
 
 ## Milestone 4 checklist
 

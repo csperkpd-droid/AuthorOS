@@ -90,7 +90,7 @@ export default async function OutlinePage({ params }: Props) {
               href={`/relationships/${outline.relationship.id}`}
               className="text-primary hover:underline"
             >
-              {outline.relationship.characterA.name} &amp; {outline.relationship.characterB.name}
+              {outline.relationship.title}
             </Link>
           )}
           {outline.character && (

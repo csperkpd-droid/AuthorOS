@@ -1,6 +1,7 @@
 // UI entry point: components and Server Actions. Domain API: ./index.ts
 export { deleteTemplateAction, renameTemplateAction, trashOutlineAction } from "./actions";
 export { BeatBoard } from "./components/beat-board";
+export { ApplyKitDialog, KitDialog, KitList, SaveKitDialog } from "./components/kits";
 export { NewStructureDialog } from "./components/new-structure-dialog";
 export { OutlineList } from "./components/outline-list";
 export { OutlineTitle } from "./components/outline-title";

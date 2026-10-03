@@ -3,7 +3,7 @@
 AuthorOS is a **modular monolith**: one Next.js application, one PostgreSQL
 database, with the code split into domain modules that have strict boundaries.
 
-> Status: Milestone 4 (series arcs, Change Impact, tasks, calendar, progress). Sections marked
+> Status: Milestone 5 (group relationships, kits, Change Impact, search, export). Sections marked
 > _planned_ describe the agreed design for later milestones so that early code
 > doesn't block it.
 
@@ -95,9 +95,11 @@ Current modules:
 | `impact`        | Change Impact: "What will this affect?" reports and reviewed apply, for identity moves of books and series; the review dialog.            |
 | `tasks`         | Tasks (story nodes) with priority and due dates; what they concern is `concerns` connections.                                             |
 | `calendar`      | Calendar events (story nodes) and the merged calendar: events, task due dates, book deadlines, words per day.                             |
+| `search`        | Global search: full-text over scenes, notes, ideas and characters; titles of everything else; follows "Writing as".                       |
+| `exports`       | Manuscript exports (DOCX, Markdown) and the structured workspace JSON backup with its integrity check; the export wizard.                 |
 | `progress`      | Words written per day (automatic from scene saves, plus logged), daily goal, streak, book deadline pace, the author's time zone.          |
 | `characters`    | Characters (each of one pen name, optionally one series), profile fields, the scene cast (appearances are connections).                   |
-| `relationships` | Relationships between two characters (story nodes themselves).                                                                            |
+| `relationships` | Relationships between two or more characters (pairs and groups), their members, and the dynamics within a group.                          |
 | `notes`         | Notes with rich text; what they're about is connections.                                                                                  |
 | `ideas`         | Quick capture; promotion to a book.                                                                                                       |
 | `trash`         | Listing, restoring and permanently deleting trashed story objects of every type.                                                          |
@@ -279,7 +281,7 @@ key and a kind-checking trigger. A trigger deletes the node when the typed
 row is deleted.
 
 **Structure stays explicit.** Book → Part → Chapter → Scene, a series' books,
-a relationship's two characters and a book's pen name are dedicated foreign
+a relationship's members and a book's pen name are dedicated foreign
 keys: fixed, typed, cascading, and queried constantly.
 
 **Associations are connections.** Everything flexible is a row in
@@ -353,8 +355,8 @@ book: a beat appears under the books its scenes are in, or else its planned
 book. Arcs carry a couple role (main or secondary). Any number of
 relationships is shown, so secondary couples, love triangles and
 multi-partner romances (as their pairwise relationships) appear side by side.
-_Extension point:_ a group relationship (more than two characters) would be
-a relationship with a members table; the Center already groups by owner.
+Group relationships (a Why Choose romance, a triangle) show as one row with
+their own arc, alongside any pairs within the group.
 
 **Templates.** "Save as template" copies a structure's beats (and, for a
 series structure, each beat's book number) into a workspace template.
@@ -386,6 +388,25 @@ UI ("What will this affect?") offers **Move everything**, **Review changes**
 under a row lock and refuses if the token no longer matches, so the author
 only ever applies what they reviewed. Nothing is moved silently or orphaned.
 
+**Presentation is factual, not alarming:** a one-line summary with concrete
+counts ("This will affect 7 items: 3 characters, 2 relationships, 1 romance
+arc, 1 note."), then each group with what happens to it; groups that stay
+as they are (shared notes, a series' characters) are listed as such, not
+counted. Reports are built with one helper (`impact/report.ts`) so every
+module produces the same shape; the UI is one dialog (`ImpactDialog`).
+
+Uses so far:
+
+- **Moving to another pen name** (book or series): below.
+- **Deleting forever / emptying the Trash:** everything removed with the
+  item (contents, dependent relationships and arcs, version history, beat
+  placements, custom fields limited to that work), links to items that stay,
+  and what stays (a series' characters, words-written history).
+- **Deleting a custom field in use:** each item with a value, the value
+  that will be lost, and how many.
+- **Deleting a template:** kits that include it; structures made from it
+  are listed as unchanged (applied templates are independent copies).
+
 First use: **identity moves.** Moving a standalone book (or a series, with
 all its books) to another pen name carries its associated story data: its
 manuscript and structures; every character of the old pen name connected to
@@ -396,6 +417,23 @@ field is copied to the new pen name). Shared notes, ideas, tasks and events
 keep their links. If anything of the old pen name that belongs to other work
 is linked in (another book's scene, a character of another series), the move
 is blocked and the report says what and why.
+
+## Group relationships (M5)
+
+A relationship has **two or more members** (`relationship_members`), so a
+couple, a love triangle, a Why Choose/reverse-harem romance and a family
+are the same kind of object. One relationship exists per exact set of
+members (`member_key`: the sorted member ids, unique; a deferred database
+trigger checks at commit that every relationship has at least two members
+and that its key matches them). The dynamics **within** a group are
+relationships of their own: Elara ↔ Kael, Elara ↔ Rowan and Kael ↔ Rowan can
+each develop differently, with their own scenes, notes, arcs and (later)
+timeline events, next to the group's own romance arc. A group page lists its
+pairs (with "Add" for missing ones); a pair page says which groups include
+it. Members can be changed later (at least two, one pen name). Deleting a
+character forever ends every relationship they belong to (a database
+trigger), as with pairs before; trashing a member hides the relationship
+until they are restored.
 
 ## Planning: tasks, calendar and progress
 
@@ -420,6 +458,56 @@ is blocked and the report says what and why.
 autosave, Ctrl/Cmd+S, the leave-page warning and conflict protection for any
 versioned rich text: scenes and notes today. When a restore produces a
 newer version, the open editor loads it.
+
+## Template kits (M5)
+
+A kit is a named, ordered set of the author's templates ("My Romantasy Book
+Kit": main plot, romance arc, character arc, a worldbuilding structure…).
+Applying a kit to a book or series creates one new, independent structure
+per template, all in one transaction: for romance templates the author picks
+the relationship(s) (one arc each, pairs or groups), for character-arc
+templates the character(s); picking none skips that template. "Save as kit"
+turns a book's (or series') structures into templates gathered in a kit.
+Kits never share live records between projects. _Extension point:_
+`template_kit_items.item_type` leaves room for other template types (e.g.
+publishing workflows in v1.1).
+
+## Search (M5)
+
+`search` uses Postgres full-text search with expression GIN indexes
+('simple' configuration: any language, no stemming; every word must match,
+as a prefix) over scenes (title, synopsis, text), notes, ideas and
+characters (name, aliases, summary), with highlighted snippets; other kinds
+are matched by title. Results are resolved through the Story Graph, so the
+Trash and "Writing as" apply as everywhere else.
+
+## Export (M5)
+
+The export wizard (`/export`) offers **current pen name, selected pen names
+or the entire workspace**, then a format:
+
+- **DOCX manuscript:** standard manuscript format (12 pt, double-spaced,
+  first-line indents, title page, a chapter per page, `#` between scenes).
+- **Markdown manuscript:** headings for books, parts and chapters, `* * *`
+  between scenes.
+- **Full workspace JSON** (`authoros.workspace`, version 1): the structured
+  backup. Every story object with its original id and story-node kind; the
+  hierarchy with positions; scene and note content as ProseMirror JSON;
+  characters, relationships with members, connections (kind, label, note,
+  attributes), structures, beats and beat → scene assignments, templates,
+  kits, custom fields and values, tasks, events, writing sessions, pen names;
+  version history optionally. Items in the Trash are included (with
+  `deletedAt`). Built-in templates are referenced by their fixed ids.
+  `checkExportIntegrity()` verifies every reference resolves inside the
+  export; a future import validates with it first and can rebuild the Story
+  Graph with the same ids.
+
+DOCX and Markdown are for reading and sharing (visible manuscript only);
+JSON is the backup. Pen-name exports contain only those identities' work,
+the shared objects not linked only to other identities, and links whose two
+ends are both included. Exports are read-only (tested: every story table is
+byte-identical before and after); downloads are a route handler that checks
+the author like every page.
 
 ## AI boundary (_planned, v1.2_)
 

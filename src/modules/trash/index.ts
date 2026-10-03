@@ -1,2 +1,9 @@
-export { deleteForever, emptyTrash, listTrash, restoreFromTrash } from "./service";
+export {
+  deleteForever,
+  emptyTrash,
+  listTrash,
+  previewDeleteForever,
+  previewEmptyTrash,
+  restoreFromTrash,
+} from "./service";
 export type { TrashItem } from "./service";

@@ -1,4 +1,4 @@
-import { Heart, NotebookPen, Settings2, Trash2 } from "lucide-react";
+import { Heart, NotebookPen, Settings2, Trash2, Users } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -9,8 +9,14 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
 import { NewNoteDialog } from "@/modules/notes/ui";
-import { getRelationship } from "@/modules/relationships";
-import { RelationshipDialog, trashRelationshipAction } from "@/modules/relationships/ui";
+import { getRelationship, groupDynamics, groupsIncluding } from "@/modules/relationships";
+import { listCharacters } from "@/modules/characters";
+import {
+  GroupDynamics,
+  MembersDialog,
+  RelationshipDialog,
+  trashRelationshipAction,
+} from "@/modules/relationships/ui";
 import { listOutlines, newStructureOptions } from "@/modules/structure";
 import { NewStructureDialog, OutlineList } from "@/modules/structure/ui";
 import { requireAuthorContext } from "@/server/context";
@@ -21,19 +27,22 @@ type Props = PageProps<"/relationships/[relationshipId]">;
 export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const ctx = await requireAuthorContext();
   const r = await orNotFound(getRelationship(ctx, (await params).relationshipId));
-  return { title: `${r.characterA.name} & ${r.characterB.name}` };
+  return { title: r.title };
 }
 
 export default async function RelationshipPage({ params }: Props) {
   const { relationshipId } = await params;
   const ctx = await requireAuthorContext();
   const r = await orNotFound(getRelationship(ctx, relationshipId));
-  const [connections, arcs, structureOptions] = await Promise.all([
+  const [connections, arcs, structureOptions, dynamics, groups, sameIdentity] = await Promise.all([
     listConnections(ctx, relationshipId),
     listOutlines(ctx, { relationshipId }),
-    newStructureOptions(ctx, { penNameId: r.characterA.penNameId }),
+    newStructureOptions(ctx, { penNameId: r.penNameId }),
+    groupDynamics(ctx, relationshipId),
+    groupsIncluding(ctx, relationshipId),
+    listCharacters(ctx, { penNameId: r.penNameId }),
   ]);
-  const title = `${r.characterA.name} & ${r.characterB.name}`;
+  const title = r.title;
 
   return (
     <div className="space-y-10">
@@ -56,6 +65,17 @@ export default async function RelationshipPage({ params }: Props) {
                 </Button>
               }
             />
+            <MembersDialog
+              relationshipId={r.id}
+              members={r.members.map((m) => m.id)}
+              characters={sameIdentity.map((c) => ({ id: c.id, name: c.name }))}
+              trigger={
+                <Button variant="outline">
+                  <Users />
+                  Members
+                </Button>
+              }
+            />
             <ConfirmDialog
               trigger={
                 <Button variant="ghost" aria-label="Move relationship to Trash">
@@ -74,7 +94,10 @@ export default async function RelationshipPage({ params }: Props) {
       />
       <div className="flex flex-wrap items-center gap-3">
         <Badge>{r.type}</Badge>
-        {[r.characterA, r.characterB].map((c) => (
+        {r.members.length > 2 && (
+          <Badge className="bg-primary/10 text-primary">Group of {r.members.length}</Badge>
+        )}
+        {r.members.map((c) => (
           <Link
             key={c.id}
             href={`/characters/${c.id}`}
@@ -85,6 +108,41 @@ export default async function RelationshipPage({ params }: Props) {
         ))}
       </div>
       {r.description && <p className="max-w-prose whitespace-pre-line">{r.description}</p>}
+      {groups.length > 0 && (
+        <p className="text-sm text-muted-foreground">
+          Part of{" "}
+          {groups.map((g, i) => (
+            <span key={g.id}>
+              {i > 0 && ", "}
+              <Link href={`/relationships/${g.id}`} className="text-primary hover:underline">
+                {g.title}
+              </Link>
+            </span>
+          ))}
+          .
+        </p>
+      )}
+
+      {dynamics.length > 0 && (
+        <section aria-labelledby="dynamics-heading" className="space-y-3">
+          <h2 id="dynamics-heading" className="font-serif text-xl">
+            Within the group
+          </h2>
+          <p className="text-sm text-muted-foreground">
+            Each pair can be a relationship of its own, developing differently, with its own scenes,
+            notes and arc.
+          </p>
+          <GroupDynamics
+            groupType={r.type}
+            dynamics={dynamics.map((d) => ({
+              members: d.members.map((m) => ({ id: m.id, name: m.name })),
+              relationship: d.relationship
+                ? { id: d.relationship.id, type: d.relationship.type }
+                : null,
+            }))}
+          />
+        </section>
+      )}
 
       <section aria-labelledby="romance-heading" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">

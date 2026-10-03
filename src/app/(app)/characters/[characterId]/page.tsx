@@ -21,7 +21,7 @@ import { listSeriesOptions } from "@/modules/library";
 import { NewNoteDialog } from "@/modules/notes/ui";
 import { getPenNameForNewWork, listPenNames } from "@/modules/pen-names";
 import { listRelationships } from "@/modules/relationships";
-import { RelationshipDialog } from "@/modules/relationships/ui";
+import { RelationshipDialog, relationshipTitle } from "@/modules/relationships/ui";
 import { listOutlines, newStructureOptions } from "@/modules/structure";
 import { NewStructureDialog, OutlineList } from "@/modules/structure/ui";
 import { requireAuthorContext } from "@/server/context";
@@ -160,7 +160,8 @@ export default async function CharacterPage({ params }: Props) {
         ) : (
           <ul className="divide-y divide-border rounded-lg border border-border bg-surface">
             {relationships.map((r) => {
-              const other = r.characterA.id === character.id ? r.characterB : r.characterA;
+              // Named by the other members ("Kael", or "Kael & Rowan" for a group).
+              const others = r.members.filter((m) => m.id !== character.id);
               return (
                 <li
                   key={r.id}
@@ -170,7 +171,7 @@ export default async function CharacterPage({ params }: Props) {
                     href={`/relationships/${r.id}`}
                     className="font-medium hover:text-primary hover:underline"
                   >
-                    {other.name}
+                    {relationshipTitle(others.map((m) => m.name))}
                   </Link>
                   <Badge>{r.type}</Badge>
                 </li>

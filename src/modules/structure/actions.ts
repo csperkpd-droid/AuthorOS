@@ -4,7 +4,8 @@ import type { ArcRole } from "@/generated/prisma/enums";
 import { runAction } from "@/server/action";
 import { requireAuthorContext } from "@/server/context";
 
-import type { BeatInput, NewOutlineInput, TemplateInput } from "./schemas";
+import { applyKit, createKit, deleteKit, saveStructuresAsKit, updateKit } from "./kits";
+import type { ApplyKitInput, BeatInput, KitInput, NewOutlineInput, TemplateInput } from "./schemas";
 import {
   addBeat,
   assignScene,
@@ -12,6 +13,7 @@ import {
   deleteBeat,
   deleteTemplate,
   moveBeat,
+  previewDeleteTemplate,
   renameOutline,
   renameTemplate,
   saveAsTemplate,
@@ -48,8 +50,35 @@ export async function renameTemplateAction(id: string, input: TemplateInput) {
   return runAction(async () => renameTemplate(await ctx(), id, input));
 }
 
-export async function deleteTemplateAction(id: string) {
-  return runAction(async () => deleteTemplate(await ctx(), id));
+export async function previewDeleteTemplateAction(id: string) {
+  return runAction(async () => previewDeleteTemplate(await ctx(), id), { refresh: false });
+}
+
+export async function deleteTemplateAction(id: string, token: string) {
+  return runAction(async () => deleteTemplate(await ctx(), id, token));
+}
+
+export async function createKitAction(input: KitInput) {
+  return runAction(async () => createKit(await ctx(), input));
+}
+
+export async function updateKitAction(id: string, input: KitInput) {
+  return runAction(async () => updateKit(await ctx(), id, input));
+}
+
+export async function deleteKitAction(id: string) {
+  return runAction(async () => deleteKit(await ctx(), id));
+}
+
+export async function saveStructuresAsKitAction(
+  target: { bookId?: string; seriesId?: string },
+  name: string,
+) {
+  return runAction(async () => saveStructuresAsKit(await ctx(), { ...target, name }));
+}
+
+export async function applyKitAction(input: ApplyKitInput) {
+  return runAction(async () => applyKit(await ctx(), input));
 }
 
 export async function addBeatAction(outlineId: string, input: BeatInput) {

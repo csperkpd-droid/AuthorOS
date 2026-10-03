@@ -173,12 +173,13 @@ something in the Trash) are hidden, not deleted, and reappear on restore.
 
 ### Story bible (Milestone 2)
 
-| Table           | Key columns                                                                                                                                                                          | Notes                                                                                                                                                                                                                                                       |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `characters`    | node id, `pen_name_id`, `series_id?`, `name`, `aliases text[]`, `role` (`PROTAGONIST`/`ANTAGONIST`/`LOVE_INTEREST`/`SUPPORTING`/`MINOR`), `summary`, `profile` (jsonb), `deleted_at` | Every character belongs to one pen name (M3; tenant-safe FK, `NO ACTION`), and optionally to one of its series. Profile fields by id (`modules/characters/profile.ts`). Scene appearances are `appears_in` connections. `series_id` → `ON DELETE SET NULL`. |
-| `relationships` | node id, `character_a_id`, `character_b_id`, `type`, `description`, `deleted_at`                                                                                                     | A story node itself, so notes, scenes (`develops_in`) and future romance arcs connect to the relationship. Tenant-safe FKs to both characters (cascade). CHECK `character_a_id < character_b_id` + unique pair: one relationship per pair.                  |
-| `notes`         | node id, `title`, `body` (jsonb), `body_text`, `version`, `deleted_at`                                                                                                               | What a note is about is a set of `about` connections. `version` for conflict detection, like scenes.                                                                                                                                                        |
-| `ideas`         | node id, `title`, `body`, `status` (`OPEN`/`USED`/`ARCHIVED`), `deleted_at`                                                                                                          | Promotion to a book creates the book and an `inspired` connection.                                                                                                                                                                                          |
+| Table                  | Key columns                                                                                                                                                                          | Notes                                                                                                                                                                                                                                                       |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `characters`           | node id, `pen_name_id`, `series_id?`, `name`, `aliases text[]`, `role` (`PROTAGONIST`/`ANTAGONIST`/`LOVE_INTEREST`/`SUPPORTING`/`MINOR`), `summary`, `profile` (jsonb), `deleted_at` | Every character belongs to one pen name (M3; tenant-safe FK, `NO ACTION`), and optionally to one of its series. Profile fields by id (`modules/characters/profile.ts`). Scene appearances are `appears_in` connections. `series_id` → `ON DELETE SET NULL`. |
+| `relationships`        | node id, `member_key`, `type`, `description`, `deleted_at`                                                                                                                           | A story node, between **two or more** characters (members below). Unique `(workspace_id, member_key)`: one relationship per exact set of members. Deferred constraint triggers check at commit: at least two members, key = sorted member ids.              |
+| `relationship_members` | PK `(relationship_id, character_id)`, `workspace_id`, `position`                                                                                                                     | Tenant-safe FKs, cascade. Trigger `characters_delete_relationships`: deleting a character forever deletes every relationship they belong to. Migrated from the M2 pair columns (`character_a_id`, `character_b_id`), data kept.                             |
+| `notes`                | node id, `title`, `body` (jsonb), `body_text`, `version`, `deleted_at`                                                                                                               | What a note is about is a set of `about` connections. `version` for conflict detection, like scenes.                                                                                                                                                        |
+| `ideas`                | node id, `title`, `body`, `status` (`OPEN`/`USED`/`ARCHIVED`), `deleted_at`                                                                                                          | Promotion to a book creates the book and an `inspired` connection.                                                                                                                                                                                          |
 
 All four use the story-node triggers (kind check, node cleanup).
 
@@ -217,6 +218,18 @@ and subplot beats all point at the same scene row.
 
 Date-only columns store UTC midnight; `lib/dates.ts` converts without
 drifting a day.
+
+### Template kits and search (Milestone 5)
+
+| Table                | Key columns                                                    | Notes                                                                                                                                                            |
+| -------------------- | -------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `template_kits`      | `workspace_id`, `name`, `description`                          | A named set of templates applied together.                                                                                                                       |
+| `template_kit_items` | `kit_id`, `item_type` (`STRUCTURE`), `template_id`, `position` | Cascade with the kit and with the template (deleting a template removes it from kits, shown by Change Impact). `item_type` leaves room for other template kinds. |
+
+Search uses expression GIN indexes, `to_tsvector('simple', …)` over
+`scenes` (title, synopsis, content_text), `notes` (title, body_text),
+`ideas` (title, body) and `characters` (name, aliases via the IMMUTABLE
+`search_join(text[])`, summary). Queries repeat the exact expressions.
 
 ### Retention
 
@@ -266,12 +279,12 @@ template_id, position)`: apply a main plot, romance and character arcs
   of more than two characters; the Romance Center already groups arcs by
   relationship.
 
-### Milestone 5: search and export
+### Later: import and export jobs
 
-- Full-text search: generated `tsvector` columns + GIN indexes on scenes,
-  notes, ideas and characters. `story_nodes` makes results uniformly
-  addressable.
-- Export: files generated on demand; an `exports` table arrives with jobs.
+- Import of the `authoros.workspace` JSON (validated with
+  `checkExportIntegrity`; ids preserved, or remapped when importing into a
+  workspace that already has them).
+- An `exports` table when exports run as background jobs (v1.1).
 
 ### v1.1: timeline and publishing
 

@@ -6,7 +6,8 @@ import { ConflictError, NotFoundError, RuleError } from "@/lib/errors";
 import { positionAtEnd, sortByPosition } from "@/lib/ordering";
 import { getBook, getSeries } from "@/modules/library";
 import { getPenName, requireAssignablePenName } from "@/modules/pen-names";
-import { resolveNode } from "@/modules/story-graph";
+import { buildReport } from "@/modules/impact";
+import { resolveNode, resolveNodes } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 
 import { fieldLabel, fieldValue, newFieldInput, type NewFieldInput } from "./schemas";
@@ -187,9 +188,59 @@ export async function renameFieldDefinition(ctx: AuthorContext, id: string, labe
   await db.fieldDefinition.update({ where: { id }, data: { label: fieldLabel.parse(label) } });
 }
 
-/** Removes a field and its values from every object. */
-export async function deleteFieldDefinition(ctx: AuthorContext, id: string) {
+/**
+ * "What will this affect?" for deleting a field: every object with a value
+ * for it, and the values that will be lost. The objects themselves stay.
+ */
+export async function previewDeleteField(ctx: AuthorContext, id: string) {
   await requireDefinition(ctx, id);
+  const def = await db.fieldDefinition.findUniqueOrThrow({
+    where: { id },
+    select: { label: true, nodeKind: true },
+  });
+  const values = await db.nodeFieldValue.findMany({
+    where: { fieldId: id, workspaceId: ctx.workspaceId },
+    select: { nodeId: true, value: true },
+  });
+  const nodes = await resolveNodes(
+    ctx,
+    values.map((v) => v.nodeId),
+  );
+  const excerpt = (v: string) => (v.length > 60 ? `“${v.slice(0, 57)}…”` : `“${v}”`);
+  return buildReport({
+    title: `Delete the “${def.label}” field?`,
+    description:
+      "The field disappears from every item, and the values filled in for it are deleted. The items themselves stay.",
+    groups: [
+      {
+        key: "VALUES",
+        label: "Items with a value",
+        noun: { one: "value", many: "values" },
+        effect: "Value deleted",
+        count: values.length,
+        items: values.map((v) => {
+          const node = nodes.get(v.nodeId);
+          return {
+            id: v.nodeId,
+            title: node?.title ?? "An item in the Trash",
+            href: node?.href ?? null,
+            note: excerpt(v.value),
+          };
+        }),
+      },
+    ],
+  });
+}
+
+/**
+ * Removes a field and its values from every object. With the reviewed
+ * report's `token`, refused if the values changed since.
+ */
+export async function deleteFieldDefinition(ctx: AuthorContext, id: string, token?: string) {
+  await requireDefinition(ctx, id);
+  if (token !== undefined && (await previewDeleteField(ctx, id)).token !== token) {
+    throw new ConflictError("This field’s values changed since you reviewed them. Review again.");
+  }
   await db.fieldDefinition.delete({ where: { id } });
 }
 

@@ -1,22 +1,25 @@
 "use client";
 
-import { AlertTriangle, ChevronDown, ChevronRight } from "lucide-react";
+import { ChevronDown, ChevronRight } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { FormError } from "@/components/ui/field";
+import { formatCount } from "@/lib/format";
 
 import type { ImpactReport } from "../types";
 
 /**
- * Shows a Change Impact report ("What will this affect?") with the three
- * choices: apply everything, review every affected item, or cancel. Generic:
- * any meaningful change can produce a report and reuse this.
+ * Shows a Change Impact report: a factual summary ("This will affect 7
+ * items: …"), what happens to each group, and the choices: go ahead, review
+ * every affected item, or cancel. Any consequential change can produce a
+ * report and reuse this.
  */
 export function ImpactReview({
   report,
   confirmLabel,
+  pendingLabel = "Working…",
   pending,
   error,
   onConfirm,
@@ -24,6 +27,7 @@ export function ImpactReview({
 }: {
   report: ImpactReport;
   confirmLabel: string;
+  pendingLabel?: string;
   pending: boolean;
   error: string | null;
   onConfirm: () => void;
@@ -31,31 +35,29 @@ export function ImpactReview({
 }) {
   const [reviewing, setReviewing] = useState(false);
   const blocked = report.blockers.length > 0;
+  const listed = report.groups.some((g) => g.items.length > 0);
 
   return (
     <div className="space-y-4">
       <p className="text-sm text-muted-foreground">{report.description}</p>
+      <p className="font-medium" role="status">
+        {report.summary}
+      </p>
 
-      <section aria-labelledby="impact-heading" className="space-y-2">
-        <h3 id="impact-heading" className="text-sm font-medium">
-          What will this affect?
-        </h3>
+      {report.groups.length > 0 && (
         <ul
-          aria-label="Affected story data"
+          aria-label="What will this affect?"
           className="divide-y divide-border rounded-lg border border-border"
         >
           {report.groups.map((g) => (
             <li key={g.key} className="space-y-1 p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                 <p className="font-medium">
-                  {g.label}
-                  {g.items.length > 0 && (
-                    <span className="ml-1 text-muted-foreground">({g.items.length})</span>
-                  )}
+                  {g.label} <span className="text-muted-foreground">({g.count})</span>
                 </p>
                 <p className="text-xs text-muted-foreground">{g.effect}</p>
               </div>
-              {g.summary && <p className="text-xs text-muted-foreground">{g.summary}</p>}
+              {g.detail && <p className="text-xs text-muted-foreground">{g.detail}</p>}
               {reviewing && g.items.length > 0 && (
                 <ul aria-label={g.label} className="mt-1 space-y-0.5 text-sm">
                   {g.items.map((i) => (
@@ -75,21 +77,19 @@ export function ImpactReview({
             </li>
           ))}
         </ul>
-      </section>
+      )}
 
       {blocked && (
         <section
-          role="alert"
-          aria-label="Needs your attention first"
-          className="space-y-2 rounded-lg border border-destructive/40 bg-destructive/5 p-3"
+          aria-labelledby="impact-resolve"
+          className="space-y-2 rounded-lg border border-border bg-muted/40 p-3"
         >
-          <p className="flex items-center gap-2 text-sm font-medium text-destructive">
-            <AlertTriangle className="size-4" aria-hidden />
-            Needs your attention first
-          </p>
+          <h3 id="impact-resolve" className="text-sm font-medium">
+            To resolve first ({formatCount(report.blockers.length, "item")})
+          </h3>
           <p className="text-xs text-muted-foreground">
-            These are linked to what’s moving but belong to other work. Remove the links (or move
-            that work too), then review again. Nothing has been changed.
+            These are linked to what’s changing but belong to other work. Remove the links (or
+            change that work too), then review again. Nothing has been changed.
           </p>
           <ul className="space-y-1 text-sm">
             {report.blockers.map((b, i) => (
@@ -113,12 +113,18 @@ export function ImpactReview({
         <Button variant="ghost" onClick={onCancel}>
           Cancel
         </Button>
-        <Button variant="outline" onClick={() => setReviewing((r) => !r)} aria-expanded={reviewing}>
-          {reviewing ? <ChevronDown /> : <ChevronRight />}
-          Review changes
-        </Button>
+        {listed && (
+          <Button
+            variant="outline"
+            onClick={() => setReviewing((r) => !r)}
+            aria-expanded={reviewing}
+          >
+            {reviewing ? <ChevronDown /> : <ChevronRight />}
+            Review changes
+          </Button>
+        )}
         <Button onClick={onConfirm} disabled={pending || blocked}>
-          {pending ? "Moving…" : confirmLabel}
+          {pending ? pendingLabel : confirmLabel}
         </Button>
       </div>
     </div>

@@ -15,10 +15,23 @@ export const relationshipDetails = z.object({
 });
 export type RelationshipDetails = z.input<typeof relationshipDetails>;
 
-export const newRelationshipInput = relationshipDetails.extend({
-  characterId: z.uuid(),
-  otherCharacterId: z.uuid(),
-});
+/**
+ * A relationship between two or more characters: `characterIds`, or (for a
+ * pair) `characterId` + `otherCharacterId`.
+ */
+export const newRelationshipInput = relationshipDetails
+  .extend({
+    characterIds: z.array(z.uuid()).optional(),
+    characterId: z.uuid().optional(),
+    otherCharacterId: z.uuid().optional(),
+  })
+  .transform(({ characterIds, characterId, otherCharacterId, ...rest }) => ({
+    ...rest,
+    characterIds: [
+      ...new Set(characterIds ?? [characterId, otherCharacterId].filter((c): c is string => !!c)),
+    ],
+  }))
+  .refine((v) => v.characterIds.length <= 12, { message: "Choose at most 12 characters." });
 export type NewRelationshipInput = z.input<typeof newRelationshipInput>;
 
 export const RELATIONSHIP_TYPE_SUGGESTIONS = [

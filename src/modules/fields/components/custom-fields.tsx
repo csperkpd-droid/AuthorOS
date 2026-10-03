@@ -4,7 +4,6 @@ import { Plus, X } from "lucide-react";
 import { useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
-import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -12,8 +11,14 @@ import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import type { FieldType, StoryNodeKind } from "@/generated/prisma/enums";
 import { useAction } from "@/hooks/use-action";
+import { ImpactDialog } from "@/modules/impact/ui";
 
-import { createFieldAction, deleteFieldAction, setFieldValueAction } from "../actions";
+import {
+  createFieldAction,
+  deleteFieldAction,
+  previewDeleteFieldAction,
+  setFieldValueAction,
+} from "../actions";
 
 type Definition = { id: string; label: string; type: FieldType; scope: string };
 type ScopeOption = { value: string; label: string };
@@ -92,7 +97,7 @@ export function CustomFields({
                       Saved
                     </span>
                   )}
-                  <ConfirmDialog
+                  <ImpactDialog
                     trigger={
                       <button
                         type="button"
@@ -102,11 +107,10 @@ export function CustomFields({
                         <X className="size-3.5" aria-hidden />
                       </button>
                     }
-                    title={`Remove the “${d.label}” field?`}
-                    description="It disappears from every item that has it, with the values filled in."
-                    confirmLabel="Remove field"
-                    destructive
+                    title={`Delete the “${d.label}” field?`}
+                    loadReport={previewDeleteFieldAction.bind(null, d.id)}
                     onConfirm={deleteFieldAction.bind(null, d.id)}
+                    confirmLabel="Delete field"
                   />
                 </span>
               </div>

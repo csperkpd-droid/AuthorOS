@@ -19,7 +19,9 @@ Read `docs/ARCHITECTURE.md` and `docs/DATABASE.md` before changing structure or 
 - **Connections:** flexible links between story objects use the `connections` module (kinds in `connections/registry.ts`); structural relationships stay explicit FKs. A new node kind needs: the enum value, a table with the two story-node triggers, a case in `story-graph/resolve.ts` and `story-graph/visibility.ts`, and registry entries.
 - **Structure vs connections:** beat → scene placement is structural (`structure` module, `beat_scenes`), never a connection; scenes are never copied. Versioned content goes through the `history` module.
 - **Identities:** characters, relationships and outlines belong to one pen name; never link across pen names (`sameIdentity()`). Notes and ideas are shared.
-- **Change Impact:** changes that move or affect connected story data (e.g. a pen-name change) go through the `impact` module: preview a report, apply with its token. Never move identity as a side effect of an edit.
+- **Change Impact:** changes that move, delete or affect connected story data (pen-name moves, deleting forever, deleting a field or template) produce a report with `buildReport()` (`@/modules/impact`) and apply with its token. Keep reports factual. Never move identity as a side effect of an edit.
+- **Relationships** have two or more members (`relationship_members`); never assume a pair.
+- **Exports** are read-only; the JSON export must keep `checkExportIntegrity()` passing when new tables are added.
 - **Client components** import other modules only via `ui` entries (services are `server-only`).
 - **Server Actions** wrap their body in `runAction()`, return ids instead of calling `redirect()`, and let the client navigate.
 - **Auth:** call `requireAuthorContext()` in every page, action and route handler that touches author data. Don't rely on layouts or `proxy.ts` for authorization.

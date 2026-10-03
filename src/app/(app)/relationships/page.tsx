@@ -55,9 +55,10 @@ export default async function RelationshipsPage() {
                 href={`/relationships/${r.id}`}
                 className="flex flex-wrap items-center gap-3 p-4 hover:bg-muted/50"
               >
-                <span className="flex-1 font-medium">
-                  {r.characterA.name} &amp; {r.characterB.name}
-                </span>
+                <span className="flex-1 font-medium">{r.title}</span>
+                {r.members.length > 2 && (
+                  <Badge className="bg-primary/10 text-primary">Group of {r.members.length}</Badge>
+                )}
                 <Badge>{r.type}</Badge>
                 {r.description && (
                   <span className="w-full truncate text-sm text-muted-foreground">
