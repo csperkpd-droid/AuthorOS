@@ -1,0 +1,36 @@
+import { Workflow } from "lucide-react";
+import Link from "next/link";
+
+import type { StructureKind } from "@/generated/prisma/enums";
+
+import { STRUCTURE_KIND_LABELS } from "../labels";
+
+type SceneBeat = {
+  beatId: string;
+  beatTitle: string;
+  outlineId: string;
+  outlineTitle: string;
+  kind: StructureKind;
+};
+
+/** The beats a scene carries, across every structure (plot, romance, arcs). */
+export function SceneBeats({ beats }: { beats: SceneBeat[] }) {
+  if (beats.length === 0) return null;
+  return (
+    <ul aria-label="Story beats in this scene" className="flex flex-wrap gap-2">
+      {beats.map((b) => (
+        <li key={b.beatId}>
+          <Link
+            href={`/structure/${b.outlineId}`}
+            title={`${STRUCTURE_KIND_LABELS[b.kind].one}: ${b.outlineTitle}`}
+            className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-0.5 text-xs hover:bg-muted"
+          >
+            <Workflow className="size-3 text-muted-foreground" aria-hidden />
+            <span className="text-muted-foreground">{STRUCTURE_KIND_LABELS[b.kind].one}:</span>
+            {b.beatTitle}
+          </Link>
+        </li>
+      ))}
+    </ul>
+  );
+}

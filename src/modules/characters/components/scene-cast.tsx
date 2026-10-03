@@ -93,11 +93,11 @@ function AddToScene({
   useEffect(() => {
     if (!open) return;
     const handle = setTimeout(async () => {
-      const result = await searchNodesAction(query, ["CHARACTER"]);
+      const result = await searchNodesAction(query, ["CHARACTER"], sceneId);
       if (result.ok) setResults(result.data.filter((r) => !existing.includes(r.id)));
     }, 150);
     return () => clearTimeout(handle);
-  }, [open, query, existing]);
+  }, [open, query, existing, sceneId]);
 
   const exact = results.some((r) => r.title.toLowerCase() === query.trim().toLowerCase());
 

@@ -13,7 +13,7 @@ import {
   type RelationshipDetails,
 } from "./schemas";
 
-const characterRef = { select: { id: true, name: true } } as const;
+const characterRef = { select: { id: true, name: true, penNameId: true } } as const;
 const relationshipSelect = {
   id: true,
   type: true,
@@ -25,7 +25,7 @@ const relationshipSelect = {
 /** Relationships in the workspace, optionally only those of one character. */
 export async function listRelationships(
   ctx: AuthorContext,
-  { characterId }: { characterId?: string } = {},
+  { characterId, penNameId = null }: { characterId?: string; penNameId?: string | null } = {},
 ) {
   return db.relationship.findMany({
     where: {
@@ -34,6 +34,8 @@ export async function listRelationships(
       ...(characterId
         ? { OR: [{ characterAId: characterId }, { characterBId: characterId }] }
         : {}),
+      // Both characters share an identity, so filtering on A is enough.
+      ...(penNameId ? { characterA: { penNameId } } : {}),
     },
     orderBy: { createdAt: "asc" },
     select: relationshipSelect,
@@ -55,14 +57,18 @@ export async function createRelationship(ctx: AuthorContext, input: NewRelations
   if (data.characterId === data.otherCharacterId) {
     throw new RuleError("Choose two different characters.");
   }
-  const found = await db.character.count({
+  const found = await db.character.findMany({
     where: {
       workspaceId: ctx.workspaceId,
       ...liveCharacter,
       id: { in: [data.characterId, data.otherCharacterId] },
     },
+    select: { penNameId: true },
   });
-  if (found !== 2) throw new NotFoundError("Character");
+  if (found.length !== 2) throw new NotFoundError("Character");
+  if (found[0].penNameId !== found[1].penNameId) {
+    throw new RuleError("Relationships connect characters of the same pen name.");
+  }
 
   // Stored in id order (matches the database CHECK), so each pair exists once.
   const [characterAId, characterBId] = [data.characterId, data.otherCharacterId].sort();

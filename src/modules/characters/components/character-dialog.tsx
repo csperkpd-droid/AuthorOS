@@ -21,19 +21,28 @@ type Character = {
   aliases: string[];
   role: CharacterRole;
   summary: string | null;
+  penNameId: string;
   series: { id: string } | null;
 };
 
-/** Create a character (no `character`) or edit one. */
+/**
+ * Create a character (no `character`) or edit one. A character belongs to one
+ * pen name and optionally to one of its series.
+ */
 export function CharacterDialog({
   character,
+  penNames,
+  defaultPenNameId,
   seriesOptions,
   trigger,
 }: {
   character?: Character;
-  seriesOptions: { id: string; title: string }[];
+  penNames: { id: string; name: string }[];
+  defaultPenNameId: string;
+  seriesOptions: { id: string; title: string; penName: { id: string } }[];
   trigger: ReactNode;
 }) {
+  const [penNameId, setPenNameId] = useState(character?.penNameId ?? defaultPenNameId);
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const create = useAction(createCharacterAction);
@@ -85,18 +94,45 @@ export function CharacterDialog({
                 ))}
               </Select>
             </Field>
+            {penNames.length > 1 ? (
+              <Field label="Pen name" htmlFor={`${id}-pen-name`}>
+                <Select
+                  id={`${id}-pen-name`}
+                  name="penNameId"
+                  value={penNameId}
+                  onChange={(e) => setPenNameId(e.target.value)}
+                >
+                  {penNames.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.name}
+                    </option>
+                  ))}
+                </Select>
+              </Field>
+            ) : (
+              <input type="hidden" name="penNameId" value={penNameId} />
+            )}
             <Field label="Series" htmlFor={`${id}-series`}>
               <Select
                 id={`${id}-series`}
                 name="seriesId"
-                defaultValue={character?.series?.id ?? ""}
+                key={penNameId}
+                defaultValue={
+                  seriesOptions.some(
+                    (s) => s.id === character?.series?.id && s.penName.id === penNameId,
+                  )
+                    ? character?.series?.id
+                    : ""
+                }
               >
-                <option value="">Any (not tied to a series)</option>
-                {seriesOptions.map((s) => (
-                  <option key={s.id} value={s.id}>
-                    {s.title}
-                  </option>
-                ))}
+                <option value="">Any book of this pen name</option>
+                {seriesOptions
+                  .filter((s) => s.penName.id === penNameId)
+                  .map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.title}
+                    </option>
+                  ))}
               </Select>
             </Field>
           </div>

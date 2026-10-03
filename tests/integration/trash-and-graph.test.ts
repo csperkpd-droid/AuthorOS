@@ -3,13 +3,13 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { NotFoundError } from "@/lib/errors";
 import { createBook, createSeries, listLibrary, trashBook, trashSeries } from "@/modules/library";
+import { saveVersion } from "@/modules/history";
 import {
   createChapter,
   createPart,
   createScene,
   getBookTree,
   saveSceneContent,
-  saveVersion,
   trashChapter,
   trashScene,
 } from "@/modules/manuscript";
@@ -97,7 +97,7 @@ describe("trash", () => {
     expect(await db.part.count({ where: { bookId: book.id } })).toBe(0);
     expect(await db.chapter.count({ where: { bookId: book.id } })).toBe(0);
     expect(await db.scene.count({ where: { bookId: book.id } })).toBe(0);
-    expect(await db.sceneRevision.count({ where: { sceneId: scene.id } })).toBe(0);
+    expect(await db.contentRevision.count({ where: { nodeId: scene.id } })).toBe(0);
     // Only the surviving book's node remains: no orphaned graph nodes.
     const nodes = await db.storyNode.findMany({ where: { workspaceId: ctx.workspaceId } });
     expect(nodes.map((n) => n.id)).toEqual([keep.id]);

@@ -15,8 +15,8 @@ export const metadata: Metadata = { title: "Relationships" };
 export default async function RelationshipsPage() {
   const ctx = await requireAuthorContext();
   const [relationships, characters] = await Promise.all([
-    listRelationships(ctx),
-    listCharacters(ctx),
+    listRelationships(ctx, { penNameId: ctx.activePenNameId }),
+    listCharacters(ctx, { penNameId: ctx.activePenNameId }),
   ]);
 
   return (

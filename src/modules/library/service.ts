@@ -4,6 +4,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { NotFoundError, RuleError } from "@/lib/errors";
 import { planInsertAfter, positionAtEnd, sortByPosition } from "@/lib/ordering";
+import { moveSeriesCharacters } from "@/modules/characters";
 import { getPenNameForNewWork, requireAssignablePenName } from "@/modules/pen-names";
 import { createStoryNode, liveBook } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
@@ -28,6 +29,8 @@ const bookCardSelect = {
   subtitle: true,
   status: true,
   targetWordCount: true,
+  tropes: true,
+  heatLevel: true,
   seriesId: true,
   seriesPosition: true,
   updatedAt: true,
@@ -155,23 +158,24 @@ export async function createSeries(ctx: AuthorContext, input: SeriesInput) {
   });
 }
 
-/** Changing a series' pen name moves all of its books to that pen name too. */
+/** Changing a series' pen name moves all of its books and characters to that pen name too. */
 export async function updateSeries(ctx: AuthorContext, id: string, input: SeriesInput) {
   const data = seriesInput.parse(input);
   const current = await getSeries(ctx, id);
   const penNameId = data.penNameId ?? current.penName.id;
   if (penNameId !== current.penName.id) await requireAssignablePenName(ctx, penNameId);
 
-  await db.$transaction([
-    db.series.update({
+  await db.$transaction(async (tx) => {
+    await tx.series.update({
       where: { id },
       data: { title: data.title, description: data.description ?? null, penNameId },
-    }),
-    db.book.updateMany({
+    });
+    await tx.book.updateMany({
       where: { seriesId: id, workspaceId: ctx.workspaceId },
       data: { penNameId },
-    }),
-  ]);
+    });
+    await moveSeriesCharacters(tx, id, penNameId);
+  });
 }
 
 /** Moves a series (and with it, its books) to the Trash. */
@@ -270,6 +274,8 @@ export async function updateBook(ctx: AuthorContext, id: string, input: BookInpu
       status: data.status,
       targetWordCount: data.targetWordCount,
       penNameId,
+      ...(data.tropes !== undefined && { tropes: data.tropes }),
+      ...(data.heatLevel !== undefined && { heatLevel: data.heatLevel }),
     },
   });
 }

@@ -10,13 +10,14 @@ import {
   liveCharacter,
   liveIdea,
   liveNote,
+  liveOutline,
   livePart,
   liveRelationship,
   liveScene,
   liveSeries,
 } from "./visibility";
 
-/** Enough about any story object to show and link to it. */
+/** Enough about any story object to show and link to it, and to check scope. */
 export type NodeSummary = {
   id: string;
   kind: StoryNodeKind;
@@ -24,32 +25,42 @@ export type NodeSummary = {
   /** Where it lives or what it is, e.g. "The Long Night › Chapter 3". */
   context: string | null;
   href: string;
+  /**
+   * The author identity this object belongs to. Null = shared across the
+   * workspace's identities (notes, ideas).
+   */
+  penNameId: string | null;
+  /** The series it belongs to, if any. */
+  seriesId: string | null;
 };
 
-type Lookup = { ids?: string[]; query?: string; take?: number };
+type Lookup = { ids?: string[]; query?: string; take?: number; penNameId?: string };
 
 const contains = (query?: string) =>
   query ? { contains: query, mode: "insensitive" as const } : undefined;
 const trail = (...parts: (string | null | undefined)[]) =>
   parts.filter(Boolean).join(" › ") || null;
+const bookScope = { select: { title: true, penNameId: true, seriesId: true } } as const;
 
 /**
- * Per-kind loaders. Each returns only visible objects in the workspace. Adding
- * a node kind means adding a case here (the switch is exhaustive).
+ * Per-kind loaders. Each returns only visible objects in the workspace, and,
+ * when `penNameId` is given, only objects of that identity (shared objects
+ * always match). Adding a node kind means adding a case here (exhaustive).
  */
 async function load(
   ctx: AuthorContext,
   kind: StoryNodeKind,
-  { ids, query, take }: Lookup,
+  { ids, query, take, penNameId }: Lookup,
 ): Promise<NodeSummary[]> {
   const ws = { workspaceId: ctx.workspaceId, ...(ids ? { id: { in: ids } } : {}) };
   const page = { take, orderBy: { updatedAt: "desc" as const } };
+  const pen = penNameId ? { penNameId } : {};
 
   switch (kind) {
     case "SERIES": {
       const rows = await db.series.findMany({
-        where: { ...ws, ...liveSeries, title: contains(query) },
-        select: { id: true, title: true, penName: { select: { name: true } } },
+        where: { ...ws, ...liveSeries, ...pen, title: contains(query) },
+        select: { id: true, title: true, penNameId: true, penName: { select: { name: true } } },
         ...page,
       });
       return rows.map((r) => ({
@@ -58,14 +69,18 @@ async function load(
         title: r.title,
         context: r.penName.name,
         href: `/library/series/${r.id}`,
+        penNameId: r.penNameId,
+        seriesId: r.id,
       }));
     }
     case "BOOK": {
       const rows = await db.book.findMany({
-        where: { ...ws, ...liveBook, title: contains(query) },
+        where: { ...ws, ...liveBook, ...pen, title: contains(query) },
         select: {
           id: true,
           title: true,
+          penNameId: true,
+          seriesId: true,
           series: { select: { title: true } },
           penName: { select: { name: true } },
         },
@@ -77,12 +92,14 @@ async function load(
         title: r.title,
         context: r.series?.title ?? r.penName.name,
         href: `/books/${r.id}`,
+        penNameId: r.penNameId,
+        seriesId: r.seriesId,
       }));
     }
     case "PART": {
       const rows = await db.part.findMany({
-        where: { ...ws, ...livePart, title: contains(query) },
-        select: { id: true, title: true, bookId: true, book: { select: { title: true } } },
+        where: { ...ws, ...livePart, ...(penNameId ? { book: pen } : {}), title: contains(query) },
+        select: { id: true, title: true, bookId: true, book: bookScope },
         ...page,
       });
       return rows.map((r) => ({
@@ -91,16 +108,23 @@ async function load(
         title: r.title,
         context: r.book.title,
         href: `/books/${r.bookId}`,
+        penNameId: r.book.penNameId,
+        seriesId: r.book.seriesId,
       }));
     }
     case "CHAPTER": {
       const rows = await db.chapter.findMany({
-        where: { ...ws, ...liveChapter, title: contains(query) },
+        where: {
+          ...ws,
+          ...liveChapter,
+          ...(penNameId ? { book: pen } : {}),
+          title: contains(query),
+        },
         select: {
           id: true,
           title: true,
           bookId: true,
-          book: { select: { title: true } },
+          book: bookScope,
           part: { select: { title: true } },
         },
         ...page,
@@ -111,16 +135,18 @@ async function load(
         title: r.title,
         context: trail(r.book.title, r.part?.title),
         href: `/books/${r.bookId}`,
+        penNameId: r.book.penNameId,
+        seriesId: r.book.seriesId,
       }));
     }
     case "SCENE": {
       const rows = await db.scene.findMany({
-        where: { ...ws, ...liveScene, title: contains(query) },
+        where: { ...ws, ...liveScene, ...(penNameId ? { book: pen } : {}), title: contains(query) },
         select: {
           id: true,
           title: true,
           bookId: true,
-          book: { select: { title: true } },
+          book: bookScope,
           chapter: { select: { title: true } },
         },
         ...page,
@@ -131,6 +157,8 @@ async function load(
         title: r.title,
         context: trail(r.book.title, r.chapter.title),
         href: `/books/${r.bookId}/scenes/${r.id}`,
+        penNameId: r.book.penNameId,
+        seriesId: r.book.seriesId,
       }));
     }
     case "CHARACTER": {
@@ -138,9 +166,16 @@ async function load(
         where: {
           ...ws,
           ...liveCharacter,
+          ...pen,
           ...(query ? { OR: [{ name: contains(query) }, { aliases: { has: query } }] } : {}),
         },
-        select: { id: true, name: true, series: { select: { title: true } } },
+        select: {
+          id: true,
+          name: true,
+          penNameId: true,
+          seriesId: true,
+          series: { select: { title: true } },
+        },
         ...page,
       });
       return rows.map((r) => ({
@@ -149,6 +184,8 @@ async function load(
         title: r.name,
         context: r.series?.title ?? null,
         href: `/characters/${r.id}`,
+        penNameId: r.penNameId,
+        seriesId: r.seriesId,
       }));
     }
     case "RELATIONSHIP": {
@@ -156,6 +193,7 @@ async function load(
         where: {
           ...ws,
           ...liveRelationship,
+          ...(penNameId ? { characterA: pen } : {}),
           ...(query
             ? {
                 OR: [
@@ -169,7 +207,7 @@ async function load(
         select: {
           id: true,
           type: true,
-          characterA: { select: { name: true } },
+          characterA: { select: { name: true, penNameId: true, seriesId: true } },
           characterB: { select: { name: true } },
         },
         ...page,
@@ -180,6 +218,29 @@ async function load(
         title: `${r.characterA.name} & ${r.characterB.name}`,
         context: r.type,
         href: `/relationships/${r.id}`,
+        penNameId: r.characterA.penNameId,
+        seriesId: r.characterA.seriesId,
+      }));
+    }
+    case "OUTLINE": {
+      const rows = await db.outline.findMany({
+        where: {
+          ...ws,
+          ...liveOutline,
+          ...(penNameId ? { book: pen } : {}),
+          title: contains(query),
+        },
+        select: { id: true, title: true, book: bookScope },
+        ...page,
+      });
+      return rows.map((r) => ({
+        id: r.id,
+        kind,
+        title: r.title,
+        context: r.book.title,
+        href: `/structure/${r.id}`,
+        penNameId: r.book.penNameId,
+        seriesId: r.book.seriesId,
       }));
     }
     case "NOTE": {
@@ -194,6 +255,8 @@ async function load(
         title: r.title,
         context: null,
         href: `/notes/${r.id}`,
+        penNameId: null,
+        seriesId: null,
       }));
     }
     case "IDEA": {
@@ -208,6 +271,8 @@ async function load(
         title: r.title,
         context: null,
         href: `/ideas/${r.id}`,
+        penNameId: null,
+        seriesId: null,
       }));
     }
   }
@@ -240,14 +305,24 @@ export async function resolveNode(ctx: AuthorContext, id: string): Promise<NodeS
   return (await resolveNodes(ctx, [id])).get(id) ?? null;
 }
 
-/** Finds visible story objects of the given kinds by title (for pickers). */
+/**
+ * Finds visible story objects of the given kinds by title (for pickers).
+ * With `penNameId`, objects of other identities are excluded.
+ */
 export async function searchNodes(
   ctx: AuthorContext,
-  { query, kinds, limit = 20 }: { query: string; kinds: StoryNodeKind[]; limit?: number },
+  {
+    query,
+    kinds,
+    limit = 20,
+    penNameId,
+  }: { query: string; kinds: StoryNodeKind[]; limit?: number; penNameId?: string | null },
 ): Promise<NodeSummary[]> {
   const q = query.trim();
   const perKind = await Promise.all(
-    kinds.map((kind) => load(ctx, kind, { query: q || undefined, take: limit })),
+    kinds.map((kind) =>
+      load(ctx, kind, { query: q || undefined, take: limit, penNameId: penNameId ?? undefined }),
+    ),
   );
   const all = perKind.flat();
   if (!q) return all.slice(0, limit);
@@ -269,4 +344,12 @@ export async function nodeKind(ctx: AuthorContext, id: string): Promise<StoryNod
     select: { kind: true },
   });
   return node?.kind ?? null;
+}
+
+/**
+ * Whether two objects may be linked without crossing author identities:
+ * same identity, or at least one of them shared.
+ */
+export function sameIdentity(a: Pick<NodeSummary, "penNameId">, b: Pick<NodeSummary, "penNameId">) {
+  return a.penNameId === null || b.penNameId === null || a.penNameId === b.penNameId;
 }

@@ -1,4 +1,4 @@
-import { NotebookPen, Settings2, Trash2 } from "lucide-react";
+import { Heart, NotebookPen, Settings2, Trash2 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -11,6 +11,8 @@ import { ConnectionsPanel } from "@/modules/connections/ui";
 import { NewNoteDialog } from "@/modules/notes/ui";
 import { getRelationship } from "@/modules/relationships";
 import { RelationshipDialog, trashRelationshipAction } from "@/modules/relationships/ui";
+import { listOutlines, newStructureOptions } from "@/modules/structure";
+import { NewStructureDialog, OutlineList } from "@/modules/structure/ui";
 import { requireAuthorContext } from "@/server/context";
 import { orNotFound } from "@/server/not-found";
 
@@ -25,9 +27,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function RelationshipPage({ params }: Props) {
   const { relationshipId } = await params;
   const ctx = await requireAuthorContext();
-  const [r, connections] = await Promise.all([
-    orNotFound(getRelationship(ctx, relationshipId)),
+  const r = await orNotFound(getRelationship(ctx, relationshipId));
+  const [connections, arcs, structureOptions] = await Promise.all([
     listConnections(ctx, relationshipId),
+    listOutlines(ctx, { relationshipId }),
+    newStructureOptions(ctx, { penNameId: r.characterA.penNameId }),
   ]);
   const title = `${r.characterA.name} & ${r.characterB.name}`;
 
@@ -81,6 +85,35 @@ export default async function RelationshipPage({ params }: Props) {
         ))}
       </div>
       {r.description && <p className="max-w-prose whitespace-pre-line">{r.description}</p>}
+
+      <section aria-labelledby="romance-heading" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="romance-heading" className="font-serif text-xl">
+            Romance arcs
+          </h2>
+          {structureOptions.books.length > 0 && (
+            <NewStructureDialog
+              {...structureOptions}
+              relationships={[{ id: r.id, label: title }]}
+              defaults={{ kind: "ROMANCE", relationshipId: r.id }}
+              trigger={
+                <Button variant="outline" size="sm">
+                  <Heart />
+                  New romance arc
+                </Button>
+              }
+            />
+          )}
+        </div>
+        {arcs.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Plan this romance beat by beat (for example with Romancing the Beat) and place each beat
+            in your scenes.
+          </p>
+        ) : (
+          <OutlineList outlines={arcs} showBook />
+        )}
+      </section>
 
       <ConnectionsPanel
         nodeId={r.id}

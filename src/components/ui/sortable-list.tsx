@@ -20,7 +20,7 @@ import {
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { GripVertical } from "lucide-react";
-import { useState, type ReactNode } from "react";
+import { useId, useState, type ReactNode } from "react";
 
 import { cn } from "@/lib/utils";
 
@@ -78,6 +78,8 @@ export function SortableList<T extends Item>({
   };
   const place = (id: string | number) =>
     `position ${order.findIndex((i) => i.id === id) + 1} of ${order.length}`;
+  // A stable id keeps dnd-kit's generated ARIA ids equal on server and client.
+  const dndId = useId();
   const announcements: Announcements = {
     onDragStart: ({ active }) => `Picked up ${name(active.id)}.`,
     // dnd-kit reports the item over its own starting slot right after pick-up;
@@ -91,6 +93,7 @@ export function SortableList<T extends Item>({
 
   return (
     <DndContext
+      id={dndId}
       sensors={sensors}
       collisionDetection={closestCenter}
       onDragEnd={handleDragEnd}

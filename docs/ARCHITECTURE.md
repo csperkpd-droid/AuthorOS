@@ -3,7 +3,7 @@
 AuthorOS is a **modular monolith**: one Next.js application, one PostgreSQL
 database, with the code split into domain modules that have strict boundaries.
 
-> Status: Milestone 2 (story bible + Universal Connections). Sections marked
+> Status: Milestone 3 (structure, romance arcs, identity separation). Sections marked
 > _planned_ describe the agreed design for later milestones so that early code
 > doesn't block it.
 
@@ -88,17 +88,21 @@ Current modules:
 | `story-graph`   | Story nodes: creation, permanent deletion, per-kind visibility rules, resolution (title/context/link) and cross-kind search. Kind labels. |
 | `connections`   | Universal Connections: the kind registry, connect/update/disconnect, reading a node's connections, the Connections panel and picker.      |
 | `library`       | Series and books; pen-name rules for them; series order.                                                                                  |
-| `manuscript`    | Parts, chapters, scenes (structure, ordering, moves), scene content, autosave, revisions, the binder and editor UI.                       |
-| `characters`    | Characters, profile fields, the scene cast (appearances are connections).                                                                 |
+| `manuscript`    | Parts, chapters, scenes (structure, ordering, moves), scene content and autosave, the binder and editor UI.                               |
+| `history`       | Version history for any versioned story object (scenes, notes): checkpoints, named versions, preview, restore; the History dialog.        |
+| `structure`     | Beat templates, outlines (plot, romance arc, character arc, subplot, custom), beats and their scene assignments; the beat board.          |
+| `fields`        | Author-defined custom fields for any node kind, optionally per identity; the "Your fields" section.                                       |
+| `characters`    | Characters (each of one pen name, optionally one series), profile fields, the scene cast (appearances are connections).                   |
 | `relationships` | Relationships between two characters (story nodes themselves).                                                                            |
 | `notes`         | Notes with rich text; what they're about is connections.                                                                                  |
 | `ideas`         | Quick capture; promotion to a book.                                                                                                       |
 | `trash`         | Listing, restoring and permanently deleting trashed story objects of every type.                                                          |
 
-Dependency direction (domain): `ideas` → `library`, `connections`;
-`notes` → `connections`; `characters`, `relationships`, `trash`,
-`connections` → `story-graph`; `manuscript` → `library` → `pen-names` →
-`workspaces`. Pages compose modules; modules never import a page.
+Dependency direction (domain): `structure` → `characters`,
+`relationships`, `library`, `manuscript`; `ideas` → `library`, `connections`;
+`notes`, `manuscript` → `history`; `library` → `characters`;
+`characters`, `relationships`, `trash`, `fields`, `connections`, `history` →
+`story-graph`; `manuscript` → `library` → `pen-names` → `workspaces`. Pages compose modules; modules never import a page.
 `story-graph` is the bottom of the story layer and knows every typed table.
 
 **Server-only guard.** Every service file imports `server-only`, so a client
@@ -181,9 +185,9 @@ User ──< WorkspaceMember >── Workspace ──< PenName
 - The MVP gives each user one personal workspace and shows no workspace UI.
   The "primary membership" rule in `findPrimaryMembership()` is the single
   place a workspace switcher would replace.
-- **Pen names** belong to the workspace; series and books reference one (see
-  Author identities below). Data is not separated per pen name: one author's
-  characters and notes can serve several identities.
+- **Pen names** belong to the workspace; series, books and characters
+  reference one (see Author identities below). Identities are private from
+  each other by default; notes and ideas are shared workspace material.
 
 ## Author identities (pen names)
 
@@ -200,6 +204,17 @@ User ──< WorkspaceMember >── Workspace ──< PenName
   narrows the Library and dashboard and is the pen name for new work. "All
   identities" (null) shows everything, grouped by pen name. The Pen names page
   is the All Identities view: every identity with its series and books.
+- **Identity separation (M3).** Characters belong to one pen name (and
+  optionally one of its series, appearing in any of its books). "Writing as"
+  narrows characters, relationships, structures and pickers to that identity;
+  "All identities" shows everything. Nothing links across identities: the
+  connection service refuses it, relationships and outlines require one
+  identity, and a linked character can't change pen name. Moving a series to
+  another pen name moves its books and characters with it. Notes and ideas
+  have no pen name (shared) and may link to anything. **Extension point:** a
+  future "shared resource" (e.g. a world bible used by two pen names) would be
+  an explicit opt-in, modeled as a null/shared identity on that object, which
+  `sameIdentity()` already treats as linkable.
 
 ## Manuscript
 
@@ -229,10 +244,12 @@ scene and refuses a stale version. The editor then stops and asks the author
 to reload: **edits made elsewhere are never silently overwritten.** Leaving
 with unsaved text triggers the browser's warning.
 
-**Revisions.** Before content is overwritten, the previous content is
-checkpointed if the last revision is older than 10 minutes. Authors can also
-save named versions. Restoring first saves the current text as a "before
-restore" revision, so restores are always undoable.
+**Revisions** (`history` module, shared by scenes and notes). Before content
+is overwritten, the previous content is checkpointed if the last revision is
+older than 10 minutes. Authors can also save named versions. Restoring first
+saves the current text as a "before restore" revision, so restores are
+always undoable. History lives in one `content_revisions` table keyed by
+node; a new versioned kind adds one accessor in `history/versioned.ts`.
 
 **Trash.** Series, books, parts, chapters and scenes are soft-deleted. The
 Trash lists the topmost trashed item of each branch; restoring brings back
@@ -242,7 +259,7 @@ the item, its descendants and their revisions.
 ## Story Graph and Universal Connections
 
 **Identity.** Every story object (series, book, part, chapter, scene,
-character, relationship, note, idea) has a row in `story_nodes`, and its
+character, relationship, outline, note, idea) has a row in `story_nodes`, and its
 typed row uses that id as its primary key, enforced by a composite foreign
 key and a kind-checking trigger. A trigger deletes the node when the typed
 row is deleted.
@@ -284,9 +301,43 @@ TypeScript flags every place to update, including the Trash), and allow it
 in the registry kinds it should join. The Connections panel, picker, Trash
 and backlinks then work for it without new UI.
 
+**Four separate concepts.** (1) _Story objects_ are nodes. (2) _Structural
+objects_ are the manuscript tree (Book → Part → Chapter → Scene, explicit
+FKs). (3) _Structure/beat assignments_ place outline beats in scenes
+(`beat_scenes`, below). (4) _Universal connections_ are flexible links. They
+are never merged: a beat is not a connection, and a scene is never copied.
+
+## Story structure
+
+An **outline** is a structure applied to one book: plot, romance arc (owned
+by a relationship), character arc (owned by a character), subplot or custom.
+It is a story node, so notes and links attach to it, and it goes to the
+Trash like anything else. Creating one from a **template** (five built-ins,
+seeded; workspace templates use the same table) copies its beats, which are
+then the author's to rename, reorder, add or remove.
+
+**Beat assignments are structure, not connections.** `beat_scenes` is a
+dedicated many-to-many table: one beat may span several scenes, and one
+scene may carry beats of the plot, a romance arc, a character arc and a
+subplot at once. The scene is the single underlying row in every case. The
+beat board shows each beat's scenes in reading order with where they fall
+in the book (%), against the beat's target %, and flags unplaced beats. The
+scene editor shows every beat the scene carries, across structures.
+
+Romance arcs are scoped to one book in M3; a relationship can have an arc in
+each book of a series.
+
+## Custom fields
+
+`fields` lets authors define their own fields ("Love language", "Magic type")
+for any node kind, for every identity or only one. Values attach to story
+nodes, so new object types get custom fields with no schema change. M3 shows
+them on characters; other kinds only need the section added to their page.
+
 **Shared editor.** `components/editor/rich-text-editor.tsx` provides
 autosave, Ctrl/Cmd+S, the leave-page warning and conflict protection for any
-versioned rich text: scenes and notes today.
+versioned rich text: scenes and notes today. When a restore produces a
+newer version, the open editor loads it.
 
 ## AI boundary (_planned, v1.2_)
 

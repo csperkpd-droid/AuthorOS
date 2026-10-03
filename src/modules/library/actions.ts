@@ -71,6 +71,10 @@ export async function updateBookAction(id: string, formData: FormData) {
       status: field(formData, "status") as BookInput["status"],
       targetWordCount: field(formData, "targetWordCount"),
       penNameId: optional(field(formData, "penNameId")),
+      ...(formData.has("tropes") && { tropes: field(formData, "tropes") }),
+      ...(formData.has("heatLevel") && {
+        heatLevel: field(formData, "heatLevel") as BookInput["heatLevel"],
+      }),
     };
     bookInput.parse(input); // validate everything before changing anything
     // Series membership first: it decides whether the book may pick its own pen name.

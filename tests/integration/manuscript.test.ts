@@ -3,21 +3,18 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { ConflictError, NotFoundError, RuleError } from "@/lib/errors";
 import { createBook, getBook } from "@/modules/library";
+import { getRevision, listRevisions, restoreRevision, saveVersion } from "@/modules/history";
 import {
   createChapter,
   createPart,
   createScene,
   dissolvePart,
   getBookTree,
-  getRevision,
   getSceneForEditor,
-  listRevisions,
   moveChapter,
   movePart,
   moveScene,
-  restoreRevision,
   saveSceneContent,
-  saveVersion,
   trashChapter,
   trashPart,
   updateSceneDetails,
@@ -256,7 +253,7 @@ describe("scene content", () => {
     expect(revisions[0]).toMatchObject({ source: "AUTOSAVE", excerpt: "first draft" });
 
     // Once the window has passed, the next save checkpoints again.
-    await db.sceneRevision.updateMany({
+    await db.contentRevision.updateMany({
       data: { createdAt: new Date(Date.now() - 11 * 60 * 1000) },
     });
     await saveSceneContent(ctx, { sceneId, content: doc("fourth draft"), baseVersion: 3 });

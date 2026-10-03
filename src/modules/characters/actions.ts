@@ -1,6 +1,8 @@
 "use server";
 
+import { NotFoundError } from "@/lib/errors";
 import { connect } from "@/modules/connections";
+import { resolveNode } from "@/modules/story-graph";
 import { field, runAction } from "@/server/action";
 import { requireAuthorContext } from "@/server/context";
 
@@ -12,6 +14,7 @@ const fromForm = (formData: FormData) => ({
   role: (field(formData, "role") || undefined) as never,
   summary: field(formData, "summary"),
   seriesId: field(formData, "seriesId"),
+  penNameId: field(formData, "penNameId") || undefined,
 });
 
 export async function createCharacterAction(formData: FormData) {
@@ -51,7 +54,16 @@ export async function addCharacterToSceneAction(
 ) {
   return runAction(async () => {
     const ctx = await requireAuthorContext();
-    const id = characterId ?? (await createCharacter(ctx, { name: newName ?? "" })).id;
+    let id = characterId;
+    if (!id) {
+      // A new character joins the scene's pen name and series.
+      const scene = await resolveNode(ctx, sceneId);
+      if (!scene) throw new NotFoundError("Scene");
+      const home = scene.seriesId
+        ? { seriesId: scene.seriesId }
+        : { penNameId: scene.penNameId ?? undefined };
+      id = (await createCharacter(ctx, { name: newName ?? "", ...home })).id;
+    }
     await connect(ctx, { sourceId: id, targetId: sceneId, kind: "appears_in", attribute: role });
     return { id };
   });

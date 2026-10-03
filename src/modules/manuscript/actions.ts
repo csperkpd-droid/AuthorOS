@@ -3,14 +3,7 @@
 import { runAction } from "@/server/action";
 import { requireAuthorContext } from "@/server/context";
 
-import {
-  getRevision,
-  listRevisions,
-  restoreRevision,
-  saveSceneContent,
-  saveVersion,
-  updateSceneDetails,
-} from "./content";
+import { saveSceneContent, updateSceneDetails } from "./content";
 import type { SceneDetailsInput } from "./schemas";
 import {
   createChapter,
@@ -96,20 +89,4 @@ export async function saveSceneContentAction(
 
 export async function updateSceneDetailsAction(sceneId: string, input: SceneDetailsInput) {
   return runAction(async () => updateSceneDetails(await ctx(), sceneId, input));
-}
-
-export async function listRevisionsAction(sceneId: string) {
-  return runAction(async () => listRevisions(await ctx(), sceneId), { refresh: false });
-}
-
-export async function getRevisionAction(revisionId: string) {
-  return runAction(async () => getRevision(await ctx(), revisionId), { refresh: false });
-}
-
-export async function saveVersionAction(sceneId: string, label: string) {
-  return runAction(async () => saveVersion(await ctx(), sceneId, label), { refresh: false });
-}
-
-export async function restoreRevisionAction(revisionId: string) {
-  return runAction(async () => restoreRevision(await ctx(), revisionId));
 }

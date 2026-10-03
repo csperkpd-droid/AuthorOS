@@ -29,7 +29,7 @@ type Revision = {
 };
 
 /** Version history for a scene: browse, preview, save a named version, restore. */
-export function RevisionsDialog({ sceneId }: { sceneId: string }) {
+export function RevisionsDialog({ nodeId, noun = "scene" }: { nodeId: string; noun?: string }) {
   const [open, setOpen] = useState(false);
   const [revisions, setRevisions] = useState<Revision[] | null>(null);
   const [selected, setSelected] = useState<{ id: string; text: string } | null>(null);
@@ -39,7 +39,7 @@ export function RevisionsDialog({ sceneId }: { sceneId: string }) {
   const [notice, setNotice] = useState<string | null>(null);
 
   async function load() {
-    const result = await listRevisionsAction(sceneId);
+    const result = await listRevisionsAction(nodeId);
     if (result.ok) setRevisions(result.data);
     else setError(result.error);
   }
@@ -53,7 +53,7 @@ export function RevisionsDialog({ sceneId }: { sceneId: string }) {
   async function saveNamedVersion() {
     setBusy(true);
     setError(null);
-    const result = await saveVersionAction(sceneId, label);
+    const result = await saveVersionAction(nodeId, label);
     setBusy(false);
     if (!result.ok) return setError(result.error);
     setLabel("");
@@ -88,7 +88,7 @@ export function RevisionsDialog({ sceneId }: { sceneId: string }) {
         </Button>
       </DialogTrigger>
       <DialogContent
-        title="Scene history"
+        title={`${noun[0].toUpperCase()}${noun.slice(1)} history`}
         description="Earlier versions are kept automatically while you write. Restoring keeps a copy of the current text."
         className="max-w-2xl"
       >

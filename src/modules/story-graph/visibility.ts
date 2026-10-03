@@ -37,3 +37,10 @@ export const liveRelationship = {
 export const liveNote = { deletedAt: null } satisfies Prisma.NoteWhereInput;
 
 export const liveIdea = { deletedAt: null } satisfies Prisma.IdeaWhereInput;
+
+export const liveOutline = {
+  deletedAt: null,
+  book: liveBook,
+  OR: [{ relationshipId: null }, { relationship: liveRelationship }],
+  AND: [{ OR: [{ characterId: null }, { character: liveCharacter }] }],
+} satisfies Prisma.OutlineWhereInput;

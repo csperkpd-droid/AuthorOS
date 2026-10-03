@@ -19,10 +19,3 @@ export const sceneDetailsInput = z.object({
     .nullish(),
 });
 export type SceneDetailsInput = z.input<typeof sceneDetailsInput>;
-
-export const revisionLabel = z
-  .string()
-  .trim()
-  .max(120, "Keep the label under 120 characters.")
-  .transform((v) => (v === "" ? null : v))
-  .nullish();

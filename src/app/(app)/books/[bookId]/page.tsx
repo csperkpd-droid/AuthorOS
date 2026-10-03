@@ -1,4 +1,4 @@
-import { PenLine, Settings2, Trash2 } from "lucide-react";
+import { PenLine, Plus, Settings2, Trash2 } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -8,7 +8,12 @@ import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Progress } from "@/components/ui/progress";
 import { formatCount, formatWords } from "@/lib/format";
-import { BOOK_STATUS_LABELS, getBook, listSeriesOptions } from "@/modules/library";
+import {
+  BOOK_STATUS_LABELS,
+  getBook,
+  HEAT_LEVEL_LABELS,
+  listSeriesOptions,
+} from "@/modules/library";
 import { BookDialog, trashBookAction } from "@/modules/library/ui";
 import { getBookTree } from "@/modules/manuscript";
 import { BinderManager } from "@/modules/manuscript/ui";
@@ -16,6 +21,8 @@ import { listPenNames } from "@/modules/pen-names";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
 import { NewNoteDialog } from "@/modules/notes/ui";
+import { listOutlines, newStructureOptions } from "@/modules/structure";
+import { NewStructureDialog, OutlineList } from "@/modules/structure/ui";
 import { requireAuthorContext } from "@/server/context";
 import { orNotFound } from "@/server/not-found";
 
@@ -30,13 +37,16 @@ export async function generateMetadata({
 export default async function BookPage({ params }: PageProps<"/books/[bookId]">) {
   const { bookId } = await params;
   const ctx = await requireAuthorContext();
-  const [book, tree, penNames, seriesOptions, connections] = await Promise.all([
-    orNotFound(getBook(ctx, bookId)),
-    orNotFound(getBookTree(ctx, bookId)),
-    listPenNames(ctx),
-    listSeriesOptions(ctx),
-    orNotFound(listConnections(ctx, bookId)),
-  ]);
+  const book = await orNotFound(getBook(ctx, bookId));
+  const [tree, penNames, seriesOptions, connections, outlines, structureOptions] =
+    await Promise.all([
+      orNotFound(getBookTree(ctx, bookId)),
+      listPenNames(ctx),
+      listSeriesOptions(ctx),
+      orNotFound(listConnections(ctx, bookId)),
+      listOutlines(ctx, { bookId }),
+      newStructureOptions(ctx, { penNameId: book.penName.id }),
+    ]);
   const firstScene = tree.sceneOrder[0];
 
   return (
@@ -119,8 +129,50 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
         </Stat>
       </dl>
       {book.description && <p className="max-w-prose text-muted-foreground">{book.description}</p>}
+      {(book.tropes.length > 0 || book.heatLevel) && (
+        <ul aria-label="Tropes and heat level" className="flex flex-wrap gap-2">
+          {book.heatLevel && (
+            <li>
+              <Badge className="bg-primary/10 text-primary">
+                {HEAT_LEVEL_LABELS[book.heatLevel]}
+              </Badge>
+            </li>
+          )}
+          {book.tropes.map((t) => (
+            <li key={t}>
+              <Badge>{t}</Badge>
+            </li>
+          ))}
+        </ul>
+      )}
 
       <BinderManager bookId={book.id} items={tree.items} />
+
+      <section aria-labelledby="structures-heading" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="structures-heading" className="font-serif text-xl">
+            Structures
+          </h2>
+          <NewStructureDialog
+            {...structureOptions}
+            books={[{ id: book.id, label: book.title }]}
+            defaults={{ bookId: book.id }}
+            trigger={
+              <Button variant="outline" size="sm">
+                <Plus />
+                New structure
+              </Button>
+            }
+          />
+        </div>
+        {outlines.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Map a plot beat sheet, romance arc or character arc onto this book’s scenes.
+          </p>
+        ) : (
+          <OutlineList outlines={outlines} />
+        )}
+      </section>
 
       <ConnectionsPanel
         nodeId={book.id}

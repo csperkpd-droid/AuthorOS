@@ -9,9 +9,9 @@ Scope details: [MVP.md](MVP.md). Schema: [DATABASE.md](DATABASE.md).
 | --- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
 | 0   | Foundations: repo, database architecture, auth, shell, docs                                                                            | ✅ Complete                     |
 | 1   | Writing loop + author identities: series/books/parts/chapters/scenes, editor, revisions, Trash, pen names, Story Graph extension point | ✅ Complete                     |
-| 2   | Story bible + Universal Connections: characters, relationships, notes, ideas, connections                                              | ✅ Complete (awaiting approval) |
-| 3   | Structure and romance: beat templates, outlines, romance arcs (outlines become story nodes)                                            | Next                            |
-| 4   | Getting work done: tasks, calendar, writing sessions, goals, dashboard                                                                 | Planned                         |
+| 2   | Story bible + Universal Connections: characters, relationships, notes, ideas, connections                                              | ✅ Complete                     |
+| 3   | Structure and romance: beat templates, outlines, romance arcs (outlines become story nodes)                                            | ✅ Complete (awaiting approval) |
+| 4   | Getting work done: tasks, calendar, writing sessions, goals, dashboard                                                                 | Next                            |
 | 5   | Ownership: search, manuscript export, workspace export                                                                                 | Planned                         |
 
 **Why this order:** the editor and binder are used every day, so they come
@@ -42,9 +42,11 @@ manuscript. Export closes the MVP with the "you own your data" promise.
 ### Story Graph growth
 
 - Universal Connections shipped in M2. New object types join as they are
-  built: outlines and romance arcs (M3), tasks (M4), timeline events (v1.1),
+  built: outlines and romance arcs (M3, done), tasks (M4), timeline events (v1.1),
   then locations, research, songs, plot threads, worldbuilding.
-- Later: a graph view of connections; tags on any node.
+- Later: a graph view of connections; tags on any node; series-level
+  outlines; "save outline as template"; more custom-field types and kinds;
+  deliberately shared resources across pen names.
 
 ### Later
 

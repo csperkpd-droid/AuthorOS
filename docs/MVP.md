@@ -16,7 +16,7 @@ the suggestion boundary).
 | **0: Foundations** ✅                         | Repo, tooling, CI, database architecture, Auth.js (magic link + Google), workspace bootstrap, default pen name, app shell, docs                                                                                                                                                                                                                                                     | An author can sign in, gets a workspace and default pen name, and sees the shell; CI is green.                                                     |
 | **1: Writing loop + identities** ✅           | Series, books, optional parts, chapters, scenes; binder with drag-and-drop and Move to…; Tiptap editor with autosave and conflict protection; word counts; scene status and synopsis; revision history with named versions and restore; Trash; full pen-name management (create, edit, default, archive, assign, switch identity, All Identities view); Story Graph extension point | An author can draft a full manuscript under any of their pen names, reorganize it, and recover any earlier version or deleted item.                |
 | **2: Story bible + Universal Connections** ✅ | Characters (profile, role, series scope, scene cast with POV); relationships (story nodes with their own scenes and notes); notes (rich text, about anything); ideas (capture, promote to book); Universal Connections (registry, panel, picker, backlinks); Trash for every new kind                                                                                               | From any scene you can see who is in it and what notes are about it; from any character, where they appear; anything can be connected to anything. |
-| **3: Structure and romance**                  | Built-in and custom beat templates; plot outline per book; romance arc per relationship; beats mapped to scenes; tropes and heat level                                                                                                                                                                                                                                              | An author can lay a beat sheet over the manuscript and see gaps.                                                                                   |
+| **3: Structure and romance** ✅               | Built-in beat templates; outlines per book (plot, romance arc per relationship, character arc, subplot, custom); beats placed in real scenes (many-to-many, no copies); notes version history; characters scoped to pen names; custom fields; tropes and heat level                                                                                                                 | An author can lay a beat sheet over the manuscript and see gaps.                                                                                   |
 | **4: Getting work done**                      | Tasks; calendar (events, due dates); writing sessions; goals; dashboard progress                                                                                                                                                                                                                                                                                                    | An author can plan their week and track daily words.                                                                                               |
 | **5: Ownership**                              | Global search; export manuscript (DOCX, Markdown); export the whole workspace (JSON)                                                                                                                                                                                                                                                                                                | An author can find anything and take all their data with them.                                                                                     |
 
@@ -30,6 +30,19 @@ the suggestion boundary).
 | Collaboration                                 | v1.3+ | Workspaces, memberships and roles exist; database sessions.          |
 | Pen-name branding, links, publishing accounts | v1.1  | Pen names, archive, assignment and identity switching shipped in M1. |
 | Imports (DOCX, Scrivener)                     | Later | Revisions record `IMPORT` source.                                    |
+
+## Milestone 3 checklist
+
+- [x] Built-in templates (Three-Act, Save the Cat, Hero's Journey, Romancing the Beat, Positive Change Arc), seeded
+- [x] Outlines as story nodes: plot, romance arc (owned by a relationship), character arc (owned by a character), subplot, custom
+- [x] Beat board: add, edit, reorder (drag or keyboard), remove beats; place each in one or more scenes; % position vs target; unplaced beats flagged
+- [x] One scene carries beats of many structures, shown in the scene editor; scenes are never copied
+- [x] Structures from the Story structure page, a book, a relationship ("New romance arc") or a character ("New arc"); Trash and restore
+- [x] Notes version history: checkpoints, named versions, preview, restore (shared `history` module)
+- [x] Characters belong to a pen name (and optionally a series); "Writing as" filters characters, relationships, structures and pickers; no links across identities
+- [x] Custom fields: definitions per kind (optionally per pen name), values per object; on characters
+- [x] Books: tropes (with suggestions) and heat level
+- [x] Tests: integration tests for structure, identity rules, history and fields; end-to-end structure, history, identity and custom-field flows
 
 ## Milestone 2 checklist
 

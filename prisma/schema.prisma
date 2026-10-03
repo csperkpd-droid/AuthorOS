@@ -35,7 +35,7 @@ model User {
   accounts    Account[]
   sessions    Session[]
   memberships WorkspaceMember[]
-  revisions   SceneRevision[]
+  revisions   ContentRevision[]
   connections Connection[]
 
   @@map("users")
@@ -144,10 +144,12 @@ model PenName {
   updatedAt   DateTime  @updatedAt @map("updated_at")
   archivedAt  DateTime? @map("archived_at")
 
-  workspace     Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  series        Series[]
-  books         Book[]
-  activeMembers WorkspaceMember[]
+  workspace        Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  series           Series[]
+  books            Book[]
+  characters       Character[]
+  fieldDefinitions FieldDefinition[]
+  activeMembers    WorkspaceMember[]
 
   @@unique([id, workspaceId])
   @@index([workspaceId])
@@ -166,6 +168,7 @@ enum StoryNodeKind {
   RELATIONSHIP
   NOTE
   IDEA
+  OUTLINE
 
   @@map("story_node_kind")
 }
@@ -180,7 +183,7 @@ model StoryNode {
   kind        StoryNodeKind
   createdAt   DateTime      @default(now()) @map("created_at")
 
-  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   series       Series?
   book         Book?
   part         Part?
@@ -190,8 +193,11 @@ model StoryNode {
   relationship Relationship?
   note         Note?
   idea         Idea?
-  outgoing     Connection[]  @relation("ConnectionSource")
-  incoming     Connection[]  @relation("ConnectionTarget")
+  outline      Outline?
+  outgoing     Connection[]      @relation("ConnectionSource")
+  incoming     Connection[]      @relation("ConnectionTarget")
+  revisions    ContentRevision[]
+  fieldValues  NodeFieldValue[]
 
   @@unique([id, workspaceId])
   @@index([workspaceId, kind])
@@ -243,6 +249,9 @@ model Book {
   description     String?
   status          BookStatus @default(PLANNING)
   targetWordCount Int?       @map("target_word_count")
+  /// Romance metadata (any genre may use tropes).
+  tropes          String[]   @default([])
+  heatLevel       HeatLevel? @map("heat_level")
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
   deletedAt       DateTime?  @map("deleted_at")
@@ -253,12 +262,22 @@ model Book {
   parts    Part[]
   chapters Chapter[]
   scenes   Scene[]
+  outlines Outline[]
 
   @@unique([id, workspaceId])
   @@index([workspaceId])
   @@index([penNameId])
   @@index([seriesId])
   @@map("books")
+}
+
+enum HeatLevel {
+  CLEAN
+  CLOSED_DOOR
+  OPEN_DOOR
+  EXPLICIT
+
+  @@map("heat_level")
 }
 
 // ─── Manuscript structure: Book → (Part) → Chapter → Scene ─────────────────
@@ -340,10 +359,10 @@ model Scene {
   updatedAt   DateTime    @updatedAt @map("updated_at")
   deletedAt   DateTime?   @map("deleted_at")
 
-  node      StoryNode       @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  book      Book            @relation(fields: [bookId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  chapter   Chapter         @relation(fields: [chapterId, bookId], references: [id, bookId], onDelete: Cascade)
-  revisions SceneRevision[]
+  node    StoryNode   @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  book    Book        @relation(fields: [bookId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  chapter Chapter     @relation(fields: [chapterId, bookId], references: [id, bookId], onDelete: Cascade)
+  beats   BeatScene[]
 
   @@unique([id, workspaceId])
   @@index([bookId])
@@ -361,11 +380,12 @@ enum RevisionSource {
   @@map("revision_source")
 }
 
-/// Append-only snapshots of earlier scene content.
-model SceneRevision {
+/// Append-only snapshots of earlier rich-text content of any versioned story
+/// node (scenes and notes today). Never pruned automatically.
+model ContentRevision {
   id          String         @id @default(uuid(7)) @db.Uuid
   workspaceId String         @map("workspace_id") @db.Uuid
-  sceneId     String         @map("scene_id") @db.Uuid
+  nodeId      String         @map("node_id") @db.Uuid
   content     Json?
   contentText String         @map("content_text")
   wordCount   Int            @map("word_count")
@@ -374,11 +394,11 @@ model SceneRevision {
   createdById String?        @map("created_by_id") @db.Uuid
   createdAt   DateTime       @default(now()) @map("created_at")
 
-  scene     Scene @relation(fields: [sceneId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+  node      StoryNode @relation(fields: [nodeId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
 
-  @@index([sceneId, createdAt(sort: Desc)])
-  @@map("scene_revisions")
+  @@index([nodeId, createdAt(sort: Desc)])
+  @@map("content_revisions")
 }
 
 // ─── Story bible ────────────────────────────────────────────────────────────
@@ -393,11 +413,13 @@ enum CharacterRole {
   @@map("character_role")
 }
 
-/// A character in the author's story world. Lives in the workspace and can be
-/// scoped to a series. Scene appearances are connections (`appears_in`).
+/// A character belongs to one author identity (pen name) and optionally to a
+/// series of that identity. Identities are private from each other by
+/// default. Scene appearances are connections (`appears_in`).
 model Character {
   id          String        @id @db.Uuid
   workspaceId String        @map("workspace_id") @db.Uuid
+  penNameId   String        @map("pen_name_id") @db.Uuid
   seriesId    String?       @map("series_id") @db.Uuid
   name        String
   aliases     String[]      @default([])
@@ -411,12 +433,15 @@ model Character {
   deletedAt   DateTime?     @map("deleted_at")
 
   node           StoryNode      @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  penName        PenName        @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
   series         Series?        @relation(fields: [seriesId], references: [id], onDelete: SetNull)
   relationshipsA Relationship[] @relation("RelationshipCharacterA")
   relationshipsB Relationship[] @relation("RelationshipCharacterB")
+  outlines       Outline[]
 
   @@unique([id, workspaceId])
   @@index([workspaceId])
+  @@index([penNameId])
   @@index([seriesId])
   @@map("characters")
 }
@@ -438,6 +463,7 @@ model Relationship {
   node       StoryNode @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   characterA Character @relation("RelationshipCharacterA", fields: [characterAId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   characterB Character @relation("RelationshipCharacterB", fields: [characterBId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  outlines   Outline[]
 
   @@unique([characterAId, characterBId])
   @@unique([id, workspaceId])
@@ -523,4 +549,165 @@ model Connection {
   @@index([targetId])
   @@index([workspaceId, kind])
   @@map("connections")
+}
+
+// ─── Story structure ────────────────────────────────────────────────────────
+
+enum StructureKind {
+  PLOT
+  ROMANCE
+  CHARACTER_ARC
+  SUBPLOT
+  CUSTOM
+
+  @@map("structure_kind")
+}
+
+/// A beat-sheet template. `workspace_id` null = built-in (seeded by migration
+/// with fixed ids); otherwise the author's own (future: save outline as template).
+model StructureTemplate {
+  id          String        @id @default(uuid(7)) @db.Uuid
+  workspaceId String?       @map("workspace_id") @db.Uuid
+  kind        StructureKind
+  name        String
+  description String?
+  source      String?
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  beats    TemplateBeat[]
+  outlines Outline[]
+
+  @@index([workspaceId])
+  @@map("structure_templates")
+}
+
+model TemplateBeat {
+  id            String  @id @default(uuid(7)) @db.Uuid
+  templateId    String  @map("template_id") @db.Uuid
+  title         String
+  description   String?
+  /// Where the beat usually falls, as a percentage of the book.
+  targetPercent Int?    @map("target_percent")
+  position      String
+
+  template     StructureTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
+  outlineBeats OutlineBeat[]
+
+  @@index([templateId])
+  @@map("template_beats")
+}
+
+/// A structure applied to a book: the main plot, a romance arc (owned by a
+/// relationship), a character arc (owned by a character), a subplot or a
+/// custom structure. A story node, so notes and other objects connect to it.
+/// CHECK: romance arcs have a relationship, character arcs a character.
+model Outline {
+  id             String        @id @db.Uuid
+  workspaceId    String        @map("workspace_id") @db.Uuid
+  bookId         String        @map("book_id") @db.Uuid
+  kind           StructureKind
+  title          String
+  templateId     String?       @map("template_id") @db.Uuid
+  relationshipId String?       @map("relationship_id") @db.Uuid
+  characterId    String?       @map("character_id") @db.Uuid
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  deletedAt      DateTime?     @map("deleted_at")
+
+  node         StoryNode          @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  book         Book               @relation(fields: [bookId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  template     StructureTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+  relationship Relationship?      @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
+  character    Character?         @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  beats        OutlineBeat[]
+
+  @@unique([id, workspaceId])
+  @@index([bookId])
+  @@index([relationshipId])
+  @@index([characterId])
+  @@map("outlines")
+}
+
+/// One beat of an outline (copied from the template, then the author's own).
+model OutlineBeat {
+  id             String   @id @default(uuid(7)) @db.Uuid
+  workspaceId    String   @map("workspace_id") @db.Uuid
+  outlineId      String   @map("outline_id") @db.Uuid
+  templateBeatId String?  @map("template_beat_id") @db.Uuid
+  title          String
+  description    String?
+  targetPercent  Int?     @map("target_percent")
+  position       String
+  createdAt      DateTime @default(now()) @map("created_at")
+  updatedAt      DateTime @updatedAt @map("updated_at")
+
+  outline      Outline       @relation(fields: [outlineId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  templateBeat TemplateBeat? @relation(fields: [templateBeatId], references: [id], onDelete: SetNull)
+  scenes       BeatScene[]
+
+  @@unique([id, workspaceId])
+  @@index([outlineId])
+  @@map("outline_beats")
+}
+
+/// Structural beat assignment: this beat happens in this scene. Many-to-many,
+/// so a beat can span several scenes and one scene can carry beats of many
+/// structures. The scene itself is never copied.
+model BeatScene {
+  workspaceId String   @map("workspace_id") @db.Uuid
+  beatId      String   @map("beat_id") @db.Uuid
+  sceneId     String   @map("scene_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  beat  OutlineBeat @relation(fields: [beatId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  scene Scene       @relation(fields: [sceneId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+
+  @@id([beatId, sceneId])
+  @@index([sceneId])
+  @@map("beat_scenes")
+}
+
+// ─── Custom fields ──────────────────────────────────────────────────────────
+
+enum FieldType {
+  TEXT
+  LONG_TEXT
+
+  @@map("field_type")
+}
+
+/// An author-defined field for a kind of story object (e.g. "Magic type" on
+/// characters). `pen_name_id` null = shown for every identity.
+model FieldDefinition {
+  id          String        @id @default(uuid(7)) @db.Uuid
+  workspaceId String        @map("workspace_id") @db.Uuid
+  penNameId   String?       @map("pen_name_id") @db.Uuid
+  nodeKind    StoryNodeKind @map("node_kind")
+  label       String
+  type        FieldType     @default(TEXT)
+  position    String
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  penName PenName?         @relation(fields: [penNameId], references: [id], onDelete: Cascade)
+  values  NodeFieldValue[]
+
+  @@unique([id, workspaceId])
+  @@index([workspaceId, nodeKind])
+  @@map("field_definitions")
+}
+
+/// A custom field's value on any story node.
+model NodeFieldValue {
+  workspaceId String   @map("workspace_id") @db.Uuid
+  nodeId      String   @map("node_id") @db.Uuid
+  fieldId     String   @map("field_id") @db.Uuid
+  value       String
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  node  StoryNode       @relation(fields: [nodeId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  field FieldDefinition @relation(fields: [fieldId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+
+  @@id([nodeId, fieldId])
+  @@index([fieldId])
+  @@map("node_field_values")
 }

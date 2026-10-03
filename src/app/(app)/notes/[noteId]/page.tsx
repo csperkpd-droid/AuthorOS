@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
+import { RevisionsDialog } from "@/modules/history/ui";
 import { getNote } from "@/modules/notes";
 import { NoteEditor, trashNoteAction } from "@/modules/notes/ui";
 import { requireAuthorContext } from "@/server/context";
@@ -35,19 +36,22 @@ export default async function NotePage({ params }: Props) {
             Notes
           </Link>
         </nav>
-        <ConfirmDialog
-          trigger={
-            <Button variant="ghost" size="sm" aria-label="Move note to Trash">
-              <Trash2 />
-            </Button>
-          }
-          title={`Move “${note.title}” to the Trash?`}
-          description="You can restore it, with its connections, from the Trash."
-          confirmLabel="Move to Trash"
-          destructive
-          onConfirm={trashNoteAction.bind(null, note.id)}
-          navigateTo="/notes"
-        />
+        <div className="flex gap-2">
+          <RevisionsDialog nodeId={note.id} noun="note" />
+          <ConfirmDialog
+            trigger={
+              <Button variant="ghost" size="sm" aria-label="Move note to Trash">
+                <Trash2 />
+              </Button>
+            }
+            title={`Move “${note.title}” to the Trash?`}
+            description="You can restore it, with its connections, from the Trash."
+            confirmLabel="Move to Trash"
+            destructive
+            onConfirm={trashNoteAction.bind(null, note.id)}
+            navigateTo="/notes"
+          />
+        </div>
       </div>
       <ConnectionsPanel
         nodeId={note.id}

@@ -1,7 +1,12 @@
 import type { StoryNodeKind } from "@/generated/prisma/enums";
 
 /**
- * The Universal Connection registry. Every link between two story objects
+ * The Universal Connection registry.
+ *
+ * Rules every kind inherits (enforced by the service): both ends visible and
+ * in the same workspace, and never across author identities (an object of
+ * one pen name can't link to an object of another; shared objects such as
+ * notes and ideas link to any). Every link between two story objects
  * has a kind defined here: which node kinds it may join, how it reads in each
  * direction, and an optional single-choice attribute.
  *
@@ -27,6 +32,11 @@ export type ConnectionKindDef = {
   from: StoryNodeKind[] | "*";
   to: StoryNodeKind[] | "*";
   attribute?: ConnectionAttribute;
+  /**
+   * If the source belongs to a series, the target must be in the same series
+   * (e.g. a series' characters appear only in that series' books).
+   */
+  sameSeries?: boolean;
   /** One-line explanation shown when choosing a kind. */
   hint: string;
 };
@@ -45,6 +55,7 @@ export const CONNECTION_KINDS = {
     from: ["CHARACTER"],
     to: ["SCENE"],
     attribute: { key: "role", label: "Role", options: SCENE_ROLES, defaultValue: "PRESENT" },
+    sameSeries: true,
     hint: "A character is in a scene: as the point of view, present, or mentioned.",
   },
   develops_in: {

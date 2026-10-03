@@ -8,7 +8,7 @@ export async function createCharacter(page: Page, name: string, role?: string) {
   await page.goto("/characters");
   await page.getByRole("button", { name: "New character" }).click();
   const dialog = page.getByRole("dialog", { name: "New character" });
-  await dialog.getByLabel("Name").fill(name);
+  await dialog.getByLabel("Name", { exact: true }).fill(name);
   if (role) await dialog.getByLabel("Role").selectOption({ label: role });
   await dialog.getByRole("button", { name: "Create character" }).click();
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();

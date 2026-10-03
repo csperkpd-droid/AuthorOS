@@ -27,6 +27,8 @@ export const characterInput = z.object({
     .max(2000, "Keep the summary under 2,000 characters.")
     .transform((v) => (v === "" ? null : v))
     .nullish(),
+  /** The identity for a character outside any series. */
+  penNameId: z.uuid().optional(),
   seriesId: z
     .string()
     .transform((v) => (v === "" ? null : v))

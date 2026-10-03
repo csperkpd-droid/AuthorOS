@@ -3,7 +3,13 @@ import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { ConflictError, NotFoundError, RuleError } from "@/lib/errors";
-import { nodeKind, resolveNode, resolveNodes, type NodeSummary } from "@/modules/story-graph";
+import {
+  nodeKind,
+  resolveNode,
+  resolveNodes,
+  sameIdentity,
+  type NodeSummary,
+} from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 
 import { canConnect, getKind, isConnectionKind, labelFrom, type ConnectionKind } from "./registry";
@@ -91,13 +97,22 @@ export async function planConnection(
   if (data.sourceId === data.targetId)
     throw new RuleError("Something can’t be connected to itself.");
 
-  const kindOf = async (id: string) =>
-    pending?.id === id ? pending.kind : ((await resolveNode(ctx, id))?.kind ?? null);
-  const [sourceKind, targetKind] = await Promise.all([
-    kindOf(data.sourceId),
-    kindOf(data.targetId),
+  // A pending node (created in the caller's transaction) is a shared object
+  // with no identity or series yet.
+  const summaryOf = async (id: string) =>
+    pending?.id === id
+      ? { kind: pending.kind, penNameId: null, seriesId: null }
+      : await resolveNode(ctx, id);
+  const [sourceNode, targetNode] = await Promise.all([
+    summaryOf(data.sourceId),
+    summaryOf(data.targetId),
   ]);
-  if (!sourceKind || !targetKind) throw new NotFoundError("Story item");
+  if (!sourceNode || !targetNode) throw new NotFoundError("Story item");
+  if (!sameIdentity(sourceNode, targetNode)) {
+    throw new RuleError("These belong to different pen names, so they can’t be connected.");
+  }
+  const sourceKind = sourceNode.kind;
+  const targetKind = targetNode.kind;
   if (!canConnect(kind, sourceKind, targetKind)) {
     throw new RuleError(
       `A ${sourceKind.toLowerCase()} can’t be connected to a ${targetKind.toLowerCase()} that way.`,
@@ -105,9 +120,14 @@ export async function planConnection(
   }
 
   let [sourceId, targetId] = [data.sourceId, data.targetId];
+  let [from, to] = [sourceNode, targetNode];
   const def = getKind(kind);
   if (def.directed && !canConnect(kind, sourceKind, targetKind, { directedOnly: true })) {
     [sourceId, targetId] = [targetId, sourceId];
+    [from, to] = [to, from];
+  }
+  if (def.sameSeries && from.seriesId && from.seriesId !== to.seriesId) {
+    throw new RuleError("A series’ characters can only be connected within that series.");
   }
   if (!def.directed && targetId < sourceId) [sourceId, targetId] = [targetId, sourceId];
 

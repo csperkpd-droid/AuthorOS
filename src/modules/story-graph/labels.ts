@@ -11,6 +11,7 @@ export const NODE_KIND_LABELS: Record<StoryNodeKind, { one: string; many: string
   RELATIONSHIP: { one: "Relationship", many: "Relationships" },
   NOTE: { one: "Note", many: "Notes" },
   IDEA: { one: "Idea", many: "Ideas" },
+  OUTLINE: { one: "Structure", many: "Structures" },
 };
 
 /** Every node kind, in display order. */

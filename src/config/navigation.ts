@@ -93,7 +93,7 @@ export const navigation: NavGroup[] = [
         href: "/structure",
         icon: Workflow,
         description: "Plot and romance beat sheets mapped to your scenes.",
-        availability: { status: "planned", milestone: "Milestone 3" },
+        availability: { status: "available" },
       },
     ],
   },

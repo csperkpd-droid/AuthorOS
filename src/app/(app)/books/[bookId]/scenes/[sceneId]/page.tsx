@@ -7,17 +7,14 @@ import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { getBook } from "@/modules/library";
 import { getSceneForEditor } from "@/modules/manuscript";
-import {
-  BinderNav,
-  RevisionsDialog,
-  SceneDetails,
-  SceneEditor,
-  trashSceneAction,
-} from "@/modules/manuscript/ui";
+import { BinderNav, SceneDetails, SceneEditor, trashSceneAction } from "@/modules/manuscript/ui";
 import { SceneCast } from "@/modules/characters/ui";
+import { RevisionsDialog } from "@/modules/history/ui";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
 import { NewNoteDialog } from "@/modules/notes/ui";
+import { beatsForScene } from "@/modules/structure";
+import { SceneBeats } from "@/modules/structure/ui";
 import { requireAuthorContext } from "@/server/context";
 import { orNotFound } from "@/server/not-found";
 
@@ -32,10 +29,11 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ScenePage({ params }: Props) {
   const { bookId, sceneId } = await params;
   const ctx = await requireAuthorContext();
-  const [book, editor, connections] = await Promise.all([
+  const [book, editor, connections, beats] = await Promise.all([
     orNotFound(getBook(ctx, bookId)),
     orNotFound(getSceneForEditor(ctx, sceneId)),
     orNotFound(listConnections(ctx, sceneId)),
+    beatsForScene(ctx, sceneId),
   ]);
   const cast = connections
     .filter((c) => c.kind === "appears_in")
@@ -64,7 +62,7 @@ export default async function ScenePage({ params }: Props) {
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
           <p>{location}</p>
           <div className="flex gap-2">
-            <RevisionsDialog sceneId={scene.id} />
+            <RevisionsDialog nodeId={scene.id} />
             <ConfirmDialog
               trigger={
                 <Button variant="ghost" size="sm" aria-label="Move scene to Trash">
@@ -87,6 +85,7 @@ export default async function ScenePage({ params }: Props) {
           status={scene.status}
           synopsis={scene.synopsis}
         />
+        <SceneBeats beats={beats} />
         <SceneCast sceneId={scene.id} cast={cast} />
         <SceneEditor
           key={scene.id}

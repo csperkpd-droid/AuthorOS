@@ -67,7 +67,7 @@ erDiagram
   books ||--o{ chapters : ""
   parts |o--o{ chapters : "optional"
   chapters ||--o{ scenes : ""
-  scenes ||--o{ scene_revisions : ""
+  story_nodes ||--o{ content_revisions : "history"
   story_nodes ||--o| characters : "is"
   story_nodes ||--o| relationships : "is"
   story_nodes ||--o| notes : "is"
@@ -75,6 +75,16 @@ erDiagram
   characters ||--o{ relationships : "A / B"
   story_nodes ||--o{ connections : "source"
   story_nodes ||--o{ connections : "target"
+  pen_names ||--o{ characters : "belongs to"
+  story_nodes ||--o| outlines : "is"
+  books ||--o{ outlines : ""
+  relationships |o--o{ outlines : "romance arc"
+  characters |o--o{ outlines : "character arc"
+  outlines ||--o{ outline_beats : ""
+  outline_beats }o--o{ scenes : "beat_scenes"
+  structure_templates ||--o{ template_beats : ""
+  story_nodes ||--o{ node_field_values : ""
+  field_definitions ||--o{ node_field_values : ""
 ```
 
 ### Identity and tenancy (Milestone 0)
@@ -93,9 +103,9 @@ erDiagram
 
 ### Story graph (Milestone 1)
 
-| Table         | Key columns                                                                                                      | Notes                                                   |
-| ------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `story_nodes` | `id`, `workspace_id`, `kind` (`SERIES`/`BOOK`/`PART`/`CHAPTER`/`SCENE`/`CHARACTER`/`RELATIONSHIP`/`NOTE`/`IDEA`) | Unique `(id, workspace_id)` for tenant-safe references. |
+| Table         | Key columns                                                                                                                | Notes                                                   |
+| ------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `story_nodes` | `id`, `workspace_id`, `kind` (`SERIES`/`BOOK`/`PART`/`CHAPTER`/`SCENE`/`CHARACTER`/`RELATIONSHIP`/`OUTLINE`/`NOTE`/`IDEA`) | Unique `(id, workspace_id)` for tenant-safe references. |
 
 Typed tables use their node id as primary key via the composite FK
 `(id, workspace_id) → story_nodes(id, workspace_id) ON DELETE CASCADE`.
@@ -111,14 +121,14 @@ triggers remove the children's nodes.
 
 ### Library and manuscript (Milestone 1)
 
-| Table             | Key columns                                                                                                                                                         | Notes                                                                                                                                                                |
-| ----------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `series`          | `pen_name_id`, `title`, `description`, `deleted_at`                                                                                                                 | Pen name via tenant-safe FK.                                                                                                                                         |
-| `books`           | `pen_name_id`, `series_id?`, `series_position?` (C collation), `title`, `subtitle`, `description`, `status`, `target_word_count`, `deleted_at`                      | CHECK: `series_position` set exactly when `series_id` is. Books in a series share the series' pen name (service rule).                                               |
-| `parts`           | `book_id`, `title`, `position`, `deleted_at`                                                                                                                        | Optional level. Unique `(id, book_id)` so chapters can reference parts safely.                                                                                       |
-| `chapters`        | `book_id`, `part_id?`, `title`, `position`, `deleted_at`                                                                                                            | `part_id` null = book top level, sharing the position space with parts.                                                                                              |
-| `scenes`          | `book_id`, `chapter_id`, `title`, `position`, `status`, `synopsis`, `content` (jsonb), `content_text`, `word_count`, `version`, `deleted_at`                        | FK `(chapter_id, book_id) → chapters(id, book_id)`: a scene's book is always its chapter's book. `version` increments on each content save (optimistic concurrency). |
-| `scene_revisions` | `scene_id`, `content`, `content_text`, `word_count`, `source` (`AUTOSAVE`/`MANUAL`/`BEFORE_RESTORE`/`AI_ACCEPTED`/`IMPORT`), `label`, `created_by_id`, `created_at` | Append-only. Indexed `(scene_id, created_at DESC)`.                                                                                                                  |
+| Table               | Key columns                                                                                                                                                                    | Notes                                                                                                                                                                                    |
+| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `series`            | `pen_name_id`, `title`, `description`, `deleted_at`                                                                                                                            | Pen name via tenant-safe FK.                                                                                                                                                             |
+| `books`             | `pen_name_id`, `series_id?`, `series_position?` (C collation), `title`, `subtitle`, `description`, `status`, `target_word_count`, `tropes text[]`, `heat_level?`, `deleted_at` | CHECK: `series_position` set exactly when `series_id` is. Books in a series share the series' pen name (service rule).                                                                   |
+| `parts`             | `book_id`, `title`, `position`, `deleted_at`                                                                                                                                   | Optional level. Unique `(id, book_id)` so chapters can reference parts safely.                                                                                                           |
+| `chapters`          | `book_id`, `part_id?`, `title`, `position`, `deleted_at`                                                                                                                       | `part_id` null = book top level, sharing the position space with parts.                                                                                                                  |
+| `scenes`            | `book_id`, `chapter_id`, `title`, `position`, `status`, `synopsis`, `content` (jsonb), `content_text`, `word_count`, `version`, `deleted_at`                                   | FK `(chapter_id, book_id) → chapters(id, book_id)`: a scene's book is always its chapter's book. `version` increments on each content save (optimistic concurrency).                     |
+| `content_revisions` | `node_id`, `content`, `content_text`, `word_count`, `source` (`AUTOSAVE`/`MANUAL`/`BEFORE_RESTORE`/`AI_ACCEPTED`/`IMPORT`), `label`, `created_by_id`, `created_at`             | Append-only history of any versioned story object (scenes, notes); renamed from `scene_revisions` in M3. Tenant-safe FK to `story_nodes`, cascade. Indexed `(node_id, created_at DESC)`. |
 
 The **manuscript** is a view, not a table: a book's parts, chapters and
 scenes in `position` order. Book and part word totals are computed from
@@ -158,20 +168,42 @@ something in the Trash) are hidden, not deleted, and reappear on restore.
 
 ### Story bible (Milestone 2)
 
-| Table           | Key columns                                                                                                                                                           | Notes                                                                                                                                                                                                                                      |
-| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `characters`    | node id, `series_id?`, `name`, `aliases text[]`, `role` (`PROTAGONIST`/`ANTAGONIST`/`LOVE_INTEREST`/`SUPPORTING`/`MINOR`), `summary`, `profile` (jsonb), `deleted_at` | `profile` holds profile fields by id (list in `modules/characters/profile.ts`). Scene appearances are `appears_in` connections. `series_id` → `ON DELETE SET NULL`.                                                                        |
-| `relationships` | node id, `character_a_id`, `character_b_id`, `type`, `description`, `deleted_at`                                                                                      | A story node itself, so notes, scenes (`develops_in`) and future romance arcs connect to the relationship. Tenant-safe FKs to both characters (cascade). CHECK `character_a_id < character_b_id` + unique pair: one relationship per pair. |
-| `notes`         | node id, `title`, `body` (jsonb), `body_text`, `version`, `deleted_at`                                                                                                | What a note is about is a set of `about` connections. `version` for conflict detection, like scenes.                                                                                                                                       |
-| `ideas`         | node id, `title`, `body`, `status` (`OPEN`/`USED`/`ARCHIVED`), `deleted_at`                                                                                           | Promotion to a book creates the book and an `inspired` connection.                                                                                                                                                                         |
+| Table           | Key columns                                                                                                                                                                          | Notes                                                                                                                                                                                                                                                       |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `characters`    | node id, `pen_name_id`, `series_id?`, `name`, `aliases text[]`, `role` (`PROTAGONIST`/`ANTAGONIST`/`LOVE_INTEREST`/`SUPPORTING`/`MINOR`), `summary`, `profile` (jsonb), `deleted_at` | Every character belongs to one pen name (M3; tenant-safe FK, `NO ACTION`), and optionally to one of its series. Profile fields by id (`modules/characters/profile.ts`). Scene appearances are `appears_in` connections. `series_id` → `ON DELETE SET NULL`. |
+| `relationships` | node id, `character_a_id`, `character_b_id`, `type`, `description`, `deleted_at`                                                                                                     | A story node itself, so notes, scenes (`develops_in`) and future romance arcs connect to the relationship. Tenant-safe FKs to both characters (cascade). CHECK `character_a_id < character_b_id` + unique pair: one relationship per pair.                  |
+| `notes`         | node id, `title`, `body` (jsonb), `body_text`, `version`, `deleted_at`                                                                                                               | What a note is about is a set of `about` connections. `version` for conflict detection, like scenes.                                                                                                                                                        |
+| `ideas`         | node id, `title`, `body`, `status` (`OPEN`/`USED`/`ARCHIVED`), `deleted_at`                                                                                                          | Promotion to a book creates the book and an `inspired` connection.                                                                                                                                                                                          |
 
 All four use the story-node triggers (kind check, node cleanup).
+
+### Story structure (Milestone 3)
+
+Four separate concepts, never mixed: story objects (nodes), the structural
+manuscript (book → part → chapter → scene), **beat assignments** (below), and
+universal connections. A scene is never copied: plot, romance, character-arc
+and subplot beats all point at the same scene row.
+
+| Table                 | Key columns                                                                                                                                                  | Notes                                                                                                                                                                                                                   |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `structure_templates` | `workspace_id?`, `kind`, `name`, `description`, `source`                                                                                                     | `workspace_id` null = built-in, seeded by the migration with fixed ids (Three-Act, Save the Cat, Hero's Journey, Romancing the Beat, Positive Change Arc). Workspace templates ("save as template") use the same table. |
+| `template_beats`      | `template_id`, `title`, `description`, `target_percent?`, `position`                                                                                         | CHECK 0–100.                                                                                                                                                                                                            |
+| `outlines`            | node id, `book_id`, `kind` (`PLOT`/`ROMANCE`/`CHARACTER_ARC`/`SUBPLOT`/`CUSTOM`), `title`, `template_id?`, `relationship_id?`, `character_id?`, `deleted_at` | A story node (so notes and links attach to it). CHECK `outlines_owner_matches_kind`: a romance arc has a relationship, a character arc a character, others neither. Owner and book share the pen name (service rule).   |
+| `outline_beats`       | `outline_id`, `template_beat_id?`, `title`, `description`, `target_percent?`, `position` (C collation)                                                       | Copied from the template on creation: the beats are then the author's own.                                                                                                                                              |
+| `beat_scenes`         | PK `(beat_id, scene_id)`, `workspace_id`, `created_at`                                                                                                       | **Structural assignment**, many-to-many: a beat may span scenes, a scene may carry beats of many outlines. Tenant-safe FKs, cascade both ways. Same-book rule enforced by the service.                                  |
+
+### Custom fields (Milestone 3)
+
+| Table               | Key columns                                                                                   | Notes                                                                                                                                        |
+| ------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `field_definitions` | `workspace_id`, `pen_name_id?`, `node_kind`, `label`, `type` (`TEXT`/`LONG_TEXT`), `position` | Author-defined fields for any node kind; `pen_name_id` limits a field to one identity. Unique per (workspace, kind, identity, lower(label)). |
+| `node_field_values` | PK `(node_id, field_id)`, `workspace_id`, `value`                                             | Values attach to story nodes, so any object type gains custom fields without a migration. Cascade with the node and the definition.          |
 
 ### Retention
 
 Nothing is pruned automatically:
 
-- **History.** `scene_revisions` rows are kept indefinitely, whatever their
+- **History.** `content_revisions` rows are kept indefinitely, whatever their
   source: autosave checkpoints, named versions, before-restore copies, and
   future publication snapshots.
 - **Trash** keeps items until the author deletes them forever or empties it.
@@ -184,11 +216,11 @@ the archive is "not now", and history is earlier versions of live content.
 
 ## 2. Target design
 
-### Milestone 3+: object types that join the graph
+### Next: object types that join the graph
 
 Every new object type gets a node kind, a typed table using the node id, the
 two triggers, and a case in the resolver; it can then take part in
-connections. Planned: outlines/romance arcs (M3), tasks (M4), timeline
+connections. Outlines joined in M3. Planned: tasks (M4), timeline
 events (v1.1), and later locations, research items, songs, plot threads and
 worldbuilding entries. New connection kinds join the registry as needed
 (e.g. `concerns` for Task → any story object, `set_in` for Scene → Location,
@@ -197,16 +229,6 @@ worldbuilding entries. New connection kinds join the registry as needed
 | Table               | Notes                                                                                  |
 | ------------------- | -------------------------------------------------------------------------------------- |
 | `tags`, `node_tags` | `node_tags(node_id, tag_id)`: tags attach to story nodes, so they work for every type. |
-
-### Milestone 3: story structure and romance
-
-| Table                 | Key columns                                                                                 | Notes                                                                                                                                      |
-| --------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
-| `structure_templates` | `workspace_id?`, `kind` (`PLOT`/`ROMANCE`/`CUSTOM`), `name`, `description`                  | `workspace_id` null = built-in (seeded).                                                                                                   |
-| `template_beats`      | `template_id`, `name`, `description`, `position`, `target_percent?`                         |                                                                                                                                            |
-| `outlines`            | node id, `book_id`, `template_id?`, `kind`, `relationship_id?`                              | Story node: a romance arc _is_ an outline with `kind = ROMANCE` and a relationship, so "Note → Romance Arc" is a plain `about` connection. |
-| `outline_beats`       | `outline_id`, `template_beat_id?`, `title`, `notes`, `position`, `chapter_id?`, `scene_id?` | Beats map to where they happen in the manuscript.                                                                                          |
-| `books` (+columns)    | `tropes text[]`, `heat_level?`                                                              |                                                                                                                                            |
 
 ### Milestone 4: tasks, calendar, progress
 

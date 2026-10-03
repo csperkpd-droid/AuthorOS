@@ -60,7 +60,7 @@ export function AddConnectionDialog({
   useEffect(() => {
     if (!open || !option) return;
     const handle = setTimeout(async () => {
-      const result = await searchNodesAction(query, option.otherKinds);
+      const result = await searchNodesAction(query, option.otherKinds, nodeId);
       if (result.ok) setResults(result.data.filter((r) => r.id !== nodeId));
     }, 200);
     return () => clearTimeout(handle);

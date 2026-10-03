@@ -316,7 +316,7 @@ kind, shared by every reader); restoring brings them back. Only "delete
 forever" removes them, via the FK cascade. Removing a connection never
 touches either object.
 
-### 38. Notes have conflict protection but no version history yet — Proposed (M2)
+### 38. Notes have conflict protection but no version history yet — Superseded by 43 (M3)
 
 Notes save like scenes (autosave, versioned, stale saves refused) but don't
 keep revisions. Scene history is the author-critical case. **Open question
@@ -349,3 +349,88 @@ explicit message.
 Autosave, conflict handling, Ctrl/Cmd+S and the leave-page warning live in
 `components/editor/rich-text-editor.tsx`; scenes and notes wrap it with
 their own save action.
+
+## Milestone 3
+
+### 43. One history model for every versioned object — Accepted (M3)
+
+`scene_revisions` became `content_revisions` keyed by story node (renamed in
+place, data kept). The `history` module owns checkpoints, named versions,
+preview and restore; each versioned kind registers an accessor (lock, read,
+write) in `history/versioned.ts`. **Notes now have full history** (approved),
+with the same guarantees as scenes: never silently overwritten, restores
+undoable, nothing pruned. The UI is the same History dialog. **Why one
+table:** one set of rules and tests; future versioned kinds (outline notes,
+research) are one accessor away.
+
+### 44. Characters belong to one pen name — Accepted (M3)
+
+`characters.pen_name_id` is required (backfilled from the series' pen name,
+else the workspace default). A character of a series belongs to that series'
+pen name and can appear in any book of the series. Identities are private by
+default: the connection service refuses links across pen names (shared
+objects with no pen name, i.e. notes and ideas, may link to anything),
+relationships and outlines require a single identity, and a character that
+is linked to anything can't change pen name. Changing a series' pen name
+moves its books and characters together. **Extension point:** a deliberately
+shared resource would be an object with a null (shared) identity, which
+`sameIdentity()` already accepts; nothing is shared by accident.
+**Rejected:** global characters filtered only in the UI (identity leaks
+through links and search).
+
+### 45. Outlines are story nodes; romance arcs are outlines — Accepted (M3)
+
+An outline is a structure applied to one book, with a kind (`PLOT`,
+`ROMANCE`, `CHARACTER_ARC`, `SUBPLOT`, `CUSTOM`). A **romance arc is a
+first-class story object** owned by a relationship (`relationship_id`); a
+character arc is owned by a character (`character_id`); a CHECK ties owner
+to kind. As nodes they take notes and links, appear in search and go to the
+Trash. Relationships stay their own story objects (ADR 35), connected to
+characters, scenes, notes and, now, romance arcs.
+
+### 46. Beat → scene is a dedicated structure, not a connection — Accepted (M3)
+
+`beat_scenes(beat_id, scene_id)`: many-to-many, tenant-safe, cascading. One
+beat may span several scenes; one scene may carry beats of several
+structures (plot, romance, character arc, subplot) at once; the scene is
+never duplicated. **Why not connections:** beats aren't story nodes, the
+assignment is ordered structural data that the beat board queries
+constantly, and keeping it separate preserves the four concepts (story
+objects, structural objects, beat assignments, universal connections).
+
+### 47. Templates are copied, not referenced — Accepted (M3)
+
+Five built-in templates are seeded by the migration with fixed ids (Three-Act,
+Save the Cat, Hero's Journey, Romancing the Beat, Positive Change Arc).
+Creating an outline copies the template's beats (keeping `template_beat_id`
+for provenance), so editing an outline never changes a template and template
+updates never rewrite an author's plan. Workspace templates use the same
+table (`workspace_id` set); "save outline as template" is a small follow-up.
+
+### 48. Custom fields: definitions per kind, values per node — Accepted (M3)
+
+`field_definitions(node_kind, pen_name_id?, label, type)` and
+`node_field_values(node_id, field_id, value)`. Any node kind can have
+author-defined fields, everywhere or for one identity, without migrations.
+M3 ships text and long-text fields on characters, with a minimal UI; other
+types (number, date, choice) and other kinds are additive. The fixed
+character profile (jsonb) stays for the built-in fields.
+
+### 49. Tropes and heat level are book attributes — Accepted (M3)
+
+`books.tropes text[]` (free text with suggestions) and `books.heat_level`
+(enum). **Why on books:** they describe what readers get from a book; a
+trope taxonomy table can come later without changing the column's meaning.
+
+### 50. Romance arcs are scoped to a book — Proposed (M3)
+
+An outline belongs to one book, so a series-long slow burn is one arc per
+book. **Open question for approval:** add series-level outlines (an outline
+belonging to a series, beats placed in scenes of any of its books)?
+
+### 51. Pickers follow the identity of what they're for — Accepted (M3)
+
+Connection and cast pickers search within the pen name of the object they
+are opened from (for shared objects, the identity being written as), and a
+scene is only offered characters of its own series or none. New characters
+created from a scene join that scene's pen name and series.
