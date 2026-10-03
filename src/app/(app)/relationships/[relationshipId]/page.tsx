@@ -67,7 +67,7 @@ export default async function RelationshipPage({ params }: Props) {
             />
             <MembersDialog
               relationshipId={r.id}
-              members={r.members.map((m) => m.id)}
+              members={r.members.map((m) => ({ id: m.id, role: m.role }))}
               characters={sameIdentity.map((c) => ({ id: c.id, name: c.name }))}
               trigger={
                 <Button variant="outline">
@@ -98,13 +98,12 @@ export default async function RelationshipPage({ params }: Props) {
           <Badge className="bg-primary/10 text-primary">Group of {r.members.length}</Badge>
         )}
         {r.members.map((c) => (
-          <Link
-            key={c.id}
-            href={`/characters/${c.id}`}
-            className="text-sm text-primary hover:underline"
-          >
-            {c.name}
-          </Link>
+          <span key={c.id} className="text-sm">
+            <Link href={`/characters/${c.id}`} className="text-primary hover:underline">
+              {c.name}
+            </Link>
+            {c.role && <span className="text-muted-foreground"> ({c.role})</span>}
+          </span>
         ))}
       </div>
       {r.description && <p className="max-w-prose whitespace-pre-line">{r.description}</p>}

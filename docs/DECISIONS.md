@@ -597,3 +597,82 @@ two ends are both included.
 Exports read through services and never write; a test checksums every story
 table before and after. Downloads are a route handler that calls
 `requireAuthorContext()` like every page.
+
+## Milestone 6
+
+### 69. The Import Engine: every source produces a Workspace Bundle — Accepted (M6)
+
+Importing is a pipeline: a source parser turns a file into a Workspace
+Bundle (the export's shape, validated column by column), then validation,
+planning, review and apply are shared by every source. AuthorOS JSON is the
+first source; Scrivener, Plottr, DOCX and EPUB are listed as coming later
+and will each be a parser that produces a bundle with fresh ids. Derived
+values (plain text, word counts, member keys) are recomputed, never read
+from the file. **Rejected:** per-source importers writing to the database
+directly (each would re-implement identity rules, conflicts and atomicity).
+
+### 70. Imports are reviewed, then applied all or nothing — Accepted (M6)
+
+The whole file is validated before anything else. The review lists what
+will be created, updated, skipped or conflict, and returns a token (hash of
+the file and the plan). The import recomputes the plan inside one
+transaction and applies it only if it still matches; any failure rolls
+everything back. Conflicts block the import until resolved with the options
+(as a copy, or keep existing). **Rejected:** best-effort imports that skip
+bad rows (partial workspaces are worse than none).
+
+### 71. Restores keep Story Graph ids; copies get new ones — Accepted (M6)
+
+"Keep ids" restores objects with their original ids, so links, exports and
+anything referencing them stay valid, and moving a workspace to another
+account or installation preserves its graph. Story-node ids are global, so
+an id already used by another workspace is a conflict, never silently
+remapped; "Import as a copy" remaps every id and reference. Rows that
+aren't story objects (beats, connections, sessions) keep their id when free
+and get a new one otherwise. The import inserts `story_nodes` rows with the
+bundle's ids in the same transaction as their typed rows: the one
+documented exception to `createStoryNode()`.
+
+### 72. What an import matches, and what it never does — Accepted (M6)
+
+Pen names match by id, then by name; the default pen name never changes.
+Relationships match by their members (one per set of members), custom
+fields by kind, scope and label; existing connections, assignments and
+field values are recognized by their keys. "Replace" saves current scene
+and note text as an `IMPORT` version first. An import never moves identity:
+objects that belong to another pen name, book or owner here than in the
+file are conflicts. Imported writing sessions, versions and connections are
+attributed to the importing author; the daily goal is set only if unset.
+
+### 73. Import uploads use route handlers, gzip and an origin check — Accepted (M6)
+
+Backups exceed the 1 MB Server Action limit, and the proxy buffers request
+bodies, so uploads go to `/api/import/*` route handlers (outside the proxy).
+The browser gzips the file; the server caps the compressed and decompressed
+size, checks the session per request, and refuses cross-origin posts
+(route handlers lack Server Actions' built-in CSRF check). **Later:**
+background jobs with object storage for very large archives.
+
+### 74. Search language belongs to the pen name — Accepted (M6)
+
+A pen name can have a writing language; search stems words in it over that
+identity's scenes and characters (shared notes and ideas use the languages
+of the identities in scope), on top of exact prefix and phrase matching in
+the 'simple' configuration, which always runs. A workspace never has one
+language forced on it, and exact titles and quoted phrases always match.
+The language list maps BCP 47 codes to Postgres configurations, so adding a
+language is one entry. Supersedes the "later" note of decision 64.
+
+### 75. Relationship roles belong to the membership — Accepted (M6)
+
+`relationship_members.role` is optional free text (suggestions: Heroine,
+Hero, FMC, MMC, Love interest, Rival, Partner, Ex, Family member, Other),
+so a character can have different roles in different relationships.
+**Rejected:** a fixed enum (romance subgenres name roles differently); a
+role on the character (it isn't a property of the person).
+
+### 76. Two JSON exports: Standard backup and Complete archive — Accepted (M6)
+
+The standard backup holds all story data without version history; the
+complete archive adds every saved version of scenes and notes. Both use the
+same format, recorded in the file (`kind`), and both import.

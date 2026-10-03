@@ -29,9 +29,15 @@ import type { ExportScopeInput } from "./schemas";
 export const EXPORT_FORMAT = "authoros.workspace";
 export const EXPORT_VERSION = 1;
 
+/**
+ * "standard": the backup (all story data, no version history).
+ * "archive": the complete archive, with every saved version of scenes and notes.
+ */
+export type ExportKind = "standard" | "archive";
+
 export async function exportWorkspaceJson(
   ctx: AuthorContext,
-  { scope, includeHistory = false }: { scope: ExportScopeInput; includeHistory?: boolean },
+  { scope, kind = "standard" }: { scope: ExportScopeInput; kind?: ExportKind },
 ) {
   const resolved = await resolveScope(ctx, scope);
   const ws = ctx.workspaceId;
@@ -146,7 +152,7 @@ export async function exportWorkspaceJson(
     db.nodeFieldValue.findMany({
       where: { fieldId: { in: fieldIds }, nodeId: { in: [...included] } },
     }),
-    includeHistory
+    kind === "archive"
       ? db.contentRevision.findMany({ where: { workspaceId: ws, nodeId: { in: [...included] } } })
       : Promise.resolve(null),
   ]);
@@ -156,6 +162,7 @@ export async function exportWorkspaceJson(
     version: EXPORT_VERSION,
     exportedAt: new Date().toISOString(),
     app: "AuthorOS",
+    kind,
     scope: { kind: pens ? "pen-names" : "workspace", label: resolved.label, penNameIds: pens },
     workspace,
     settings: { dailyWordGoal: member?.dailyWordGoal ?? null },
@@ -169,7 +176,11 @@ export async function exportWorkspaceJson(
     characters,
     relationships: relationships.map(({ members, ...r }) => ({
       ...r,
-      members: members.map((m) => ({ characterId: m.characterId, position: m.position })),
+      members: members.map((m) => ({
+        characterId: m.characterId,
+        position: m.position,
+        role: m.role,
+      })),
     })),
     notes: notes.filter((n) => has(n.id)),
     ideas: ideas.filter((i) => has(i.id)),
@@ -192,17 +203,57 @@ export async function exportWorkspaceJson(
     ...(revisions ? { contentRevisions: revisions } : {}),
   };
   const date = data.exportedAt.slice(0, 10);
-  return { filename: `authoros-${resolved.slug}-${date}.json`, data };
+  return {
+    filename: `authoros-${resolved.slug}-${kind === "archive" ? "archive-" : ""}${date}.json`,
+    data,
+  };
 }
 
 export type WorkspaceExport = Awaited<ReturnType<typeof exportWorkspaceJson>>["data"];
 
+type Id = { id: string };
+type Ref = string | null;
+
+/** The parts of an export (or an import bundle) the integrity check reads. */
+export type IntegrityInput = {
+  storyNodes: { id: string; kind: string }[];
+  penNames: Id[];
+  series: (Id & { penNameId: string })[];
+  books: (Id & { penNameId: string; seriesId: Ref })[];
+  parts: (Id & { bookId: string })[];
+  chapters: (Id & { bookId: string; partId: Ref })[];
+  scenes: (Id & { bookId: string; chapterId: string })[];
+  characters: (Id & { penNameId: string; seriesId: Ref })[];
+  relationships: (Id & { members: { characterId: string }[] })[];
+  notes: Id[];
+  ideas: Id[];
+  tasks: Id[];
+  calendarEvents: Id[];
+  connections: { sourceId: string; targetId: string }[];
+  outlines: (Id & {
+    bookId: Ref;
+    seriesId: Ref;
+    relationshipId: Ref;
+    characterId: Ref;
+    templateId: Ref;
+  })[];
+  outlineBeats: (Id & { outlineId: string; bookId: Ref })[];
+  beatScenes: { beatId: string; sceneId: string }[];
+  structureTemplates: Id[];
+  builtInTemplates: Id[];
+  templateKits: { items: { templateId: string }[] }[];
+  fieldDefinitions: (Id & { penNameId: Ref; seriesId: Ref; bookId: Ref })[];
+  fieldValues: { fieldId: string; nodeId: string }[];
+  writingSessions?: { bookId: Ref }[];
+  contentRevisions?: { nodeId: string }[];
+};
+
 /**
  * Checks that an export is self-contained: every reference points at an
- * object in the export. A future import validates with this first.
+ * object in the export. The import validates every file with this first.
  * Returns the problems found (empty = consistent).
  */
-export function checkExportIntegrity(data: WorkspaceExport): string[] {
+export function checkExportIntegrity(data: IntegrityInput): string[] {
   const problems: string[] = [];
   const nodes = new Map(data.storyNodes.map((n) => [n.id, n.kind]));
   const ids = (rows: { id: string }[]) => new Set(rows.map((r) => r.id));
@@ -248,7 +299,11 @@ export function checkExportIntegrity(data: WorkspaceExport): string[] {
     need("book.series", b.seriesId, series);
   }
   for (const p of data.parts) need("part.book", p.bookId, books);
-  for (const c of data.chapters) need("chapter.book", c.bookId, books);
+  const parts = ids(data.parts);
+  for (const c of data.chapters) {
+    need("chapter.book", c.bookId, books);
+    need("chapter.part", c.partId, parts);
+  }
   for (const s of data.scenes) {
     need("scene.book", s.bookId, books);
     need("scene.chapter", s.chapterId, chapters);
@@ -272,7 +327,10 @@ export function checkExportIntegrity(data: WorkspaceExport): string[] {
     need("structure.character", o.characterId, characters);
     need("structure.template", o.templateId, templates);
   }
-  for (const b of data.outlineBeats) need("beat.structure", b.outlineId, outlines);
+  for (const b of data.outlineBeats) {
+    need("beat.structure", b.outlineId, outlines);
+    need("beat.book", b.bookId, books);
+  }
   for (const bs of data.beatScenes) {
     need("assignment.beat", bs.beatId, beats);
     need("assignment.scene", bs.sceneId, ids(data.scenes));
@@ -283,5 +341,12 @@ export function checkExportIntegrity(data: WorkspaceExport): string[] {
   }
   for (const k of data.templateKits)
     for (const i of k.items) need("kit.template", i.templateId, templates);
+  for (const f of data.fieldDefinitions) {
+    need("field.penName", f.penNameId, penNames);
+    need("field.series", f.seriesId, series);
+    need("field.book", f.bookId, books);
+  }
+  for (const w of data.writingSessions ?? []) need("writing.book", w.bookId, books);
+  for (const r of data.contentRevisions ?? []) need("revision.node", r.nodeId, nodes);
   return problems;
 }

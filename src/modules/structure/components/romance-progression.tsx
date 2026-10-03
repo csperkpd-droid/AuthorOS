@@ -11,7 +11,7 @@ type Row = {
   relationship: {
     id: string;
     type: string;
-    members: { id: string; name: string }[];
+    members: { id: string; name: string; role: string | null }[];
     title: string;
   };
   arcRole: ArcRole;
@@ -54,6 +54,21 @@ export function RomanceProgression({
                 {ARC_ROLE_LABELS[r.arcRole]}
               </Badge>
             </div>
+            {r.relationship.members.some((m) => m.role) && (
+              <ul
+                aria-label={`Roles in ${couple}`}
+                className="flex flex-wrap gap-x-3 gap-y-1 text-sm"
+              >
+                {r.relationship.members.map((m) => (
+                  <li key={m.id}>
+                    <Link href={`/characters/${m.id}`} className="hover:underline">
+                      {m.name}
+                    </Link>
+                    {m.role && <span className="text-muted-foreground"> · {m.role}</span>}
+                  </li>
+                ))}
+              </ul>
+            )}
             <p className="text-xs text-muted-foreground">
               {r.arcs.map((a, i) => (
                 <span key={a.id}>

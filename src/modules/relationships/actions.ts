@@ -39,10 +39,12 @@ export async function trashRelationshipAction(id: string) {
   });
 }
 
-export async function setRelationshipMembersAction(id: string, characterIds: string[]) {
-  return runAction(async () =>
-    setRelationshipMembers(await requireAuthorContext(), id, characterIds),
-  );
+/** Sets the members, each with an optional role in this relationship (Heroine, Rival…). */
+export async function setRelationshipMembersAction(
+  id: string,
+  members: { characterId: string; role: string | null }[],
+) {
+  return runAction(async () => setRelationshipMembers(await requireAuthorContext(), id, members));
 }
 
 /** Creates the relationship between some members of a group (e.g. one pair). */

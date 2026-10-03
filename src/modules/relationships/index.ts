@@ -5,6 +5,7 @@ export {
   groupsIncluding,
   listRelationships,
   memberKey,
+  setMemberRole,
   setRelationshipMembers,
   trashRelationship,
   updateRelationship,
@@ -12,6 +13,7 @@ export {
 export type { RelationshipView } from "./service";
 export { relationshipTitle } from "./labels";
 export {
+  MEMBER_ROLE_SUGGESTIONS,
   RELATIONSHIP_TYPE_SUGGESTIONS,
   newRelationshipInput,
   relationshipDetails,

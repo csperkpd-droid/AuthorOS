@@ -3,7 +3,7 @@
 AuthorOS is a **modular monolith**: one Next.js application, one PostgreSQL
 database, with the code split into domain modules that have strict boundaries.
 
-> Status: Milestone 5 (group relationships, kits, Change Impact, search, export). Sections marked
+> Status: Milestone 6 (Import Engine, search languages, relationship roles). Sections marked
 > _planned_ describe the agreed design for later milestones so that early code
 > doesn't block it.
 
@@ -435,6 +435,14 @@ character forever ends every relationship they belong to (a database
 trigger), as with pairs before; trashing a member hides the relationship
 until they are restored.
 
+**Member roles (M6).** Each membership can carry an optional role
+(`relationship_members.role`: Heroine, Hero, FMC, MMC, Love interest,
+Rival, Partner, Ex, Family member, Other, or anything typed, up to 60
+characters). A role belongs to the membership, never to the character:
+Elara can be the Heroine of one romance and the Rival in another. Roles are
+edited in the Members dialog, shown on the relationship page and in the
+Series Romance Center, kept when members change, and exported and imported.
+
 ## Planning: tasks, calendar and progress
 
 - **Tasks** and **calendar events** are story nodes (author-level, like
@@ -472,13 +480,29 @@ Kits never share live records between projects. _Extension point:_
 `template_kit_items.item_type` leaves room for other template types (e.g.
 publishing workflows in v1.1).
 
-## Search (M5)
+## Search (M5, languages M6)
 
-`search` uses Postgres full-text search with expression GIN indexes
-('simple' configuration: any language, no stemming; every word must match,
-as a prefix) over scenes (title, synopsis, text), notes, ideas and
-characters (name, aliases, summary), with highlighted snippets; other kinds
-are matched by title. Results are resolved through the Story Graph, so the
+`search` uses Postgres full-text search over scenes (title, synopsis,
+text), notes, ideas and characters (name, aliases, summary), with
+highlighted snippets; other kinds are matched by title. Two kinds of
+matching are combined:
+
+- **Exact words**, always on, in any language: the 'simple' configuration
+  on expression GIN indexes, every word as a prefix ("lighth" finds
+  "lighthouse"), and `"quoted phrases"` matched exactly. Exact titles and
+  phrases therefore always work.
+- **Word forms in the pen name's language (M6):** a pen name can have a
+  writing language (`pen_names.language`, a BCP 47 code; list in
+  `lib/languages.ts`, about 25 languages with Postgres stemmers). Words are
+  also stemmed in that language ("running" finds "run", "corrían" finds
+  "correr"), over that identity's scenes and characters; shared notes and
+  ideas are searched in the languages of the identities in scope. The
+  language belongs to the pen name, never to the workspace, so an author
+  writing in English and Spanish gets both. Stemmed queries filter by
+  workspace first and need no extra index at today's sizes; per-language
+  expression indexes can be added later without changing the service.
+
+Results are merged by best rank, resolved through the Story Graph, so the
 Trash and "Writing as" apply as everywhere else.
 
 ## Export (M5)
@@ -490,17 +514,19 @@ or the entire workspace**, then a format:
   first-line indents, title page, a chapter per page, `#` between scenes).
 - **Markdown manuscript:** headings for books, parts and chapters, `* * *`
   between scenes.
-- **Full workspace JSON** (`authoros.workspace`, version 1): the structured
-  backup. Every story object with its original id and story-node kind; the
-  hierarchy with positions; scene and note content as ProseMirror JSON;
-  characters, relationships with members, connections (kind, label, note,
-  attributes), structures, beats and beat → scene assignments, templates,
-  kits, custom fields and values, tasks, events, writing sessions, pen names;
-  version history optionally. Items in the Trash are included (with
-  `deletedAt`). Built-in templates are referenced by their fixed ids.
-  `checkExportIntegrity()` verifies every reference resolves inside the
-  export; a future import validates with it first and can rebuild the Story
-  Graph with the same ids.
+- **Standard backup (JSON)** (`authoros.workspace`, version 1, `kind:
+"standard"`): the structured backup. Every story object with its original
+  id and story-node kind; the hierarchy with positions; scene and note
+  content as ProseMirror JSON; characters, relationships with members and
+  roles, connections (kind, label, note, attributes), structures, beats and
+  beat → scene assignments, templates, kits, custom fields and values,
+  tasks, events, writing sessions, pen names (with language). Items in the
+  Trash are included (with `deletedAt`). Built-in templates are referenced
+  by their fixed ids. `checkExportIntegrity()` verifies every reference
+  resolves inside the export; the import validates with it first.
+- **Complete archive (JSON)** (`kind: "archive"`, M6): the standard backup
+  plus version history (every saved version of scenes and notes). Larger;
+  the file name ends in `-archive-<date>.json`.
 
 DOCX and Markdown are for reading and sharing (visible manuscript only);
 JSON is the backup. Pen-name exports contain only those identities' work,
@@ -508,6 +534,68 @@ the shared objects not linked only to other identities, and links whose two
 ends are both included. Exports are read-only (tested: every story table is
 byte-identical before and after); downloads are a route handler that checks
 the author like every page.
+
+## Import Engine (M6)
+
+`/import` restores a backup or brings a workspace in from another account.
+The engine (`src/modules/imports`) is a pipeline, the same for every source:
+
+```
+file → source parser → Workspace Bundle → validate → plan → review
+                                                       ↘ apply (one transaction)
+```
+
+- **Sources** (`sources/catalog.ts`, `sources/registry.ts`) turn a file into
+  a **Workspace Bundle** (`bundle.ts`): the export's shape, validated
+  column by column (only known columns are read; derived values such as
+  plain text, word counts and member keys are recomputed, never trusted).
+  AuthorOS JSON is implemented. Scrivener, Plottr, DOCX and EPUB are listed
+  as coming later; each will be one parser producing a bundle (with fresh
+  ids) and reuse everything downstream.
+- **Validate** (`validate.ts`) checks the whole file before anything else:
+  every reference resolves (`checkExportIntegrity`), ids are unique, and
+  the product rules hold (identities never mix, relationships have two or
+  more members and one per set of members, structures have one owner,
+  connections follow the registry, one point of view per scene, field
+  values match their field's kind). An invalid file is refused with the
+  problems listed; nothing is read from the database.
+- **Plan** (`plan.ts`) decides for every row: **create**, **update**,
+  **skip** (already here) or **conflict**, under two options. _Ids_:
+  **keep** restores with the original Story Graph ids; an id already used
+  by another workspace (or by another kind of object) is a conflict, to be
+  resolved by importing **as a copy**, which gives every object a new id and
+  rewrites every reference. _Existing objects_: **skip** keeps them as they
+  are (missing ones are still restored); **replace** updates them to the
+  file's version, saving current scene and note text as a version first
+  (`IMPORT` revision, "Before import") and bumping the content version so
+  open editors notice. Objects moved to another pen name, book or owner
+  since the backup are conflicts: an import never moves identity. Matching:
+  pen names by id, then by name (the default pen name never changes);
+  relationships by their members; custom fields by kind, scope and label;
+  connections by ends and kind (a second point of view becomes "present");
+  beat assignments and field values by their keys; the editor's daily
+  writing rows by day. Imported writing sessions, versions and connections
+  belong to the importing author; the daily goal is set only if unset.
+- **Review** (`reviewImport`) shows the file (backup or archive, scope,
+  date), a factual summary ("This import will create 52 items, skip 3 that
+  already exist."), counts per kind, conflicts with the objects concerned,
+  adjustments ("Good to know"), or the validation problems. It changes
+  nothing and returns a token: a hash of the file and of the plan.
+- **Apply** (`runImport`) re-reads and re-validates the file, recomputes the
+  plan inside one database transaction, refuses if it has conflicts or no
+  longer matches the token ("Your workspace changed since this file was
+  reviewed"), then writes parents before children in batches. Any failure
+  rolls everything back: an import is all or nothing (tested by failing a
+  write midway). Story nodes are inserted with the bundle's ids in the same
+  transaction as their typed rows: the one place ids don't come from
+  `createStoryNode()`.
+
+Uploads go to route handlers under `/api/import/{review,apply}` (not
+Server Actions, whose bodies are capped at 1 MB; `/api` is outside the
+proxy, which would buffer them). The browser gzips the file
+(`CompressionStream`); the server checks the origin (route handlers don't
+get Server Actions' CSRF protection), the session, and caps the upload (60
+MB compressed, 200 MB decompressed).
 
 ## AI boundary (_planned, v1.2_)
 

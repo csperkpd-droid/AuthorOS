@@ -13,7 +13,7 @@ import { requireAuthorContext } from "@/server/context";
  * Downloads an export. Read-only: exports never change the manuscript or
  * the Story Graph.
  *
- * ?format=docx|markdown|json&scope=current|selected|all&pen=<id>…&book=<id>…&history=1
+ * ?format=docx|markdown|json&scope=current|selected|all&pen=<id>…&book=<id>…&kind=standard|archive
  */
 export async function GET(request: Request) {
   const ctx = await requireAuthorContext();
@@ -44,7 +44,7 @@ export async function GET(request: Request) {
       case "json": {
         const { filename, data } = await exportWorkspaceJson(ctx, {
           scope,
-          includeHistory: params.get("history") === "1",
+          kind: params.get("kind") === "archive" ? "archive" : "standard",
         });
         return download(JSON.stringify(data, null, 2), filename, "application/json; charset=utf-8");
       }

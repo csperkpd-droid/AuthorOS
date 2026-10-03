@@ -13,6 +13,7 @@ export {
   SCENE_ROLES,
   canConnect,
   connectionOptionsFor,
+  getKind,
   isConnectionKind,
   labelFrom,
 } from "./registry";

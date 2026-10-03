@@ -14,6 +14,7 @@ import {
   groupDynamics,
   groupsIncluding,
   listRelationships,
+  setMemberRole,
   setRelationshipMembers,
 } from "@/modules/relationships";
 import { searchNodes } from "@/modules/story-graph";
@@ -99,6 +100,26 @@ describe("group relationships", () => {
     const finn = (await createCharacter(ctx, { name: "Finn" })).id;
     await setRelationshipMembers(ctx, group.id, [elara, kael, rowan, finn]);
     expect((await getRelationship(ctx, group.id)).title).toBe("Elara, Kael, Rowan & Finn");
+  });
+
+  it("give each member an optional role, kept when members change", async () => {
+    const group = await createRelationship(ctx, { characterIds: [elara, kael], type: "Romance" });
+    await setMemberRole(ctx, group.id, elara, "  Heroine ");
+    await setMemberRole(ctx, group.id, kael, "MMC");
+    await setRelationshipMembers(ctx, group.id, [elara, kael, rowan]);
+    const roles = (await getRelationship(ctx, group.id)).members.map((m) => [m.name, m.role]);
+    expect(roles).toEqual([
+      ["Elara", "Heroine"],
+      ["Kael", "MMC"],
+      ["Rowan", null],
+    ]);
+    await setMemberRole(ctx, group.id, kael, "");
+    expect((await getRelationship(ctx, group.id)).members[1].role).toBeNull();
+    await expect(setMemberRole(ctx, group.id, elara, "x".repeat(61))).rejects.toThrow();
+    const stranger = (await createCharacter(ctx, { name: "Ivy" })).id;
+    await expect(setMemberRole(ctx, group.id, stranger, "Rival")).rejects.toBeInstanceOf(
+      NotFoundError,
+    );
   });
 
   it("are checked by the database: two members minimum, key matches members", async () => {

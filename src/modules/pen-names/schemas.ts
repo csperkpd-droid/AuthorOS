@@ -12,6 +12,13 @@ export const penNameInput = z.object({
     .max(2000, "Keep the bio under 2,000 characters.")
     .transform((v) => (v === "" ? null : v))
     .nullish(),
+  /** BCP 47 tag (e.g. "en"); empty = no language. Absent = unchanged. */
+  language: z
+    .string()
+    .trim()
+    .nullish()
+    .transform((v) => (v === undefined ? undefined : v ? v : null))
+    .refine((v) => v == null || /^[a-z]{2,3}(-[A-Za-z0-9]{2,8})*$/.test(v), "Choose a language."),
 });
 
 export type PenNameInput = z.input<typeof penNameInput>;

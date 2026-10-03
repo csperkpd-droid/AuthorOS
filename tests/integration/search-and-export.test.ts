@@ -267,10 +267,10 @@ describe("workspace JSON export", () => {
     const before = await fingerprint();
     const { data, filename } = await exportWorkspaceJson(ctx, {
       scope: { kind: "all" },
-      includeHistory: true,
+      kind: "archive",
     });
 
-    expect(filename).toMatch(/^authoros-workspace-\d{4}-\d{2}-\d{2}\.json$/);
+    expect(filename).toMatch(/^authoros-workspace-archive-\d{4}-\d{2}-\d{2}\.json$/);
     expect(data).toMatchObject({
       format: "authoros.workspace",
       version: 1,
@@ -331,5 +331,43 @@ describe("workspace JSON export", () => {
     expect(data.notes.map((n) => n.title).sort()).toEqual(["Loose idea", "World notes"]);
     expect(data.connections.every((c) => c.sourceId !== s.roseOnly.id)).toBe(true);
     expect(data.contentRevisions).toBeUndefined();
+  });
+});
+
+describe("search by language and phrase", () => {
+  it("finds word forms in a pen name's language, keeps exact phrases exact", async () => {
+    const { updatePenName, getDefaultPenName } = await import("@/modules/pen-names");
+    const jane = await getDefaultPenName(ctx);
+    const book = await createBook(ctx, { title: "Harbour Lights" });
+    await sceneWith(book.id, null, "Flight", para("She was running toward the lighthouses."));
+    await createNote(ctx, { title: "Runs and tides" });
+
+    // Without a language, only exact words (as prefixes) match: "runs" isn't
+    // a prefix of "running".
+    expect((await search(ctx, { query: "runs" })).map((r) => r.node.title)).toEqual([
+      "Runs and tides",
+    ]);
+    await updatePenName(ctx, jane.id, { name: jane.name, language: "en" });
+    const found = (await search(ctx, { query: "runs" })).map((r) => r.node.title).sort();
+    expect(found).toEqual(["Flight", "Runs and tides"]);
+    expect((await search(ctx, { query: "lighthouse" })).map((r) => r.node.title)).toEqual([
+      "Flight",
+    ]);
+
+    // Quoted phrases match exactly, in order.
+    expect((await search(ctx, { query: '"running toward"' })).map((r) => r.node.title)).toEqual([
+      "Flight",
+    ]);
+    expect(await search(ctx, { query: '"toward running"' })).toEqual([]);
+
+    // Another pen name's language doesn't apply to this one's work.
+    const rose = await createPenName(ctx, { name: "Rose", language: "es" });
+    const roseBook = await createBook(ctx, { title: "Libro", penNameId: rose.id });
+    await sceneWith(roseBook.id, null, "Huida", para("Corrían hacia el faro."));
+    expect((await search(ctx, { query: "corrian" })).length).toBe(0); // accents differ: exact only
+    expect((await search(ctx, { query: "corrían" })).map((r) => r.node.title)).toEqual(["Huida"]);
+    await expect(
+      updatePenName(ctx, rose.id, { name: "Rose", language: "Klingon!" }),
+    ).rejects.toThrow();
   });
 });

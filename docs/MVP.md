@@ -29,7 +29,19 @@ the suggestion boundary).
 | AI suggestions                                | v1.2  | `Suggestion` boundary designed; revisions record `source`.           |
 | Collaboration                                 | v1.3+ | Workspaces, memberships and roles exist; database sessions.          |
 | Pen-name branding, links, publishing accounts | v1.1  | Pen names, archive, assignment and identity switching shipped in M1. |
-| Imports (DOCX, Scrivener)                     | Later | Revisions record `IMPORT` source.                                    |
+| More import sources (Scrivener, Plottr, DOCX) | Later | Import Engine (M6): a source parser produces a Workspace Bundle.     |
+
+## Milestone 6 checklist
+
+- [x] Import Engine: source registry (AuthorOS JSON available; Scrivener, Plottr, DOCX, EPUB shown as coming later), Workspace Bundle, whole-file validation before anything changes
+- [x] Import review: create / update / already here per kind, conflicts with the objects concerned, adjustments, or the file's problems
+- [x] Restore with original Story Graph ids, or import as a copy with new ids; keep or replace existing objects (current text saved as a version first); never moves identity
+- [x] Preserves pen names and identity separation, the series → scene hierarchy, characters and group relationships (with roles), connections, structures and beat assignments, custom fields and values, notes, ideas, tasks, events, writing sessions and (archives) version history
+- [x] All or nothing: one transaction, plan re-checked against the review token; a failure midway changes nothing (tested)
+- [x] Search language per pen name: stemming in ~25 languages next to exact prefix and phrase matching
+- [x] Optional member roles in relationships, shown in the Romance Center
+- [x] Export: Standard backup and Complete archive (with version history)
+- [x] Architecture checkpoint report (findings and recommendations only)
 
 ## Milestone 5 checklist
 

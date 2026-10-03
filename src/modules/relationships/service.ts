@@ -8,6 +8,7 @@ import type { AuthorContext } from "@/server/context";
 
 import { relationshipTitle } from "./labels";
 import {
+  memberRole,
   newRelationshipInput,
   relationshipDetails,
   type NewRelationshipInput,
@@ -30,6 +31,7 @@ const relationshipSelect = {
   members: {
     orderBy: { position: "asc" },
     select: {
+      role: true,
       character: { select: { id: true, name: true, penNameId: true, seriesId: true } },
     },
   },
@@ -37,7 +39,8 @@ const relationshipSelect = {
 
 type Row = Prisma.RelationshipGetPayload<{ select: typeof relationshipSelect }>;
 export type RelationshipView = Omit<Row, "members"> & {
-  members: Row["members"][number]["character"][];
+  /** Members in order, each with their role in this relationship (if any). */
+  members: (Row["members"][number]["character"] & { role: string | null })[];
   /** "Elara & Kael", or "Elara, Kael & Rowan". */
   title: string;
   /** All members share one pen name. */
@@ -45,7 +48,7 @@ export type RelationshipView = Omit<Row, "members"> & {
 };
 
 function toView(row: Row): RelationshipView {
-  const members = row.members.map((m) => m.character);
+  const members = row.members.map((m) => ({ ...m.character, role: m.role }));
   return {
     ...row,
     members,
@@ -141,16 +144,28 @@ export async function createRelationship(ctx: AuthorContext, input: NewRelations
   }
 }
 
-/** Changes who is in a relationship (two or more characters, one pen name). */
+/**
+ * Changes who is in a relationship (two or more characters, one pen name),
+ * with each member's optional role in it. Members given as plain ids keep
+ * their current role.
+ */
 export async function setRelationshipMembers(
   ctx: AuthorContext,
   id: string,
-  characterIds: string[],
+  members: (string | { characterId: string; role?: string | null })[],
 ) {
+  const list = members.map((m) => (typeof m === "string" ? { characterId: m } : m));
+  const characterIds = list.map((m) => m.characterId);
   const ids = [...new Set(characterIds)];
   if (ids.length < 2) throw new RuleError("A relationship needs at least two characters.");
   const current = await getRelationship(ctx, id);
   await requireMembers(ctx, ids);
+  const roleOf = (characterId: string) => {
+    const given = list.find((m) => m.characterId === characterId);
+    return given && "role" in given
+      ? memberRole.parse(given.role)
+      : (current.members.find((m) => m.id === characterId)?.role ?? null);
+  };
   if (ids[0] && current.members[0].penNameId !== (await penOf(ids[0]))) {
     throw new RuleError("Members must stay within the relationship’s pen name.");
   }
@@ -164,6 +179,7 @@ export async function setRelationshipMembers(
           relationshipId: id,
           characterId,
           position,
+          role: roleOf(characterId),
         })),
       });
     });
@@ -238,6 +254,21 @@ export async function groupsIncluding(ctx: AuthorContext, id: string) {
     select: relationshipSelect,
   });
   return rows.map(toView).filter((r) => r.members.length > rel.members.length);
+}
+
+/** Sets (or, with null, clears) one member's role in a relationship. */
+export async function setMemberRole(
+  ctx: AuthorContext,
+  id: string,
+  characterId: string,
+  role: string | null,
+) {
+  const rel = await getRelationship(ctx, id);
+  if (!rel.members.some((m) => m.id === characterId)) throw new NotFoundError("Member");
+  await db.relationshipMember.update({
+    where: { relationshipId_characterId: { relationshipId: id, characterId } },
+    data: { role: memberRole.parse(role) },
+  });
 }
 
 export async function updateRelationship(

@@ -138,7 +138,7 @@ test.describe("Milestone 5", () => {
     expect(text).toContain("Waves broke on the rocks.");
 
     await page.getByLabel("Entire workspace").check();
-    await page.getByLabel("Full backup (.json)").check();
+    await page.getByLabel("Standard backup (.json)").check();
     const json = page.waitForEvent("download");
     await page.getByRole("button", { name: "Download" }).click();
     const backup = JSON.parse(await readFile((await (await json).path())!, "utf8"));
@@ -150,7 +150,7 @@ test.describe("Milestone 5", () => {
 test("search and export fit a phone screen", async ({ page, isMobile }) => {
   test.skip(!isMobile, "Phone layout only.");
   await signUp(page);
-  for (const path of ["/search?q=storm", "/export", "/structure/templates"]) {
+  for (const path of ["/search?q=storm", "/export", "/import", "/structure/templates"]) {
     await page.goto(path);
     await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
     const overflow = await page.evaluate(

@@ -22,8 +22,13 @@ const FORMATS = [
   },
   {
     value: "json",
-    label: "Full backup (.json)",
-    hint: "Everything, structured: every story object with its id, relationships, connections, structures and beat placements. Built so it can be imported back.",
+    label: "Standard backup (.json)",
+    hint: "All your story data, structured: every story object with its id, hierarchy, identities, relationships, connections, structures and beat placements, custom fields. Can be imported back.",
+  },
+  {
+    value: "archive",
+    label: "Complete archive (.json)",
+    hint: "The standard backup plus version history: every saved version of your scenes and notes. Larger.",
   },
 ] as const;
 
@@ -50,7 +55,7 @@ export function ExportWizard({
     scope === "current" ? (active ? [active.id] : []) : scope === "selected" ? pens : null;
   const inScope = books.filter((b) => !scopePens || scopePens.includes(b.penNameId));
   const [excluded, setExcluded] = useState<string[]>([]);
-  const manuscript = format !== "json";
+  const manuscript = format === "docx" || format === "markdown";
   const chosenBooks = inScope.filter((b) => !excluded.includes(b.id));
   const ready =
     (scope !== "selected" || pens.length > 0) &&
@@ -122,7 +127,7 @@ export function ExportWizard({
           <label key={f.value} className="flex items-start gap-2 text-sm">
             <input
               type="radio"
-              name="format"
+              name={f.value === "archive" ? undefined : "format"}
               value={f.value}
               checked={format === f.value}
               onChange={() => setFormat(f.value)}
@@ -134,11 +139,9 @@ export function ExportWizard({
             </span>
           </label>
         ))}
-        {format === "json" && (
-          <label className="ml-6 flex items-center gap-2 text-sm">
-            <input type="checkbox" name="history" value="1" />
-            Include version history (saved versions of scenes and notes)
-          </label>
+        {/* Both JSON options use format=json; "kind" picks standard or archive. */}
+        {(format === "json" || format === "archive") && (
+          <input type="hidden" name="kind" value={format === "archive" ? "archive" : "standard"} />
         )}
       </fieldset>
 
@@ -177,6 +180,7 @@ export function ExportWizard({
         </fieldset>
       )}
 
+      {format === "archive" && <input type="hidden" name="format" value="json" />}
       <div className="flex flex-wrap items-center gap-3 border-t border-border pt-6">
         <Button type="submit" disabled={!ready}>
           <Download />

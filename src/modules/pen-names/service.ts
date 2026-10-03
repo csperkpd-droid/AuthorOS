@@ -12,6 +12,7 @@ const penNameSelect = {
   bio: true,
   isDefault: true,
   archivedAt: true,
+  language: true,
 } as const;
 
 export type PenNameSummary = {
@@ -20,6 +21,8 @@ export type PenNameSummary = {
   bio: string | null;
   isDefault: boolean;
   archivedAt: Date | null;
+  /** Writing language (BCP 47), for search stemming. */
+  language: string | null;
 };
 
 /** Pen names in display order: default first, then by creation. */
@@ -99,7 +102,12 @@ export async function createPenName(
 ): Promise<PenNameSummary> {
   const data = penNameInput.parse(input);
   return db.penName.create({
-    data: { workspaceId: ctx.workspaceId, name: data.name, bio: data.bio ?? null },
+    data: {
+      workspaceId: ctx.workspaceId,
+      name: data.name,
+      bio: data.bio ?? null,
+      language: data.language ?? null,
+    },
     select: penNameSelect,
   });
 }
@@ -113,7 +121,11 @@ export async function updatePenName(
   await getPenName(ctx, id);
   return db.penName.update({
     where: { id },
-    data: { name: data.name, bio: data.bio ?? null },
+    data: {
+      name: data.name,
+      bio: data.bio ?? null,
+      ...(data.language !== undefined && { language: data.language }),
+    },
     select: penNameSelect,
   });
 }

@@ -6,17 +6,18 @@ relationships, story structure, romance planning, notes, tasks and more.
 **Principles:** authors stay in control · AI suggests, never changes ·
 everything is connected · built to grow.
 
-> **Status:** the MVP is complete: Milestone 5 (search, exports, group relationships, template kits) is done. See [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status:** the MVP is complete, plus Milestone 6 (JSON import, search languages, relationship roles). An architecture checkpoint precedes v1.1. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Documentation
 
-| Doc                                     | What's in it                                                |
-| --------------------------------------- | ----------------------------------------------------------- |
-| [ARCHITECTURE.md](docs/ARCHITECTURE.md) | System design, layers, auth, module rules, deployment       |
-| [DATABASE.md](docs/DATABASE.md)         | Conventions, current schema, target schema for every module |
-| [MVP.md](docs/MVP.md)                   | MVP scope and milestone acceptance criteria                 |
-| [ROADMAP.md](docs/ROADMAP.md)           | Milestones and post-MVP releases                            |
-| [DECISIONS.md](docs/DECISIONS.md)       | Architecture decision log                                   |
+| Doc                                                           | What's in it                                                |
+| ------------------------------------------------------------- | ----------------------------------------------------------- |
+| [ARCHITECTURE.md](docs/ARCHITECTURE.md)                       | System design, layers, auth, module rules, deployment       |
+| [DATABASE.md](docs/DATABASE.md)                               | Conventions, current schema, target schema for every module |
+| [MVP.md](docs/MVP.md)                                         | MVP scope and milestone acceptance criteria                 |
+| [ROADMAP.md](docs/ROADMAP.md)                                 | Milestones and post-MVP releases                            |
+| [DECISIONS.md](docs/DECISIONS.md)                             | Architecture decision log                                   |
+| [ARCHITECTURE-CHECKPOINT.md](docs/ARCHITECTURE-CHECKPOINT.md) | Pre-v1.1 review: findings and recommendations               |
 
 ## Stack
 

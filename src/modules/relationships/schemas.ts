@@ -45,3 +45,24 @@ export const RELATIONSHIP_TYPE_SUGGESTIONS = [
   "Colleagues",
   "Exes",
 ];
+
+/** Common roles within a relationship; any other text is allowed too. */
+export const MEMBER_ROLE_SUGGESTIONS = [
+  "Heroine",
+  "Hero",
+  "FMC",
+  "MMC",
+  "Love interest",
+  "Rival",
+  "Partner",
+  "Ex",
+  "Family member",
+  "Other",
+];
+
+export const memberRole = z
+  .string()
+  .trim()
+  .max(60, "Keep the role under 60 characters.")
+  .nullish()
+  .transform((v) => (v ? v : null));

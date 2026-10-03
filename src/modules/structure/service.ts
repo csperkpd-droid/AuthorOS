@@ -720,7 +720,7 @@ export async function seriesRomance(ctx: AuthorContext, seriesId: string) {
           type: true,
           members: {
             orderBy: { position: "asc" },
-            select: { character: { select: { id: true, name: true } } },
+            select: { role: true, character: { select: { id: true, name: true } } },
           },
         },
       },
@@ -781,7 +781,7 @@ export async function seriesRomance(ctx: AuthorContext, seriesId: string) {
   const relationships = [...byRelationship.values()]
     .sort((a, b) => (a.arcRole === b.arcRole ? 0 : a.arcRole === "MAIN" ? -1 : 1))
     .map((r) => {
-      const members = r.relationship.members.map((m) => m.character);
+      const members = r.relationship.members.map((m) => ({ ...m.character, role: m.role }));
       return {
         ...r,
         relationship: {

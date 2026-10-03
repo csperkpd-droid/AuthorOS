@@ -6,8 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
 import { Field, FormError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
+import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { useAction } from "@/hooks/use-action";
+import { LANGUAGES } from "@/lib/languages";
 
 import { savePenNameAction } from "../actions";
 
@@ -16,7 +18,7 @@ export function PenNameDialog({
   penName,
   trigger,
 }: {
-  penName?: { id: string; name: string; bio: string | null };
+  penName?: { id: string; name: string; bio: string | null; language?: string | null };
   trigger: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -44,6 +46,20 @@ export function PenNameDialog({
         >
           <Field label="Name" htmlFor="pen-name-name">
             <Input id="pen-name-name" name="name" defaultValue={penName?.name} required autoFocus />
+          </Field>
+          <Field
+            label="Writing language"
+            htmlFor="pen-name-language"
+            hint="Search in this pen name’s work understands word forms (“running” finds “run”)."
+          >
+            <Select id="pen-name-language" name="language" defaultValue={penName?.language ?? ""}>
+              <option value="">Not set (exact words only)</option>
+              {LANGUAGES.map((l) => (
+                <option key={l.code} value={l.code}>
+                  {l.name}
+                </option>
+              ))}
+            </Select>
           </Field>
           <Field label="Bio" htmlFor="pen-name-bio" hint="Optional. For your reference for now.">
             <Textarea id="pen-name-bio" name="bio" defaultValue={penName?.bio ?? ""} rows={4} />

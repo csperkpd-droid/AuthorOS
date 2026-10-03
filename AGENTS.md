@@ -22,6 +22,7 @@ Read `docs/ARCHITECTURE.md` and `docs/DATABASE.md` before changing structure or 
 - **Change Impact:** changes that move, delete or affect connected story data (pen-name moves, deleting forever, deleting a field or template) produce a report with `buildReport()` (`@/modules/impact`) and apply with its token. Keep reports factual. Never move identity as a side effect of an edit.
 - **Relationships** have two or more members (`relationship_members`); never assume a pair.
 - **Exports** are read-only; the JSON export must keep `checkExportIntegrity()` passing when new tables are added.
+- **Imports** go through the Import Engine (`imports` module): a source parser produces a Workspace Bundle; validation, plan and the single-transaction apply are shared. A new table needs its bundle schema, validation and plan/apply steps alongside its export. Never write partially.
 - **Client components** import other modules only via `ui` entries (services are `server-only`).
 - **Server Actions** wrap their body in `runAction()`, return ids instead of calling `redirect()`, and let the client navigate.
 - **Auth:** call `requireAuthorContext()` in every page, action and route handler that touches author data. Don't rely on layouts or `proxy.ts` for authorization.

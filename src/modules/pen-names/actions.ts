@@ -15,7 +15,11 @@ import {
 export async function savePenNameAction(id: string | null, formData: FormData) {
   return runAction(async () => {
     const ctx = await requireAuthorContext();
-    const input = { name: field(formData, "name"), bio: field(formData, "bio") };
+    const input = {
+      name: field(formData, "name"),
+      bio: field(formData, "bio"),
+      ...(formData.has("language") && { language: field(formData, "language") }),
+    };
     if (id) await updatePenName(ctx, id, input);
     else await createPenName(ctx, input);
     return null;

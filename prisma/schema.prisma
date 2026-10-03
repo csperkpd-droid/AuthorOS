@@ -148,6 +148,8 @@ model PenName {
   name        String
   bio         String?
   isDefault   Boolean   @default(false) @map("is_default")
+  /// Writing language (BCP 47, e.g. "en"): search stemming for this identity's work. Null = no language rules.
+  language    String?
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
   archivedAt  DateTime? @map("archived_at")
@@ -498,6 +500,8 @@ model RelationshipMember {
   characterId    String   @map("character_id") @db.Uuid
   /// Display order of the members.
   position       Int
+  /// This member's role in this relationship ("Heroine", "FMC", "Rival"…). Optional.
+  role           String?
   createdAt      DateTime @default(now()) @map("created_at")
 
   relationship Relationship @relation(fields: [relationshipId, workspaceId], references: [id, workspaceId], onDelete: Cascade)

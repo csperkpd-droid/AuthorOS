@@ -11,6 +11,7 @@ import {
   SquareCheck,
   StickyNote,
   Trash2,
+  Upload,
   UserRound,
   Users,
   Workflow,
@@ -135,6 +136,13 @@ export const navigation: NavGroup[] = [
         href: "/export",
         icon: Download,
         description: "Manuscripts (Word, Markdown) and a full structured backup.",
+        availability: { status: "available" },
+      },
+      {
+        label: "Import",
+        href: "/import",
+        icon: Upload,
+        description: "Restore an AuthorOS backup, or bring a workspace from another account.",
         availability: { status: "available" },
       },
       {

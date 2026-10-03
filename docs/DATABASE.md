@@ -102,9 +102,9 @@ erDiagram
 
 ### Author identities (Milestone 1)
 
-| Table       | Key columns                                                | Notes                                                                                                                                                                                    |
-| ----------- | ---------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `pen_names` | `workspace_id`, `name`, `bio`, `is_default`, `archived_at` | Partial unique index: one default per workspace. CHECK `pen_names_default_not_archived`. Referenced by series and books with `ON DELETE NO ACTION`: pen names are archived, not deleted. |
+| Table       | Key columns                                                                 | Notes                                                                                                                                                                                                                                                                                                        |
+| ----------- | --------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `pen_names` | `workspace_id`, `name`, `bio`, `is_default`, `language` (M6), `archived_at` | Partial unique index: one default per workspace. CHECK `pen_names_default_not_archived`. `language`: optional BCP 47 code (CHECK `pen_names_language_format`) choosing the search stemmer for that identity. Referenced by series and books with `ON DELETE NO ACTION`: pen names are archived, not deleted. |
 
 ### Story graph (Milestone 1)
 
@@ -177,7 +177,7 @@ something in the Trash) are hidden, not deleted, and reappear on restore.
 | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `characters`           | node id, `pen_name_id`, `series_id?`, `name`, `aliases text[]`, `role` (`PROTAGONIST`/`ANTAGONIST`/`LOVE_INTEREST`/`SUPPORTING`/`MINOR`), `summary`, `profile` (jsonb), `deleted_at` | Every character belongs to one pen name (M3; tenant-safe FK, `NO ACTION`), and optionally to one of its series. Profile fields by id (`modules/characters/profile.ts`). Scene appearances are `appears_in` connections. `series_id` → `ON DELETE SET NULL`. |
 | `relationships`        | node id, `member_key`, `type`, `description`, `deleted_at`                                                                                                                           | A story node, between **two or more** characters (members below). Unique `(workspace_id, member_key)`: one relationship per exact set of members. Deferred constraint triggers check at commit: at least two members, key = sorted member ids.              |
-| `relationship_members` | PK `(relationship_id, character_id)`, `workspace_id`, `position`                                                                                                                     | Tenant-safe FKs, cascade. Trigger `characters_delete_relationships`: deleting a character forever deletes every relationship they belong to. Migrated from the M2 pair columns (`character_a_id`, `character_b_id`), data kept.                             |
+| `relationship_members` | PK `(relationship_id, character_id)`, `workspace_id`, `position`, `role` (M6)                                                                                                        | Tenant-safe FKs, cascade. Trigger `characters_delete_relationships`: deleting a character forever deletes every relationship they belong to. Migrated from the M2 pair columns (`character_a_id`, `character_b_id`), data kept.                             |
 | `notes`                | node id, `title`, `body` (jsonb), `body_text`, `version`, `deleted_at`                                                                                                               | What a note is about is a set of `about` connections. `version` for conflict detection, like scenes.                                                                                                                                                        |
 | `ideas`                | node id, `title`, `body`, `status` (`OPEN`/`USED`/`ARCHIVED`), `deleted_at`                                                                                                          | Promotion to a book creates the book and an `inspired` connection.                                                                                                                                                                                          |
 
@@ -230,6 +230,19 @@ Search uses expression GIN indexes, `to_tsvector('simple', …)` over
 `scenes` (title, synopsis, content_text), `notes` (title, body_text),
 `ideas` (title, body) and `characters` (name, aliases via the IMMUTABLE
 `search_join(text[])`, summary). Queries repeat the exact expressions.
+Stemmed matching in a pen name's language (M6) computes
+`to_tsvector('<language>', …)` on the workspace's rows without an index.
+
+`relationship_members.role` (M6): optional, 1–60 characters (CHECK
+`relationship_members_role_length`); a role in that relationship, not a
+property of the character.
+
+### Import (Milestone 6)
+
+No new tables: the import writes the existing ones in one transaction.
+Story-node ids from a backup are inserted as they are (restores) or
+replaced by new UUIDv7s (copies). `content_revisions.source = 'IMPORT'`
+marks text saved before an import replaced it.
 
 ### Retention
 
@@ -281,10 +294,9 @@ template_id, position)`: apply a main plot, romance and character arcs
 
 ### Later: import and export jobs
 
-- Import of the `authoros.workspace` JSON (validated with
-  `checkExportIntegrity`; ids preserved, or remapped when importing into a
-  workspace that already has them).
-- An `exports` table when exports run as background jobs (v1.1).
+- JSON import shipped in M6 (synchronous, one transaction).
+- An `import_jobs` / `exports` table when imports and exports run as
+  background jobs (v1.1), with the uploaded file in object storage.
 
 ### v1.1: timeline and publishing
 
