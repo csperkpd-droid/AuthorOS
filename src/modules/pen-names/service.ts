@@ -1,3 +1,5 @@
+import "server-only";
+
 import { db } from "@/lib/db";
 import { NotFoundError, RuleError } from "@/lib/errors";
 import type { AuthorContext } from "@/server/context";

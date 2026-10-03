@@ -36,6 +36,7 @@ model User {
   sessions    Session[]
   memberships WorkspaceMember[]
   revisions   SceneRevision[]
+  connections Connection[]
 
   @@map("users")
 }
@@ -161,6 +162,10 @@ enum StoryNodeKind {
   PART
   CHAPTER
   SCENE
+  CHARACTER
+  RELATIONSHIP
+  NOTE
+  IDEA
 
   @@map("story_node_kind")
 }
@@ -175,12 +180,18 @@ model StoryNode {
   kind        StoryNodeKind
   createdAt   DateTime      @default(now()) @map("created_at")
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  series    Series?
-  book      Book?
-  part      Part?
-  chapter   Chapter?
-  scene     Scene?
+  workspace    Workspace     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  series       Series?
+  book         Book?
+  part         Part?
+  chapter      Chapter?
+  scene        Scene?
+  character    Character?
+  relationship Relationship?
+  note         Note?
+  idea         Idea?
+  outgoing     Connection[]  @relation("ConnectionSource")
+  incoming     Connection[]  @relation("ConnectionTarget")
 
   @@unique([id, workspaceId])
   @@index([workspaceId, kind])
@@ -199,9 +210,10 @@ model Series {
   updatedAt   DateTime  @updatedAt @map("updated_at")
   deletedAt   DateTime? @map("deleted_at")
 
-  node    StoryNode @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  penName PenName   @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
-  books   Book[]
+  node       StoryNode   @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  penName    PenName     @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
+  characters Character[]
+  books      Book[]
 
   @@unique([id, workspaceId])
   @@index([workspaceId])
@@ -367,4 +379,148 @@ model SceneRevision {
 
   @@index([sceneId, createdAt(sort: Desc)])
   @@map("scene_revisions")
+}
+
+// ─── Story bible ────────────────────────────────────────────────────────────
+
+enum CharacterRole {
+  PROTAGONIST
+  ANTAGONIST
+  LOVE_INTEREST
+  SUPPORTING
+  MINOR
+
+  @@map("character_role")
+}
+
+/// A character in the author's story world. Lives in the workspace and can be
+/// scoped to a series. Scene appearances are connections (`appears_in`).
+model Character {
+  id          String        @id @db.Uuid
+  workspaceId String        @map("workspace_id") @db.Uuid
+  seriesId    String?       @map("series_id") @db.Uuid
+  name        String
+  aliases     String[]      @default([])
+  role        CharacterRole @default(SUPPORTING)
+  summary     String?
+  /// Profile fields (age, appearance, goal…) keyed by field id. See
+  /// modules/characters/profile.ts for the known fields.
+  profile     Json          @default("{}")
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+  deletedAt   DateTime?     @map("deleted_at")
+
+  node           StoryNode      @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  series         Series?        @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  relationshipsA Relationship[] @relation("RelationshipCharacterA")
+  relationshipsB Relationship[] @relation("RelationshipCharacterB")
+
+  @@unique([id, workspaceId])
+  @@index([workspaceId])
+  @@index([seriesId])
+  @@map("characters")
+}
+
+/// A relationship between two characters. It is a story node itself, so
+/// notes, scenes ("develops_in") and future romance arcs can connect to it.
+/// The pair is stored in id order (CHECK) and is unique.
+model Relationship {
+  id           String    @id @db.Uuid
+  workspaceId  String    @map("workspace_id") @db.Uuid
+  characterAId String    @map("character_a_id") @db.Uuid
+  characterBId String    @map("character_b_id") @db.Uuid
+  type         String
+  description  String?
+  createdAt    DateTime  @default(now()) @map("created_at")
+  updatedAt    DateTime  @updatedAt @map("updated_at")
+  deletedAt    DateTime? @map("deleted_at")
+
+  node       StoryNode @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  characterA Character @relation("RelationshipCharacterA", fields: [characterAId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  characterB Character @relation("RelationshipCharacterB", fields: [characterBId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+
+  @@unique([characterAId, characterBId])
+  @@unique([id, workspaceId])
+  @@index([characterBId])
+  @@index([workspaceId])
+  @@map("relationships")
+}
+
+model Note {
+  id          String    @id @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  title       String
+  /// ProseMirror document JSON. Null = empty note.
+  body        Json?
+  bodyText    String    @default("") @map("body_text")
+  /// Incremented on every body save (conflict detection, like scenes).
+  version     Int       @default(0)
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  node StoryNode @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+
+  @@unique([id, workspaceId])
+  @@index([workspaceId])
+  @@map("notes")
+}
+
+enum IdeaStatus {
+  OPEN
+  USED
+  ARCHIVED
+
+  @@map("idea_status")
+}
+
+model Idea {
+  id          String     @id @db.Uuid
+  workspaceId String     @map("workspace_id") @db.Uuid
+  title       String
+  body        String?
+  status      IdeaStatus @default(OPEN)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+  deletedAt   DateTime?  @map("deleted_at")
+
+  node StoryNode @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+
+  @@unique([id, workspaceId])
+  @@index([workspaceId])
+  @@map("ideas")
+}
+
+// ─── Universal connections ──────────────────────────────────────────────────
+
+/// A link between any two story nodes. Which kinds of link exist, which node
+/// kinds they may join, their wording and their attributes are defined in
+/// code (modules/connections/registry.ts), so new object types can take part
+/// without schema changes. Both endpoints use tenant-safe FKs and cascade:
+/// a connection disappears with either endpoint.
+/// Hand-written constraints: no self-links; at most one POV per scene.
+model Connection {
+  id          String   @id @default(uuid(7)) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  sourceId    String   @map("source_id") @db.Uuid
+  targetId    String   @map("target_id") @db.Uuid
+  /// Registry key, e.g. "appears_in", "about", "related".
+  kind        String
+  /// The author's own wording for this link (optional).
+  label       String?
+  note        String?
+  /// Kind-specific values validated by the registry (e.g. { role: "POV" }).
+  attributes  Json     @default("{}")
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  source    StoryNode @relation("ConnectionSource", fields: [sourceId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  target    StoryNode @relation("ConnectionTarget", fields: [targetId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([sourceId, targetId, kind])
+  @@index([targetId])
+  @@index([workspaceId, kind])
+  @@map("connections")
 }

@@ -1,9 +1,11 @@
+import "server-only";
+
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { NotFoundError, RuleError } from "@/lib/errors";
 import { planInsertAfter, positionAtEnd, sortByPosition } from "@/lib/ordering";
 import { getPenNameForNewWork, requireAssignablePenName } from "@/modules/pen-names";
-import { createStoryNode } from "@/modules/story-graph";
+import { createStoryNode, liveBook } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 
 import {
@@ -16,10 +18,7 @@ import {
 } from "./schemas";
 
 // A book is visible when neither it nor its series is in the Trash.
-export const visibleBookWhere = {
-  deletedAt: null,
-  OR: [{ seriesId: null }, { series: { deletedAt: null } }],
-} satisfies Prisma.BookWhereInput;
+export const visibleBookWhere = liveBook;
 
 const penNameRef = { select: { id: true, name: true, archivedAt: true } } as const;
 

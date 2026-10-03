@@ -1,14 +1,19 @@
+import "server-only";
+
 import type { Prisma, StoryNodeKind } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { NotFoundError } from "@/lib/errors";
-import { visibleBookWhere } from "@/modules/library";
-import { purgeStoryNodes } from "@/modules/story-graph";
+import { liveBook, liveCharacter, purgeStoryNodes } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 
 /**
  * The Trash works across every story-node type. An item is listed when it is
  * deleted but everything that contains it is not: deleting a chapter lists
  * the chapter, and its scenes return with it when restored.
+ *
+ * The Trash is separate from archiving (pen names, ideas) and from version
+ * history (scene revisions): nothing here is removed until the author deletes
+ * it forever or empties the Trash.
  */
 export type TrashItem = {
   id: string;
@@ -20,115 +25,151 @@ export type TrashItem = {
 };
 
 const deleted = { deletedAt: { not: null } } as const;
-const livePart = {
+const livePartOf = {
   OR: [{ partId: null }, { part: { deletedAt: null } }],
 } satisfies Prisma.ChapterWhereInput;
 
 function whereFor(ctx: AuthorContext) {
-  const ws = { workspaceId: ctx.workspaceId };
+  const ws = { workspaceId: ctx.workspaceId, ...deleted };
   return {
-    series: { ...ws, ...deleted } satisfies Prisma.SeriesWhereInput,
+    series: ws satisfies Prisma.SeriesWhereInput,
     book: {
       ...ws,
-      ...deleted,
       OR: [{ seriesId: null }, { series: { deletedAt: null } }],
     } satisfies Prisma.BookWhereInput,
-    part: { ...ws, ...deleted, book: visibleBookWhere } satisfies Prisma.PartWhereInput,
-    chapter: {
-      ...ws,
-      ...deleted,
-      book: visibleBookWhere,
-      ...livePart,
-    } satisfies Prisma.ChapterWhereInput,
+    part: { ...ws, book: liveBook } satisfies Prisma.PartWhereInput,
+    chapter: { ...ws, book: liveBook, ...livePartOf } satisfies Prisma.ChapterWhereInput,
     scene: {
       ...ws,
-      ...deleted,
-      book: visibleBookWhere,
-      chapter: { deletedAt: null, ...livePart },
+      book: liveBook,
+      chapter: { deletedAt: null, ...livePartOf },
     } satisfies Prisma.SceneWhereInput,
+    character: ws satisfies Prisma.CharacterWhereInput,
+    // A relationship is listed on its own only while both characters are live;
+    // otherwise it returns with the trashed character.
+    relationship: {
+      ...ws,
+      characterA: liveCharacter,
+      characterB: liveCharacter,
+    } satisfies Prisma.RelationshipWhereInput,
+    note: ws satisfies Prisma.NoteWhereInput,
+    idea: ws satisfies Prisma.IdeaWhereInput,
   };
 }
 
 export async function listTrash(ctx: AuthorContext): Promise<TrashItem[]> {
   const where = whereFor(ctx);
-  const [series, books, parts, chapters, scenes] = await Promise.all([
-    db.series.findMany({
-      where: where.series,
-      select: { id: true, title: true, deletedAt: true, penName: { select: { name: true } } },
-    }),
-    db.book.findMany({
-      where: where.book,
-      select: {
-        id: true,
-        title: true,
-        deletedAt: true,
-        series: { select: { title: true } },
-        penName: { select: { name: true } },
-      },
-    }),
-    db.part.findMany({
-      where: where.part,
-      select: { id: true, title: true, deletedAt: true, book: { select: { title: true } } },
-    }),
-    db.chapter.findMany({
-      where: where.chapter,
-      select: {
-        id: true,
-        title: true,
-        deletedAt: true,
-        book: { select: { title: true } },
-        part: { select: { title: true } },
-      },
-    }),
-    db.scene.findMany({
-      where: where.scene,
-      select: {
-        id: true,
-        title: true,
-        deletedAt: true,
-        book: { select: { title: true } },
-        chapter: { select: { title: true } },
-      },
-    }),
-  ]);
+  const base = { id: true, deletedAt: true } as const;
+  const [series, books, parts, chapters, scenes, characters, relationships, notes, ideas] =
+    await Promise.all([
+      db.series.findMany({
+        where: where.series,
+        select: { ...base, title: true, penName: { select: { name: true } } },
+      }),
+      db.book.findMany({
+        where: where.book,
+        select: {
+          ...base,
+          title: true,
+          series: { select: { title: true } },
+          penName: { select: { name: true } },
+        },
+      }),
+      db.part.findMany({
+        where: where.part,
+        select: { ...base, title: true, book: { select: { title: true } } },
+      }),
+      db.chapter.findMany({
+        where: where.chapter,
+        select: {
+          ...base,
+          title: true,
+          book: { select: { title: true } },
+          part: { select: { title: true } },
+        },
+      }),
+      db.scene.findMany({
+        where: where.scene,
+        select: {
+          ...base,
+          title: true,
+          book: { select: { title: true } },
+          chapter: { select: { title: true } },
+        },
+      }),
+      db.character.findMany({ where: where.character, select: { ...base, name: true } }),
+      db.relationship.findMany({
+        where: where.relationship,
+        select: {
+          ...base,
+          type: true,
+          characterA: { select: { name: true } },
+          characterB: { select: { name: true } },
+        },
+      }),
+      db.note.findMany({ where: where.note, select: { ...base, title: true } }),
+      db.idea.findMany({ where: where.idea, select: { ...base, title: true } }),
+    ]);
 
   const items: TrashItem[] = [
-    ...series.map((s) => item(s, "SERIES", s.penName.name)),
-    ...books.map((b) => item(b, "BOOK", b.series?.title ?? b.penName.name)),
-    ...parts.map((p) => item(p, "PART", p.book.title)),
-    ...chapters.map((c) => item(c, "CHAPTER", trail(c.book.title, c.part?.title))),
-    ...scenes.map((s) => item(s, "SCENE", trail(s.book.title, s.chapter.title))),
+    ...series.map((s) => item(s, "SERIES", s.title, s.penName.name)),
+    ...books.map((b) => item(b, "BOOK", b.title, b.series?.title ?? b.penName.name)),
+    ...parts.map((p) => item(p, "PART", p.title, p.book.title)),
+    ...chapters.map((c) => item(c, "CHAPTER", c.title, trail(c.book.title, c.part?.title))),
+    ...scenes.map((s) => item(s, "SCENE", s.title, trail(s.book.title, s.chapter.title))),
+    ...characters.map((c) => item(c, "CHARACTER", c.name, null)),
+    ...relationships.map((r) =>
+      item(r, "RELATIONSHIP", `${r.characterA.name} & ${r.characterB.name}`, r.type),
+    ),
+    ...notes.map((n) => item(n, "NOTE", n.title, null)),
+    ...ideas.map((i) => item(i, "IDEA", i.title, null)),
   ];
   return items.sort((a, b) => b.deletedAt.getTime() - a.deletedAt.getTime());
 }
 
 function item(
-  row: { id: string; title: string; deletedAt: Date | null },
+  row: { id: string; deletedAt: Date | null },
   kind: StoryNodeKind,
+  title: string,
   context: string | null,
 ): TrashItem {
-  return { id: row.id, kind, title: row.title, context, deletedAt: row.deletedAt! };
+  return { id: row.id, kind, title, context, deletedAt: row.deletedAt! };
 }
 
 function trail(...parts: (string | null | undefined)[]) {
   return parts.filter(Boolean).join(" › ");
 }
 
+function unreachable(kind: never): never {
+  throw new Error(`Unhandled story node kind: ${String(kind)}`);
+}
+
 /** Confirms the item is currently listed in this workspace's Trash. */
 async function requireTrashed(ctx: AuthorContext, kind: StoryNodeKind, id: string) {
   const where = whereFor(ctx);
+  const select = { id: true } as const;
   const found = await (() => {
     switch (kind) {
       case "SERIES":
-        return db.series.findFirst({ where: { ...where.series, id }, select: { id: true } });
+        return db.series.findFirst({ where: { ...where.series, id }, select });
       case "BOOK":
-        return db.book.findFirst({ where: { ...where.book, id }, select: { id: true } });
+        return db.book.findFirst({ where: { ...where.book, id }, select });
       case "PART":
-        return db.part.findFirst({ where: { ...where.part, id }, select: { id: true } });
+        return db.part.findFirst({ where: { ...where.part, id }, select });
       case "CHAPTER":
-        return db.chapter.findFirst({ where: { ...where.chapter, id }, select: { id: true } });
+        return db.chapter.findFirst({ where: { ...where.chapter, id }, select });
       case "SCENE":
-        return db.scene.findFirst({ where: { ...where.scene, id }, select: { id: true } });
+        return db.scene.findFirst({ where: { ...where.scene, id }, select });
+      case "CHARACTER":
+        return db.character.findFirst({ where: { ...where.character, id }, select });
+      case "RELATIONSHIP":
+        return db.relationship.findFirst({ where: { ...where.relationship, id }, select });
+      case "NOTE":
+        return db.note.findFirst({ where: { ...where.note, id }, select });
+      case "IDEA":
+        return db.idea.findFirst({ where: { ...where.idea, id }, select });
+      default:
+        return unreachable(kind);
     }
   })();
   if (!found) throw new NotFoundError("Item in the Trash");
@@ -136,18 +177,28 @@ async function requireTrashed(ctx: AuthorContext, kind: StoryNodeKind, id: strin
 
 export async function restoreFromTrash(ctx: AuthorContext, kind: StoryNodeKind, id: string) {
   await requireTrashed(ctx, kind, id);
-  const data = { deletedAt: null };
+  const args = { where: { id }, data: { deletedAt: null } };
   switch (kind) {
     case "SERIES":
-      return void (await db.series.update({ where: { id }, data }));
+      return void (await db.series.update(args));
     case "BOOK":
-      return void (await db.book.update({ where: { id }, data }));
+      return void (await db.book.update(args));
     case "PART":
-      return void (await db.part.update({ where: { id }, data }));
+      return void (await db.part.update(args));
     case "CHAPTER":
-      return void (await db.chapter.update({ where: { id }, data }));
+      return void (await db.chapter.update(args));
     case "SCENE":
-      return void (await db.scene.update({ where: { id }, data }));
+      return void (await db.scene.update(args));
+    case "CHARACTER":
+      return void (await db.character.update(args));
+    case "RELATIONSHIP":
+      return void (await db.relationship.update(args));
+    case "NOTE":
+      return void (await db.note.update(args));
+    case "IDEA":
+      return void (await db.idea.update(args));
+    default:
+      return unreachable(kind);
   }
 }
 

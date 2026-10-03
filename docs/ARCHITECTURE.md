@@ -3,7 +3,7 @@
 AuthorOS is a **modular monolith**: one Next.js application, one PostgreSQL
 database, with the code split into domain modules that have strict boundaries.
 
-> Status: Milestone 1 (writing loop + author identities). Sections marked
+> Status: Milestone 2 (story bible + Universal Connections). Sections marked
 > _planned_ describe the agreed design for later milestones so that early code
 > doesn't block it.
 
@@ -80,18 +80,32 @@ src/modules/library/
 
 Current modules:
 
-| Module        | Owns                                                                                                                |
-| ------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `auth`        | Sign-in form and actions (UI only).                                                                                 |
-| `workspaces`  | Personal workspace bootstrap, membership lookup.                                                                    |
-| `pen-names`   | Author identities: create/edit/default/archive/restore, the active identity, the identity switcher.                 |
-| `story-graph` | Story node creation and permanent deletion (the Story Graph extension point).                                       |
-| `library`     | Series and books; pen-name rules for them; series order.                                                            |
-| `manuscript`  | Parts, chapters, scenes (structure, ordering, moves), scene content, autosave, revisions, the binder and editor UI. |
-| `trash`       | Listing, restoring and permanently deleting trashed story objects of every type.                                    |
+| Module          | Owns                                                                                                                                      |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `auth`          | Sign-in form and actions (UI only).                                                                                                       |
+| `workspaces`    | Personal workspace bootstrap, membership lookup.                                                                                          |
+| `pen-names`     | Author identities: create/edit/default/archive/restore, the active identity, the identity switcher.                                       |
+| `story-graph`   | Story nodes: creation, permanent deletion, per-kind visibility rules, resolution (title/context/link) and cross-kind search. Kind labels. |
+| `connections`   | Universal Connections: the kind registry, connect/update/disconnect, reading a node's connections, the Connections panel and picker.      |
+| `library`       | Series and books; pen-name rules for them; series order.                                                                                  |
+| `manuscript`    | Parts, chapters, scenes (structure, ordering, moves), scene content, autosave, revisions, the binder and editor UI.                       |
+| `characters`    | Characters, profile fields, the scene cast (appearances are connections).                                                                 |
+| `relationships` | Relationships between two characters (story nodes themselves).                                                                            |
+| `notes`         | Notes with rich text; what they're about is connections.                                                                                  |
+| `ideas`         | Quick capture; promotion to a book.                                                                                                       |
+| `trash`         | Listing, restoring and permanently deleting trashed story objects of every type.                                                          |
 
-Dependency direction: `manuscript` → `library` → `pen-names` → `workspaces`;
-`trash` → `library`, `story-graph`. Nothing depends on `trash` or on UI.
+Dependency direction (domain): `ideas` → `library`, `connections`;
+`notes` → `connections`; `characters`, `relationships`, `trash`,
+`connections` → `story-graph`; `manuscript` → `library` → `pen-names` →
+`workspaces`. Pages compose modules; modules never import a page.
+`story-graph` is the bottom of the story layer and knows every typed table.
+
+**Server-only guard.** Every service file imports `server-only`, so a client
+component that reaches a domain entry fails the build with an explicit
+error instead of shipping database code to the browser. Client components
+use `ui` entries, which hold only components, actions and client-safe
+constants (labels, the connection registry).
 
 ### Server Actions
 
@@ -225,22 +239,54 @@ Trash lists the topmost trashed item of each branch; restoring brings back
 its contents (except things trashed separately). "Delete forever" removes
 the item, its descendants and their revisions.
 
-## Story Graph (extension point for Universal Connections)
+## Story Graph and Universal Connections
 
-Every story object has a row in `story_nodes` (id, workspace, kind), and its
-typed row (series, book, part, chapter, scene) uses that id as its primary
-key, enforced by a composite foreign key and a kind-checking trigger. A
-trigger deletes the node when the typed row is deleted, so the graph never
-holds orphans.
+**Identity.** Every story object (series, book, part, chapter, scene,
+character, relationship, note, idea) has a row in `story_nodes`, and its
+typed row uses that id as its primary key, enforced by a composite foreign
+key and a kind-checking trigger. A trigger deletes the node when the typed
+row is deleted.
 
-This gives every object one universal, foreign-key-addressable identity.
-The planned **Universal Connection layer** (Character → Inspiration, Scene →
-Song, Research → Scene, Plot Thread → Scene, Note → Romance Arc…) becomes a
-single `connections` table between two `story_nodes`, with no per-type join
-tables. New object types (characters, locations, research, songs) join the
-graph by getting a node. Explicit foreign keys remain for structural
-relationships (a scene's chapter), where the type is fixed and cascades
-matter. See [DATABASE.md](DATABASE.md#universal-connections-target-design).
+**Structure stays explicit.** Book → Part → Chapter → Scene, a series' books,
+a relationship's two characters and a book's pen name are dedicated foreign
+keys: fixed, typed, cascading, and queried constantly.
+
+**Associations are connections.** Everything flexible is a row in
+`connections` between two nodes: character ↔ scene appearances (with a
+role), notes about anything, relationship moments in scenes, what an idea
+inspired, and free "related to" links. Tasks (M4), inspiration, research,
+songs, plot threads and locations will use the same table.
+
+**The registry** (`modules/connections/registry.ts`, client-safe) defines each
+kind: allowed source and target node kinds (or any), how it reads from each
+end ("Appears in" / "Characters"), whether it is directed, and an optional
+single-choice attribute (a scene role). The service validates every
+connection against it; the UI builds the "Connect" picker from it.
+
+| Kind          | From → To              | Reads as                           | Attribute                                         |
+| ------------- | ---------------------- | ---------------------------------- | ------------------------------------------------- |
+| `appears_in`  | Character → Scene      | Appears in / Characters            | role: POV, present, mentioned (one POV per scene) |
+| `develops_in` | Relationship → Scene   | Develops in / Relationship moments |                                                   |
+| `about`       | Note → any             | About / Notes                      |                                                   |
+| `inspired`    | Idea → any             | Inspired / Inspired by             |                                                   |
+| `related`     | any ↔ any (undirected) | Related to                         |                                                   |
+
+**Resolution.** `story-graph/resolve.ts` turns node ids into summaries
+(kind, title, context, link) with one loader per kind, each applying that
+kind's visibility rule (`story-graph/visibility.ts`: nothing trashed, nothing
+inside something trashed). Connections to hidden objects are skipped, not
+deleted, so restoring brings them back. The same loaders power cross-kind
+search for the picker.
+
+**Adding a new object type** (e.g. Location): add the node kind and the
+table (with the two triggers), a resolver case (the switch is exhaustive, so
+TypeScript flags every place to update, including the Trash), and allow it
+in the registry kinds it should join. The Connections panel, picker, Trash
+and backlinks then work for it without new UI.
+
+**Shared editor.** `components/editor/rich-text-editor.tsx` provides
+autosave, Ctrl/Cmd+S, the leave-page warning and conflict protection for any
+versioned rich text: scenes and notes today.
 
 ## AI boundary (_planned, v1.2_)
 

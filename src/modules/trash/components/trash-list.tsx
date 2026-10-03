@@ -8,17 +8,12 @@ import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { FormError } from "@/components/ui/field";
 import type { StoryNodeKind } from "@/generated/prisma/enums";
 import { useAction } from "@/hooks/use-action";
+import { NODE_KIND_LABELS } from "@/modules/story-graph/ui";
 import { formatDateTime } from "@/lib/format";
 
 import { deleteForeverAction, emptyTrashAction, restoreAction } from "../actions";
 
-const KIND_LABELS: Record<StoryNodeKind, string> = {
-  SERIES: "Series",
-  BOOK: "Book",
-  PART: "Part",
-  CHAPTER: "Chapter",
-  SCENE: "Scene",
-};
+const kindLabel = (kind: StoryNodeKind) => NODE_KIND_LABELS[kind].one;
 
 type Item = {
   id: string;
@@ -66,7 +61,7 @@ export function TrashList({ items }: { items: Item[] }) {
           <li key={item.id} className="flex flex-wrap items-center gap-3 p-4">
             <div className="min-w-0 flex-1">
               <p className="flex flex-wrap items-center gap-2">
-                <Badge>{KIND_LABELS[item.kind]}</Badge>
+                <Badge>{kindLabel(item.kind)}</Badge>
                 <span className="font-medium">{item.title}</span>
               </p>
               <p className="mt-1 text-xs text-muted-foreground">

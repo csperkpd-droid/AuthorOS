@@ -16,6 +16,8 @@ Read `docs/ARCHITECTURE.md` and `docs/DATABASE.md` before changing structure or 
 - **Layers:** `src/app` routes are transport only. Business logic lives in `src/modules/<name>/service.ts`; services take `AuthorContext` first and scope every query by `ctx.workspaceId`.
 - **Module boundaries:** import other modules only via `@/modules/<name>` (domain: services, schemas, labels) or `@/modules/<name>/ui` (components, Server Actions); enforced by ESLint. Routes and components never import `@/lib/db` or Prisma.
 - **Story objects** get their id from `createStoryNode()` in the same transaction (see Story Graph in `docs/ARCHITECTURE.md`). Permanent deletion = deleting the node.
+- **Connections:** flexible links between story objects use the `connections` module (kinds in `connections/registry.ts`); structural relationships stay explicit FKs. A new node kind needs: the enum value, a table with the two story-node triggers, a case in `story-graph/resolve.ts` and `story-graph/visibility.ts`, and registry entries.
+- **Client components** import other modules only via `ui` entries (services are `server-only`).
 - **Server Actions** wrap their body in `runAction()`, return ids instead of calling `redirect()`, and let the client navigate.
 - **Auth:** call `requireAuthorContext()` in every page, action and route handler that touches author data. Don't rely on layouts or `proxy.ts` for authorization.
 - **Schema:** follow `docs/DATABASE.md` conventions (UUIDv7, snake_case maps, `workspace_id` everywhere, `deleted_at` on creative content). Record notable choices in `docs/DECISIONS.md`.

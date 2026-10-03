@@ -1,3 +1,5 @@
+import "server-only";
+
 import type { WorkspaceRole } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 

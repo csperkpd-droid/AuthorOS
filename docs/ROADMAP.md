@@ -8,9 +8,9 @@ Scope details: [MVP.md](MVP.md). Schema: [DATABASE.md](DATABASE.md).
 |     | Milestone                                                                                                                              | Status                          |
 | --- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------- |
 | 0   | Foundations: repo, database architecture, auth, shell, docs                                                                            | ✅ Complete                     |
-| 1   | Writing loop + author identities: series/books/parts/chapters/scenes, editor, revisions, Trash, pen names, Story Graph extension point | ✅ Complete (awaiting approval) |
-| 2   | Story bible: characters, relationships, ideas, notes (+ first Universal Connections, if approved)                                      | Next                            |
-| 3   | Structure and romance: beat templates, outlines, romance arcs                                                                          | Planned                         |
+| 1   | Writing loop + author identities: series/books/parts/chapters/scenes, editor, revisions, Trash, pen names, Story Graph extension point | ✅ Complete                     |
+| 2   | Story bible + Universal Connections: characters, relationships, notes, ideas, connections                                              | ✅ Complete (awaiting approval) |
+| 3   | Structure and romance: beat templates, outlines, romance arcs (outlines become story nodes)                                            | Next                            |
 | 4   | Getting work done: tasks, calendar, writing sessions, goals, dashboard                                                                 | Planned                         |
 | 5   | Ownership: search, manuscript export, workspace export                                                                                 | Planned                         |
 
@@ -39,12 +39,12 @@ manuscript. Export closes the MVP with the "you own your data" promise.
 - Invite co-authors, editors (comment and suggest) and beta readers (view and comment).
 - Role checks via a policy helper; activity log; presence.
 
-### Universal Connections (Story Graph)
+### Story Graph growth
 
-- A `connections` table between any two story nodes, with an author-facing
-  "Connections" panel and backlinks on every object.
-- Groundwork shipped in M1 (`story_nodes`). Proposed to start in Milestone 2
-  alongside characters and notes.
+- Universal Connections shipped in M2. New object types join as they are
+  built: outlines and romance arcs (M3), tasks (M4), timeline events (v1.1),
+  then locations, research, songs, plot threads, worldbuilding.
+- Later: a graph view of connections; tags on any node.
 
 ### Later
 

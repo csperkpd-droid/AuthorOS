@@ -72,7 +72,7 @@ test.describe("desktop writing loop", () => {
     await editorText(page).click();
     await page.keyboard.type("It was a dark and stormy night.");
     await expectSaved(page);
-    await expect(page.getByTestId("scene-word-count")).toHaveText("7 words");
+    await expect(page.getByTestId("word-count")).toHaveText("7 words");
 
     // Scene details save on change
     await page.getByLabel("Scene status").selectOption({ label: "Revised" });

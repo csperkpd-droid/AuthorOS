@@ -1,3 +1,5 @@
+import "server-only";
+
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { ConflictError, NotFoundError } from "@/lib/errors";

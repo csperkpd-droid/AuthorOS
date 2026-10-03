@@ -13,6 +13,9 @@ import { BookDialog, trashBookAction } from "@/modules/library/ui";
 import { getBookTree } from "@/modules/manuscript";
 import { BinderManager } from "@/modules/manuscript/ui";
 import { listPenNames } from "@/modules/pen-names";
+import { listConnections } from "@/modules/connections";
+import { ConnectionsPanel } from "@/modules/connections/ui";
+import { NewNoteDialog } from "@/modules/notes/ui";
 import { requireAuthorContext } from "@/server/context";
 import { orNotFound } from "@/server/not-found";
 
@@ -27,11 +30,12 @@ export async function generateMetadata({
 export default async function BookPage({ params }: PageProps<"/books/[bookId]">) {
   const { bookId } = await params;
   const ctx = await requireAuthorContext();
-  const [book, tree, penNames, seriesOptions] = await Promise.all([
+  const [book, tree, penNames, seriesOptions, connections] = await Promise.all([
     orNotFound(getBook(ctx, bookId)),
     orNotFound(getBookTree(ctx, bookId)),
     listPenNames(ctx),
     listSeriesOptions(ctx),
+    orNotFound(listConnections(ctx, bookId)),
   ]);
   const firstScene = tree.sceneOrder[0];
 
@@ -117,6 +121,24 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
       {book.description && <p className="max-w-prose text-muted-foreground">{book.description}</p>}
 
       <BinderManager bookId={book.id} items={tree.items} />
+
+      <ConnectionsPanel
+        nodeId={book.id}
+        nodeKind="BOOK"
+        connections={connections}
+        heading="Notes & links"
+        emptyText="Notes, research, ideas and other links for this book."
+        actions={
+          <NewNoteDialog
+            about={{ id: book.id, title: book.title }}
+            trigger={
+              <Button variant="outline" size="sm">
+                New note
+              </Button>
+            }
+          />
+        }
+      />
     </div>
   );
 }

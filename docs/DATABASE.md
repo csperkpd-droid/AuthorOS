@@ -5,7 +5,7 @@ migrations in `prisma/migrations/`.
 
 This document has two parts:
 
-1. **Implemented**: what exists in the database today (Milestones 0–1).
+1. **Implemented**: what exists in the database today (Milestones 0–2).
 2. **Target design**: the agreed schema for every planned module, including
    the Universal Connection layer. Each milestone implements its slice.
    Changes to the target design are recorded in [DECISIONS.md](DECISIONS.md).
@@ -68,6 +68,13 @@ erDiagram
   parts |o--o{ chapters : "optional"
   chapters ||--o{ scenes : ""
   scenes ||--o{ scene_revisions : ""
+  story_nodes ||--o| characters : "is"
+  story_nodes ||--o| relationships : "is"
+  story_nodes ||--o| notes : "is"
+  story_nodes ||--o| ideas : "is"
+  characters ||--o{ relationships : "A / B"
+  story_nodes ||--o{ connections : "source"
+  story_nodes ||--o{ connections : "target"
 ```
 
 ### Identity and tenancy (Milestone 0)
@@ -86,9 +93,9 @@ erDiagram
 
 ### Story graph (Milestone 1)
 
-| Table         | Key columns                                                             | Notes                                                   |
-| ------------- | ----------------------------------------------------------------------- | ------------------------------------------------------- |
-| `story_nodes` | `id`, `workspace_id`, `kind` (`SERIES`/`BOOK`/`PART`/`CHAPTER`/`SCENE`) | Unique `(id, workspace_id)` for tenant-safe references. |
+| Table         | Key columns                                                                                                      | Notes                                                   |
+| ------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `story_nodes` | `id`, `workspace_id`, `kind` (`SERIES`/`BOOK`/`PART`/`CHAPTER`/`SCENE`/`CHARACTER`/`RELATIONSHIP`/`NOTE`/`IDEA`) | Unique `(id, workspace_id)` for tenant-safe references. |
 
 Typed tables use their node id as primary key via the composite FK
 `(id, workspace_id) → story_nodes(id, workspace_id) ON DELETE CASCADE`.
@@ -117,77 +124,98 @@ The **manuscript** is a view, not a table: a book's parts, chapters and
 scenes in `position` order. Book and part word totals are computed from
 visible scenes, not stored.
 
+### Universal connections (Milestone 2)
+
+Any two story nodes can be linked. One table holds every link:
+
+| Column                                      | Notes                                                                                                                        |
+| ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `id`, `workspace_id`                        |                                                                                                                              |
+| `source_id`, `target_id`                    | Composite tenant-safe FKs to `story_nodes (id, workspace_id)`, `ON DELETE CASCADE`: a connection disappears with either end. |
+| `kind`                                      | Registry key (`appears_in`, `develops_in`, `about`, `inspired`, `related`). CHECK: lowercase identifier.                     |
+| `label`, `note`                             | The author's own wording and a short note.                                                                                   |
+| `attributes`                                | `jsonb` object (CHECK) holding kind-specific values validated by the registry, e.g. `{ "role": "POV" }`.                     |
+| `created_by_id`, `created_at`, `updated_at` |                                                                                                                              |
+
+Constraints and indexes:
+
+- `UNIQUE (source_id, target_id, kind)`. Undirected kinds are stored once
+  per pair in id order, so `related` can't be duplicated from the other side.
+- CHECK `connections_not_self`: no self-links.
+- Partial unique index `connections_one_pov_per_scene`: at most one
+  `appears_in` with `role = POV` per scene. Kind-specific rules that the
+  database must enforce are added as partial indexes like this one.
+- Indexes on `target_id` (backlinks) and `(workspace_id, kind)`.
+
+What is **not** in the table: which node kinds a kind may join, its wording in
+each direction, and its attribute options. Those live in
+`src/modules/connections/registry.ts`, so new kinds, and new object types
+taking part in existing kinds, need no migration.
+
+Reading: a node's connections are read in both directions and the other end
+is resolved per kind (title, context, link). Ends in the Trash (or inside
+something in the Trash) are hidden, not deleted, and reappear on restore.
+
+### Story bible (Milestone 2)
+
+| Table           | Key columns                                                                                                                                                           | Notes                                                                                                                                                                                                                                      |
+| --------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `characters`    | node id, `series_id?`, `name`, `aliases text[]`, `role` (`PROTAGONIST`/`ANTAGONIST`/`LOVE_INTEREST`/`SUPPORTING`/`MINOR`), `summary`, `profile` (jsonb), `deleted_at` | `profile` holds profile fields by id (list in `modules/characters/profile.ts`). Scene appearances are `appears_in` connections. `series_id` → `ON DELETE SET NULL`.                                                                        |
+| `relationships` | node id, `character_a_id`, `character_b_id`, `type`, `description`, `deleted_at`                                                                                      | A story node itself, so notes, scenes (`develops_in`) and future romance arcs connect to the relationship. Tenant-safe FKs to both characters (cascade). CHECK `character_a_id < character_b_id` + unique pair: one relationship per pair. |
+| `notes`         | node id, `title`, `body` (jsonb), `body_text`, `version`, `deleted_at`                                                                                                | What a note is about is a set of `about` connections. `version` for conflict detection, like scenes.                                                                                                                                       |
+| `ideas`         | node id, `title`, `body`, `status` (`OPEN`/`USED`/`ARCHIVED`), `deleted_at`                                                                                           | Promotion to a book creates the book and an `inspired` connection.                                                                                                                                                                         |
+
+All four use the story-node triggers (kind check, node cleanup).
+
+### Retention
+
+Nothing is pruned automatically:
+
+- **History.** `scene_revisions` rows are kept indefinitely, whatever their
+  source: autosave checkpoints, named versions, before-restore copies, and
+  future publication snapshots.
+- **Trash** keeps items until the author deletes them forever or empties it.
+- **Archive** (pen names; ideas' `ARCHIVED` status) hides without deleting.
+
+These are three distinct concepts: the Trash is deletion that can be undone,
+the archive is "not now", and history is earlier versions of live content.
+
 ---
 
 ## 2. Target design
 
-### Universal connections (target design)
+### Milestone 3+: object types that join the graph
 
-The long-term Story Graph lets any object connect to any other: Character →
-Inspiration, Scene → Song, Research → Scene, Plot Thread → Scene, Character →
-Location, Idea → Book, Note → Romance Arc, Worldbuilding → Scene.
+Every new object type gets a node kind, a typed table using the node id, the
+two triggers, and a case in the resolver; it can then take part in
+connections. Planned: outlines/romance arcs (M3), tasks (M4), timeline
+events (v1.1), and later locations, research items, songs, plot threads and
+worldbuilding entries. New connection kinds join the registry as needed
+(e.g. `concerns` for Task → any story object, `set_in` for Scene → Location,
+`soundtrack` for Scene → Song).
 
-```
-connections
-  id                uuid PK
-  workspace_id      uuid
-  source_node_id    uuid  ─┐ composite FKs (node_id, workspace_id)
-  target_node_id    uuid  ─┘ → story_nodes, ON DELETE CASCADE
-  kind              text          -- "inspired_by", "appears_in", "set_in", "soundtrack"…
-  label             text?         -- the author's own wording
-  note              text?
-  position          text? (C)     -- optional ordering (e.g. a playlist)
-  created_by_id     uuid?
-  created_at        timestamptz
-  UNIQUE (source_node_id, target_node_id, kind)
-  INDEX (target_node_id)          -- backlinks: "what points at this scene?"
-```
-
-- **No new join table per pair of types.** Any two node kinds can connect.
-  Allowed combinations and their wording ("appears in" / "features")
-  live in a code registry, so they can grow without migrations.
-- **Every new object type joins the graph by getting a node**: characters,
-  locations, ideas, notes, research items, songs, plot threads, romance arcs,
-  worldbuilding entries. The node-kind enum grows with each one.
-- Connections are deleted with either endpoint (cascade). Trashing an endpoint
-  hides its connections (the reader filters on the endpoint's `deleted_at`).
-- AI may _suggest_ connections later (as `suggestions` rows); only the author
-  creates them.
-- **Explicit FKs stay for structure and ownership** (scene → chapter, book →
-  pen name, character → series scope), where the relationship is fixed, typed
-  and needs cascades and integrity. Connections are for the author's
-  associative links.
-
-### Milestone 2: story bible
-
-| Table                 | Key columns                                                                                            | Notes                                                                                                                                                               |
-| --------------------- | ------------------------------------------------------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ideas`               | node id, `title`, `body` (jsonb), `status` (`OPEN`/`PROMOTED`/`ARCHIVED`)                              | Story node. Promotion to a book/series is recorded as a connection (`promoted_to`).                                                                                 |
-| `characters`          | node id, `series_id?`, `name`, `aliases text[]`, `role`, `summary`, `attributes` (jsonb), `deleted_at` | Story node. `attributes` holds flexible profile fields; anything queried gets a real column.                                                                        |
-| `scene_characters`    | PK `(scene_id, character_id)`, `presence` (`POV`/`PRESENT`/`MENTIONED`)                                | Structural and queried constantly ("who is in this scene?"), so it stays an explicit table rather than a generic connection.                                        |
-| `relationships`       | node id, `character_a_id`, `character_b_id`, `type`, `description`                                     | Story node (so notes, songs, arcs can connect to a relationship). CHECK `character_a_id < character_b_id` + unique pair.                                            |
-| `relationship_events` | `relationship_id`, `scene_id?`, `description`, `intensity?`                                            | How the relationship develops scene by scene.                                                                                                                       |
-| `notes`               | node id, `title`, `body` (jsonb), `body_text`, `deleted_at`                                            | Story node. Attaching a note to a book, scene, character or romance arc is a **connection** (`about`). This supersedes the exclusive-arc FK design (DECISIONS #22). |
-| `tags`, `node_tags`   | `tags(workspace_id, name)`; `node_tags(node_id, tag_id)`                                               | Tags attach to story nodes, so they work for every type.                                                                                                            |
+| Table               | Notes                                                                                  |
+| ------------------- | -------------------------------------------------------------------------------------- |
+| `tags`, `node_tags` | `node_tags(node_id, tag_id)`: tags attach to story nodes, so they work for every type. |
 
 ### Milestone 3: story structure and romance
 
-| Table                 | Key columns                                                                                 | Notes                                                                                                                              |
-| --------------------- | ------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------- |
-| `structure_templates` | `workspace_id?`, `kind` (`PLOT`/`ROMANCE`/`CUSTOM`), `name`, `description`                  | `workspace_id` null = built-in (seeded).                                                                                           |
-| `template_beats`      | `template_id`, `name`, `description`, `position`, `target_percent?`                         |                                                                                                                                    |
-| `outlines`            | node id, `book_id`, `template_id?`, `kind`, `relationship_id?`                              | Story node: a romance arc _is_ an outline with `kind = ROMANCE` and a relationship, so "Note → Romance Arc" is a plain connection. |
-| `outline_beats`       | `outline_id`, `template_beat_id?`, `title`, `notes`, `position`, `chapter_id?`, `scene_id?` | Beats map to where they happen in the manuscript.                                                                                  |
-| `books` (+columns)    | `tropes text[]`, `heat_level?`                                                              |                                                                                                                                    |
+| Table                 | Key columns                                                                                 | Notes                                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------ |
+| `structure_templates` | `workspace_id?`, `kind` (`PLOT`/`ROMANCE`/`CUSTOM`), `name`, `description`                  | `workspace_id` null = built-in (seeded).                                                                                                   |
+| `template_beats`      | `template_id`, `name`, `description`, `position`, `target_percent?`                         |                                                                                                                                            |
+| `outlines`            | node id, `book_id`, `template_id?`, `kind`, `relationship_id?`                              | Story node: a romance arc _is_ an outline with `kind = ROMANCE` and a relationship, so "Note → Romance Arc" is a plain `about` connection. |
+| `outline_beats`       | `outline_id`, `template_beat_id?`, `title`, `notes`, `position`, `chapter_id?`, `scene_id?` | Beats map to where they happen in the manuscript.                                                                                          |
+| `books` (+columns)    | `tropes text[]`, `heat_level?`                                                              |                                                                                                                                            |
 
 ### Milestone 4: tasks, calendar, progress
 
-| Table              | Key columns                                                                           | Notes                                                                               |
-| ------------------ | ------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------- |
-| `tasks`            | `workspace_id`, `title`, `status`, `priority`, `due_at?`, `completed_at?`, `node_id?` | Optional link to any story node (task about a scene, a character…), tenant-safe FK. |
-| `calendar_events`  | `workspace_id`, `title`, `starts_at`, `ends_at?`, `all_day`, `node_id?`               | The calendar merges events, task due dates and (v1.1) publishing deadlines.         |
-| `writing_sessions` | `workspace_id`, `user_id`, `book_id?`, `date`, `words_written`, `minutes?`            |                                                                                     |
-| `writing_goals`    | `workspace_id`, `book_id?`, `kind`, `target`, `period`                                |                                                                                     |
+| Table              | Key columns                                                                | Notes                                                                                                               |
+| ------------------ | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `tasks`            | node id, `title`, `status`, `priority`, `due_at?`, `completed_at?`         | Story node. What a task concerns is one or more connections (`concerns`), not fixed foreign keys.                   |
+| `calendar_events`  | `workspace_id`, `title`, `starts_at`, `ends_at?`, `all_day`                | The calendar merges events, task due dates and (v1.1) publishing deadlines; links to story objects via connections. |
+| `writing_sessions` | `workspace_id`, `user_id`, `book_id?`, `date`, `words_written`, `minutes?` |                                                                                                                     |
+| `writing_goals`    | `workspace_id`, `book_id?`, `kind`, `target`, `period`                     |                                                                                                                     |
 
 ### Milestone 5: search and export
 
@@ -198,13 +226,13 @@ connections
 
 ### v1.1: timeline and publishing
 
-| Table                                      | Key columns                                                                                             | Notes                                                            |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------- |
-| `timeline_events`                          | node id, `book_id?`, `series_id?`, `title`, `story_time_label`, `story_sort_key` (numeric), `scene_id?` | In-world time as a label plus a sortable key (custom calendars). |
-| `publishing_workflows`, `publishing_steps` | `book_id`; `stage`, `status`, `due_at?`, `position`                                                     | From a default checklist.                                        |
-| `editions`                                 | `book_id`, `pen_name_id?`, `format`, `isbn?`, `release_date?`                                           | `pen_name_id` overrides the book's (e.g. a co-written edition).  |
-| `retail_listings`                          | `edition_id`, `retailer`, `url`, `asin?`                                                                |                                                                  |
-| `pen_names` (+)                            | `pen_name_links` (website, socials), brand kit                                                          | Pen-name branding and publishing accounts.                       |
+| Table                                      | Key columns                                                                                             | Notes                                                                                                                                                                                                                                       |
+| ------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `timeline_events`                          | node id, `book_id?`, `series_id?`, `title`, `story_time_label`, `story_sort_key` (numeric), `scene_id?` | In-world time as a label plus a sortable key (custom calendars).                                                                                                                                                                            |
+| `publishing_workflows`, `publishing_steps` | `book_id`; `stage`, `status`, `due_at?`, `position`                                                     | From a default checklist.                                                                                                                                                                                                                   |
+| `editions`                                 | `book_id`, `pen_name_id?`, `format`, `isbn?`, `release_date?`                                           | **The extension point for a book-level publication identity.** A book's pen name follows its series; an edition may be published under a different identity via `pen_name_id`. Built with Publishing (v1.1); nothing earlier depends on it. |
+| `retail_listings`                          | `edition_id`, `retailer`, `url`, `asin?`                                                                |                                                                                                                                                                                                                                             |
+| `pen_names` (+)                            | `pen_name_links` (website, socials), brand kit                                                          | Pen-name branding and publishing accounts.                                                                                                                                                                                                  |
 
 ### v1.2: AI suggestions
 

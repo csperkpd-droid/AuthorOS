@@ -6,7 +6,7 @@ relationships, story structure, romance planning, notes, tasks and more.
 **Principles:** authors stay in control · AI suggests, never changes ·
 everything is connected · built to grow.
 
-> **Status:** Milestone 1 (writing loop + author identities) is complete. See [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status:** Milestone 2 (story bible + Universal Connections) is complete. See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Documentation
 

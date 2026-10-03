@@ -1,3 +1,5 @@
+import "server-only";
+
 import type { Prisma, StoryNodeKind } from "@/generated/prisma/client";
 
 /**

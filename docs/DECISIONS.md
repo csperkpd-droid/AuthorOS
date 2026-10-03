@@ -171,7 +171,7 @@ object, and every typed create goes through `createStoryNode()`.
 cascades); building the connections table now (out of MVP scope; the
 extension point is enough).
 
-### 22. Notes and tasks attach through the graph — Accepted (M1, supersedes the M0 plan)
+### 22. Notes and tasks attach through the graph — Accepted (M1, supersedes the M0 plan), implemented in M2 (#33)
 
 The M0 plan gave notes and tasks an "exclusive arc" of nullable FKs (book,
 chapter, scene, character…). With story nodes, a note is itself a node and
@@ -261,3 +261,91 @@ is live, and restoring an item brings back its contents except things trashed
 separately before it. Permanent deletion deletes the story node and relies on
 FK cascades and triggers. Automatic purge after N days is deferred (needs
 background jobs).
+
+---
+
+## Milestone 2
+
+### 33. Universal Connections: one table, a code registry — Accepted (M2)
+
+`connections(source_id, target_id, kind, label, note, attributes)` between
+any two story nodes, with tenant-safe composite FKs that cascade with either
+end. The **kinds live in code** (`connections/registry.ts`): allowed node
+kinds per end, wording per direction, directedness, an optional attribute.
+**Why:** new kinds and new object types join without migrations or new join
+tables, and the UI (picker, panel, backlinks) is generated from the registry.
+**Integrity kept in the database:** both ends exist and are in the same
+workspace, no self-links, unique per (source, target, kind), plus partial
+indexes for kind rules the database must guarantee (one POV per scene).
+**Rejected:** a join table per pair of types (doesn't scale to the Story
+Graph); a polymorphic `(type, id)` pair (no FK integrity); kinds as a
+Postgres enum (every new kind would need a migration).
+
+### 34. Structure explicit, associations as connections — Accepted (M2)
+
+Book → Part → Chapter → Scene, series → books, a relationship's two
+characters, and pen names are dedicated FKs. Flexible associations are
+connections: Character ↔ Scene appearances (with a role), Note → anything,
+Relationship → Scene moments, Idea → anything, Related ↔ anything; later
+Task → story item, Research → Scene, Inspiration → Character, Song → Scene.
+**Changed from the M0 plan:** scene appearances were going to be a dedicated
+`scene_characters` table; they are now `appears_in` connections with a
+`role` attribute, per the Universal Connections direction. The cost (role in
+JSON rather than a column) is covered by registry validation and the POV
+partial index.
+
+### 35. Relationships are story nodes with a structural pair — Accepted (M2)
+
+A relationship is a node with explicit `character_a_id`/`character_b_id`
+(ordered pair, unique), not a character ↔ character connection. **Why:** a
+relationship has its own content (type, description) and its own links (the
+scenes where it develops, notes about it, and in M3 a romance arc). Only a
+node can be the target of connections. Free-form character links ("rivals
+at school") remain possible as `related` connections.
+
+### 36. Undirected connections are stored once per pair — Accepted (M2)
+
+`related` is stored with `source_id < target_id`, so it can't be duplicated
+from the other side. Directed kinds offered from the target's side (e.g.
+adding a character from a scene) are stored source → target.
+
+### 37. Connections to trashed objects are hidden, not deleted — Accepted (M2)
+
+Trashing an object hides its connections everywhere (visibility rules per
+kind, shared by every reader); restoring brings them back. Only "delete
+forever" removes them, via the FK cascade. Removing a connection never
+touches either object.
+
+### 38. Notes have conflict protection but no version history yet — Proposed (M2)
+
+Notes save like scenes (autosave, versioned, stale saves refused) but don't
+keep revisions. Scene history is the author-critical case. **Open question
+for approval:** should notes get history too (same revision model)?
+
+### 39. History, Trash and Archive are separate and never auto-pruned — Accepted (M2)
+
+Version history (revisions) is kept indefinitely, including named versions
+and future publication snapshots; the Trash keeps items until the author
+deletes them; archiving hides without deleting. Any future retention
+feature must be opt-in and per author.
+
+### 40. Book-level publication identity: extension point only — Accepted (M2)
+
+Series → pen name → books stays the rule, and changing a series' pen name
+moves its books. The planned override is per **edition**
+(`editions.pen_name_id`, v1.1): publication-specific, without breaking the
+series rule for the manuscript. Not built.
+
+### 41. Client components never import domain entries; services are `server-only` — Accepted (M2)
+
+Found when a client component imported a registry constant from a module's
+domain entry and pulled the Postgres driver into the browser bundle (build
+error). Client-safe constants are exported from `ui` entries, and every
+service imports `server-only`, so any future leak fails the build with an
+explicit message.
+
+### 42. One rich-text editor component — Accepted (M2)
+
+Autosave, conflict handling, Ctrl/Cmd+S and the leave-page warning live in
+`components/editor/rich-text-editor.tsx`; scenes and notes wrap it with
+their own save action.

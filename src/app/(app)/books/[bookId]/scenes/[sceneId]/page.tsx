@@ -14,6 +14,10 @@ import {
   SceneEditor,
   trashSceneAction,
 } from "@/modules/manuscript/ui";
+import { SceneCast } from "@/modules/characters/ui";
+import { listConnections } from "@/modules/connections";
+import { ConnectionsPanel } from "@/modules/connections/ui";
+import { NewNoteDialog } from "@/modules/notes/ui";
 import { requireAuthorContext } from "@/server/context";
 import { orNotFound } from "@/server/not-found";
 
@@ -28,10 +32,19 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ScenePage({ params }: Props) {
   const { bookId, sceneId } = await params;
   const ctx = await requireAuthorContext();
-  const [book, editor] = await Promise.all([
+  const [book, editor, connections] = await Promise.all([
     orNotFound(getBook(ctx, bookId)),
     orNotFound(getSceneForEditor(ctx, sceneId)),
+    orNotFound(listConnections(ctx, sceneId)),
   ]);
+  const cast = connections
+    .filter((c) => c.kind === "appears_in")
+    .map((c) => ({
+      connectionId: c.id,
+      characterId: c.other.id,
+      name: c.other.title,
+      role: c.attribute ?? "PRESENT",
+    }));
   const { scene, tree, previous, next } = editor;
   if (scene.bookId !== bookId) notFound();
   const location = [scene.chapter.part?.title, scene.chapter.title].filter(Boolean).join(" › ");
@@ -74,6 +87,7 @@ export default async function ScenePage({ params }: Props) {
           status={scene.status}
           synopsis={scene.synopsis}
         />
+        <SceneCast sceneId={scene.id} cast={cast} />
         <SceneEditor
           key={scene.id}
           sceneId={scene.id}
@@ -109,6 +123,29 @@ export default async function ScenePage({ params }: Props) {
             </Link>
           )}
         </nav>
+
+        <div className="rounded-xl border border-border bg-surface p-4">
+          <div>
+            <ConnectionsPanel
+              nodeId={scene.id}
+              nodeKind="SCENE"
+              connections={connections}
+              heading="Notes & links"
+              hideKinds={["appears_in"]}
+              emptyText="Notes, research, relationship moments and other links for this scene."
+              actions={
+                <NewNoteDialog
+                  about={{ id: scene.id, title: scene.title }}
+                  trigger={
+                    <Button variant="outline" size="sm">
+                      New note
+                    </Button>
+                  }
+                />
+              }
+            />
+          </div>
+        </div>
       </article>
     </div>
   );
