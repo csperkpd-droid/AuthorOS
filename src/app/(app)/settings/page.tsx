@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -40,22 +41,17 @@ export default async function SettingsPage() {
         <CardHeader>
           <CardTitle>Pen names</CardTitle>
           <CardDescription>
-            The names you publish under. Books and series will be assigned a pen name.
+            {penNames.length === 1 ? "1 pen name" : `${penNames.length} pen names`}. Default:{" "}
+            {penNames.find((p) => p.isDefault)?.name}.
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <ul className="divide-y divide-border">
-            {penNames.map((p) => (
-              <li key={p.id} className="flex items-center justify-between py-2 text-sm">
-                <span>{p.name}</span>
-                {p.isDefault && (
-                  <span className="rounded bg-muted px-2 py-0.5 text-xs text-muted-foreground">
-                    Default
-                  </span>
-                )}
-              </li>
-            ))}
-          </ul>
+          <Link
+            href="/identities"
+            className="text-sm text-primary underline-offset-4 hover:underline"
+          >
+            Manage pen names
+          </Link>
         </CardContent>
       </Card>
     </div>

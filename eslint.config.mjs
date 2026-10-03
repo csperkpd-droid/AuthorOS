@@ -7,7 +7,8 @@ const eslintConfig = defineConfig([
   ...nextTs,
   {
     // Module boundaries (docs/ARCHITECTURE.md): other code may only import a
-    // module through its public index, never its internals.
+    // module through its public entry points, never its internals:
+    // `index.ts` (domain API, server-safe) and `ui.ts` (components, actions).
     files: ["src/**/*.{ts,tsx}"],
     rules: {
       "no-restricted-imports": [
@@ -15,8 +16,9 @@ const eslintConfig = defineConfig([
         {
           patterns: [
             {
-              group: ["@/modules/*/*"],
-              message: "Import modules through their public index: '@/modules/<name>'.",
+              group: ["@/modules/*/*", "!@/modules/*/ui"],
+              message:
+                "Import modules through their public entry points: '@/modules/<name>' (domain) or '@/modules/<name>/ui' (components, actions).",
             },
           ],
         },
@@ -38,8 +40,9 @@ const eslintConfig = defineConfig([
           ],
           patterns: [
             {
-              group: ["@/modules/*/*"],
-              message: "Import modules through their public index: '@/modules/<name>'.",
+              group: ["@/modules/*/*", "!@/modules/*/ui"],
+              message:
+                "Import modules through their public entry points: '@/modules/<name>' (domain) or '@/modules/<name>/ui' (components, actions).",
             },
             {
               group: ["@/generated/prisma/*"],

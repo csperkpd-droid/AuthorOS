@@ -8,6 +8,8 @@ import {
   Rocket,
   SquareCheck,
   StickyNote,
+  Trash2,
+  UserRound,
   Users,
   Workflow,
   type LucideIcon,
@@ -28,6 +30,8 @@ export type NavItem = {
   icon: LucideIcon;
   description: string;
   availability: Availability;
+  /** Other path prefixes that belong to this section (for the active state). */
+  matches?: string[];
 };
 
 export type NavGroup = { label: string; items: NavItem[] };
@@ -47,8 +51,16 @@ export const navigation: NavGroup[] = [
         label: "Library",
         href: "/library",
         icon: Library,
-        description: "Series, books, chapters and scenes, with the manuscript editor.",
-        availability: { status: "planned", milestone: "Milestone 1" },
+        description: "Series, books, parts, chapters and scenes, with the manuscript editor.",
+        availability: { status: "available" },
+        matches: ["/books"],
+      },
+      {
+        label: "Pen names",
+        href: "/identities",
+        icon: UserRound,
+        description: "Your author identities and the work published under each.",
+        availability: { status: "available" },
       },
       {
         label: "Ideas",
@@ -108,6 +120,13 @@ export const navigation: NavGroup[] = [
         icon: CalendarDays,
         description: "Deadlines, events and writing sessions in one view.",
         availability: { status: "planned", milestone: "Milestone 4" },
+      },
+      {
+        label: "Trash",
+        href: "/trash",
+        icon: Trash2,
+        description: "Deleted work, kept until you restore it or delete it forever.",
+        availability: { status: "available" },
       },
       {
         label: "Timeline",

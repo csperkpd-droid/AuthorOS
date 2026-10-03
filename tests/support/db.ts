@@ -16,3 +16,11 @@ export async function createUser(
 ) {
   return db.user.create({ data: { email, name } });
 }
+
+/** A signed-up author with a workspace, ready to pass to services. */
+export async function createAuthor(name = "Test Author") {
+  const { ensurePersonalWorkspace } = await import("@/modules/workspaces");
+  const user = await createUser(undefined, name);
+  const membership = await ensurePersonalWorkspace(user);
+  return { userId: user.id, ...membership };
+}

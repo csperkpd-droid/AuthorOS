@@ -4,7 +4,7 @@ import { redirect } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { isGoogleEnabled } from "@/lib/auth";
 import { safeCallbackUrl } from "@/lib/auth/callback-url";
-import { SignInForm } from "@/modules/auth";
+import { SignInForm } from "@/modules/auth/ui";
 import { getSessionUser } from "@/server/context";
 
 export const metadata: Metadata = { title: "Sign in" };

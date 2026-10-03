@@ -15,6 +15,8 @@ export type AuthorContext = {
   userId: string;
   workspaceId: string;
   role: WorkspaceRole;
+  /** The pen name the author is working as; null = all identities. */
+  activePenNameId: string | null;
 };
 
 export type SessionUser = {

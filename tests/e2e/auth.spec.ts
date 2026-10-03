@@ -30,9 +30,12 @@ test("first sign-in creates a workspace with a default pen name", async ({ page 
   await expect(page).toHaveURL(/\/dashboard$/);
   await expect(page.getByText(`${handle}'s workspace`)).toBeVisible();
 
-  await page.goto("/settings");
-  const penNames = page.getByRole("listitem").filter({ hasText: "Default" });
-  await expect(penNames).toHaveText(new RegExp(handle));
+  await page.goto("/identities");
+  await expect(
+    page
+      .getByRole("list", { name: "Pen names" })
+      .getByRole("heading", { name: new RegExp(`${handle}.*Default`) }),
+  ).toBeVisible();
 });
 
 test("rejects an invalid email without sending a link", async ({ page }) => {

@@ -6,8 +6,11 @@
 // - Tables and columns are snake_case in Postgres, camelCase in Prisma.
 // - Creative content gets soft delete (`deletedAt`) so authors can restore from Trash.
 //
-// Milestone 0 defines the foundation only: identity, tenancy and pen names.
-// Domain tables (series, books, scenes, characters…) arrive with their milestones.
+// - Story objects share one identity space: `story_nodes` (the Story Graph
+//   extension point). Each series/book/part/chapter/scene row's primary key is
+//   also a story node id.
+// - References to rows in the same workspace use composite foreign keys that
+//   include `workspace_id`, so the database rejects cross-workspace links.
 
 generator client {
   provider = "prisma-client"
@@ -32,6 +35,7 @@ model User {
   accounts    Account[]
   sessions    Session[]
   memberships WorkspaceMember[]
+  revisions   SceneRevision[]
 
   @@map("users")
 }
@@ -90,8 +94,9 @@ model Workspace {
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
-  members  WorkspaceMember[]
-  penNames PenName[]
+  members    WorkspaceMember[]
+  penNames   PenName[]
+  storyNodes StoryNode[]
 
   @@map("workspaces")
 }
@@ -105,13 +110,16 @@ enum WorkspaceRole {
 }
 
 model WorkspaceMember {
-  workspaceId String        @map("workspace_id") @db.Uuid
-  userId      String        @map("user_id") @db.Uuid
-  role        WorkspaceRole @default(OWNER)
-  createdAt   DateTime      @default(now()) @map("created_at")
+  workspaceId     String        @map("workspace_id") @db.Uuid
+  userId          String        @map("user_id") @db.Uuid
+  role            WorkspaceRole @default(OWNER)
+  /// The identity this member is currently working as. Null = all identities.
+  activePenNameId String?       @map("active_pen_name_id") @db.Uuid
+  createdAt       DateTime      @default(now()) @map("created_at")
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  activePenName PenName?  @relation(fields: [activePenNameId], references: [id], onDelete: SetNull)
 
   @@id([workspaceId, userId])
   @@index([userId])
@@ -120,10 +128,11 @@ model WorkspaceMember {
 
 // ─── Author identities ──────────────────────────────────────────────────────
 
-/// A name the author publishes under. Books, series and publishing records
-/// reference a pen name; the MVP creates one default per workspace.
-/// At most one default per workspace is enforced by a partial unique index
-/// (see migration `init_foundation`).
+/// An author identity the workspace publishes under. Series and books belong
+/// to exactly one pen name. Pen names are archived, never deleted, so the
+/// books written under them keep their attribution.
+/// Constraints (hand-written in migrations): at most one default per
+/// workspace; the default cannot be archived.
 model PenName {
   id          String    @id @default(uuid(7)) @db.Uuid
   workspaceId String    @map("workspace_id") @db.Uuid
@@ -132,10 +141,230 @@ model PenName {
   isDefault   Boolean   @default(false) @map("is_default")
   createdAt   DateTime  @default(now()) @map("created_at")
   updatedAt   DateTime  @updatedAt @map("updated_at")
-  deletedAt   DateTime? @map("deleted_at")
+  archivedAt  DateTime? @map("archived_at")
 
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  workspace     Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  series        Series[]
+  books         Book[]
+  activeMembers WorkspaceMember[]
 
+  @@unique([id, workspaceId])
   @@index([workspaceId])
   @@map("pen_names")
+}
+
+// ─── Story graph ────────────────────────────────────────────────────────────
+
+enum StoryNodeKind {
+  SERIES
+  BOOK
+  PART
+  CHAPTER
+  SCENE
+
+  @@map("story_node_kind")
+}
+
+/// The universal identity of every story object. Typed tables (books,
+/// scenes…) use their node id as their primary key, so future cross-cutting
+/// features (connections, tags, comments, search) can reference any object
+/// with a real foreign key. A trigger deletes the node when its row is deleted.
+model StoryNode {
+  id          String        @id @default(uuid(7)) @db.Uuid
+  workspaceId String        @map("workspace_id") @db.Uuid
+  kind        StoryNodeKind
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  series    Series?
+  book      Book?
+  part      Part?
+  chapter   Chapter?
+  scene     Scene?
+
+  @@unique([id, workspaceId])
+  @@index([workspaceId, kind])
+  @@map("story_nodes")
+}
+
+// ─── Library: series and books ──────────────────────────────────────────────
+
+model Series {
+  id          String    @id @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  penNameId   String    @map("pen_name_id") @db.Uuid
+  title       String
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  node    StoryNode @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  penName PenName   @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
+  books   Book[]
+
+  @@unique([id, workspaceId])
+  @@index([workspaceId])
+  @@index([penNameId])
+  @@map("series")
+}
+
+enum BookStatus {
+  PLANNING
+  DRAFTING
+  REVISING
+  COMPLETE
+  PUBLISHED
+
+  @@map("book_status")
+}
+
+model Book {
+  id              String     @id @db.Uuid
+  workspaceId     String     @map("workspace_id") @db.Uuid
+  penNameId       String     @map("pen_name_id") @db.Uuid
+  seriesId        String?    @map("series_id") @db.Uuid
+  /// Fractional-index key for the book's place in its series (C collation).
+  seriesPosition  String?    @map("series_position")
+  title           String
+  subtitle        String?
+  description     String?
+  status          BookStatus @default(PLANNING)
+  targetWordCount Int?       @map("target_word_count")
+  createdAt       DateTime   @default(now()) @map("created_at")
+  updatedAt       DateTime   @updatedAt @map("updated_at")
+  deletedAt       DateTime?  @map("deleted_at")
+
+  node     StoryNode @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  penName  PenName   @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
+  series   Series?   @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  parts    Part[]
+  chapters Chapter[]
+  scenes   Scene[]
+
+  @@unique([id, workspaceId])
+  @@index([workspaceId])
+  @@index([penNameId])
+  @@index([seriesId])
+  @@map("books")
+}
+
+// ─── Manuscript structure: Book → (Part) → Chapter → Scene ─────────────────
+//
+// Parts are optional. A book's top level is an ordered mix of parts and
+// part-less chapters (e.g. Prologue, Part One, Part Two, Epilogue) sharing one
+// position space. `position` columns are fractional-index keys (C collation).
+
+model Part {
+  id          String    @id @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  bookId      String    @map("book_id") @db.Uuid
+  title       String
+  position    String
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  node     StoryNode @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  book     Book      @relation(fields: [bookId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  chapters Chapter[]
+
+  @@unique([id, workspaceId])
+  @@unique([id, bookId])
+  @@index([bookId])
+  @@map("parts")
+}
+
+model Chapter {
+  id          String    @id @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  bookId      String    @map("book_id") @db.Uuid
+  /// Null = the chapter sits at the book's top level.
+  partId      String?   @map("part_id") @db.Uuid
+  title       String
+  position    String
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  node   StoryNode @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  book   Book      @relation(fields: [bookId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  part   Part?     @relation(fields: [partId], references: [id], onDelete: Cascade)
+  scenes Scene[]
+
+  @@unique([id, workspaceId])
+  @@unique([id, bookId])
+  @@index([bookId])
+  @@index([partId])
+  @@map("chapters")
+}
+
+enum SceneStatus {
+  OUTLINED
+  DRAFT
+  REVISED
+  FINAL
+
+  @@map("scene_status")
+}
+
+model Scene {
+  id          String      @id @db.Uuid
+  workspaceId String      @map("workspace_id") @db.Uuid
+  bookId      String      @map("book_id") @db.Uuid
+  chapterId   String      @map("chapter_id") @db.Uuid
+  title       String
+  position    String
+  status      SceneStatus @default(DRAFT)
+  synopsis    String?
+  /// ProseMirror (Tiptap) document JSON. Null = empty scene.
+  content     Json?
+  /// Plain text derived from `content`, for search and word counts.
+  contentText String      @default("") @map("content_text")
+  wordCount   Int         @default(0) @map("word_count")
+  /// Incremented on every content save; used to detect conflicting edits.
+  version     Int         @default(0)
+  createdAt   DateTime    @default(now()) @map("created_at")
+  updatedAt   DateTime    @updatedAt @map("updated_at")
+  deletedAt   DateTime?   @map("deleted_at")
+
+  node      StoryNode       @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  book      Book            @relation(fields: [bookId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  chapter   Chapter         @relation(fields: [chapterId, bookId], references: [id, bookId], onDelete: Cascade)
+  revisions SceneRevision[]
+
+  @@unique([id, workspaceId])
+  @@index([bookId])
+  @@index([chapterId])
+  @@map("scenes")
+}
+
+enum RevisionSource {
+  AUTOSAVE
+  MANUAL
+  BEFORE_RESTORE
+  AI_ACCEPTED
+  IMPORT
+
+  @@map("revision_source")
+}
+
+/// Append-only snapshots of earlier scene content.
+model SceneRevision {
+  id          String         @id @default(uuid(7)) @db.Uuid
+  workspaceId String         @map("workspace_id") @db.Uuid
+  sceneId     String         @map("scene_id") @db.Uuid
+  content     Json?
+  contentText String         @map("content_text")
+  wordCount   Int            @map("word_count")
+  source      RevisionSource
+  label       String?
+  createdById String?        @map("created_by_id") @db.Uuid
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  scene     Scene @relation(fields: [sceneId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([sceneId, createdAt(sort: Desc)])
+  @@map("scene_revisions")
 }

@@ -78,7 +78,7 @@ from user-owned to workspace-owned data later means rewriting every query
 and migrating every row; adding it now costs one table and one join.
 Collaboration later becomes additive (members, invitations, role checks).
 
-### 9. Pen names are first-class from day one — Accepted (M0)
+### 9. Pen names are first-class from day one — Accepted (M0), scope extended by #25
 
 A `pen_names` table exists in M0; each workspace gets a default pen name;
 series, books and editions will reference one. **MVP scope:** one default
@@ -98,7 +98,7 @@ Models map to snake_case tables and columns, so hand-written SQL (search,
 reports, CHECK constraints) is idiomatic Postgres. Auth.js OAuth token fields
 keep the adapter's names.
 
-### 12. Explicit foreign keys over polymorphic links — Accepted (M0)
+### 12. Explicit foreign keys over polymorphic links — Superseded in part by #21/#22 (M1)
 
 Notes and tasks attach to entities via nullable FKs plus a CHECK constraint
 (an "exclusive arc"), not `(entity_type, entity_id)`. **Why:** referential
@@ -111,7 +111,7 @@ service on accept.
 `deleted_at` on everything an author writes or plans; a Trash restores it.
 Authors fear losing work more than they value a tidy database.
 
-### 14. Fractional indexing for ordering — Accepted (planned for M1)
+### 14. Fractional indexing for ordering — Accepted, implemented in M1 (see #28)
 
 Text `position` keys let a drag-and-drop move update one row. **Rejected:**
 integer positions (renumbering siblings on every move causes write
@@ -152,3 +152,112 @@ Integration tests run services against a migrated test database; no ORM
 mocks. End-to-end tests perform the real magic-link sign-in. **Why:** the
 riskiest code (tenancy scoping, constraints, concurrency) is only meaningful
 against Postgres.
+
+---
+
+## Milestone 1
+
+### 21. Story nodes: one identity for every story object — Accepted (M1)
+
+`story_nodes(id, workspace_id, kind)`; series, books, parts, chapters and
+scenes use their node id as primary key (composite FK + kind trigger;
+deleting the row deletes the node). **Why:** the long-term Universal
+Connection layer must link any object to any other (Scene → Song, Research →
+Scene, Character → Location…). With a shared identity it is one
+`connections` table with real foreign keys, instead of a join table per pair
+of types or an unverifiable `(type, id)` pair. **Cost:** one extra insert per
+object, and every typed create goes through `createStoryNode()`.
+**Rejected:** polymorphic `(entity_type, entity_id)` links (no integrity, no
+cascades); building the connections table now (out of MVP scope; the
+extension point is enough).
+
+### 22. Notes and tasks attach through the graph — Accepted (M1, supersedes the M0 plan)
+
+The M0 plan gave notes and tasks an "exclusive arc" of nullable FKs (book,
+chapter, scene, character…). With story nodes, a note is itself a node and
+attaches via a connection, and a task carries one optional `node_id`. This
+covers every current and future object type without schema changes.
+Structural relationships (scene → chapter, scene ↔ character presence) stay
+explicit tables.
+
+### 23. Tenant-safe composite foreign keys — Accepted (M1)
+
+References within a workspace include `workspace_id` in the FK
+(`(pen_name_id, workspace_id) → pen_names(id, workspace_id)`), and a scene's
+chapter FK includes `book_id`. The database rejects cross-workspace or
+cross-book links even if a service check were missed. Optional relations
+(book → series, chapter → part) use plain FKs plus service checks, because
+Prisma cannot model an optional composite relation that shares a required
+column.
+
+### 24. Optional parts share the book's top level with chapters — Accepted (M1)
+
+Book → (Part) → Chapter → Scene. Parts and part-less chapters are ordered
+together at the book level, so a book can be Prologue · Part One · Part Two ·
+Epilogue, or have no parts at all. "Remove part, keep chapters" dissolves a
+part in place. **Rejected:** a mandatory hidden default part (leaks into
+exports and moves); separate position spaces for parts and chapters (can't
+put a prologue before Part One).
+
+### 25. Full pen-name management in M1 — Accepted (M1)
+
+Create, edit, set default, archive/restore, assign series and books, switch
+identity, All Identities view. **Rules:** pen names are archived, never
+deleted (books keep attribution; FKs are `NO ACTION`); the default cannot be
+archived (CHECK constraint); books in a series always use the series' pen
+name, and changing it moves the books (simple and matches how series are
+published; per-edition overrides arrive with Publishing). Branding, links
+and publishing accounts per pen name stay in v1.1.
+
+### 26. Active identity is per member and stored server-side — Accepted (M1)
+
+`workspace_members.active_pen_name_id` (null = all identities), loaded into
+`AuthorContext`. It follows the author across devices and is ready for
+collaborators to have their own. Archiving the active pen name resets it.
+**Rejected:** a cookie (device-specific); a URL parameter (lost on
+navigation).
+
+### 27. Optimistic concurrency for scene content — Accepted (M1)
+
+Each save sends the version it was based on; the server row-locks the scene
+and refuses stale versions; the editor stops and asks the author to reload.
+**Why:** the alternative, last-write-wins, silently destroys text written
+in another tab or device. Real-time co-editing (CRDT/Yjs) is a collaboration
+feature, not MVP.
+
+### 28. Serialized structure creation; server-side default titles — Accepted (M1)
+
+Adding a part, chapter or scene locks its parent row and computes the
+position and default title ("Scene 3") in the same transaction. Found by
+end-to-end tests: a double click produced two "Scene 1"s with equal
+positions when titles were computed client-side.
+
+### 29. Revision checkpoints: 10-minute window, named versions, safe restore — Accepted (M1)
+
+Before overwriting content, the previous content is saved if the last
+revision is older than 10 minutes, so history stays readable without
+snapshotting every keystroke. Authors can save named versions. Restoring
+first saves the current text as `BEFORE_RESTORE`. Retention and pruning are
+deferred until real data shows the need.
+
+### 30. Modules expose a domain entry and a UI entry — Accepted (M1)
+
+`@/modules/<name>` exports services, schemas and labels; `@/modules/<name>/ui`
+exports components and Server Actions. Found when a service import pulled
+Auth.js and React into integration tests. Keeps services runnable in tests,
+jobs and a future API. Lint-enforced.
+
+### 31. Actions return results; the client navigates — Accepted (M1)
+
+Server Actions called from event handlers never `redirect()`: the awaited
+promise never resolves and the client transition stalls (found in end-to-end
+tests: creating a book didn't navigate). Actions return ids; components call
+`router.push`. All action bodies go through `runAction()` for uniform errors.
+
+### 32. Trash shows the topmost deleted item; delete-forever is node deletion — Accepted (M1)
+
+Soft delete is per row; the Trash lists an item only if everything above it
+is live, and restoring an item brings back its contents except things trashed
+separately before it. Permanent deletion deletes the story node and relies on
+FK cascades and triggers. Automatic purge after N days is deferred (needs
+background jobs).

@@ -14,7 +14,9 @@ Read `docs/ARCHITECTURE.md` and `docs/DATABASE.md` before changing structure or 
 
 - **Product rules:** AI never writes creative content (only `Suggestion` rows). Creative content uses soft delete and revisions.
 - **Layers:** `src/app` routes are transport only. Business logic lives in `src/modules/<name>/service.ts`; services take `AuthorContext` first and scope every query by `ctx.workspaceId`.
-- **Module boundaries:** import other modules only via `@/modules/<name>` (enforced by ESLint). Routes and components never import `@/lib/db` or Prisma.
+- **Module boundaries:** import other modules only via `@/modules/<name>` (domain: services, schemas, labels) or `@/modules/<name>/ui` (components, Server Actions); enforced by ESLint. Routes and components never import `@/lib/db` or Prisma.
+- **Story objects** get their id from `createStoryNode()` in the same transaction (see Story Graph in `docs/ARCHITECTURE.md`). Permanent deletion = deleting the node.
+- **Server Actions** wrap their body in `runAction()`, return ids instead of calling `redirect()`, and let the client navigate.
 - **Auth:** call `requireAuthorContext()` in every page, action and route handler that touches author data. Don't rely on layouts or `proxy.ts` for authorization.
 - **Schema:** follow `docs/DATABASE.md` conventions (UUIDv7, snake_case maps, `workspace_id` everywhere, `deleted_at` on creative content). Record notable choices in `docs/DECISIONS.md`.
 - **Navigation:** add new sections to `src/config/navigation.ts`.

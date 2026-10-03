@@ -1,26 +1,18 @@
 import { expect, test } from "@playwright/test";
 
-import { uniqueEmail, waitForMagicLink } from "./support/outbox";
+import { signUp } from "./support/auth";
 
 test.beforeEach(async ({ page }) => {
-  const email = uniqueEmail();
-  await page.goto("/sign-in");
-  await page.getByLabel("Email").fill(email);
-  await page.getByRole("button", { name: "Email me a sign-in link" }).click();
-  await page.goto(await waitForMagicLink(email));
-  await expect(page).toHaveURL(/\/dashboard$/);
+  await signUp(page);
 });
 
 test("navigates to a planned section", async ({ page, isMobile }) => {
   if (isMobile) await page.getByRole("button", { name: "Open menu" }).click();
-  await page
-    .getByRole("navigation", { name: "Main" })
-    .getByRole("link", { name: /Library/ })
-    .click();
+  await page.getByRole("navigation", { name: "Main" }).getByRole("link", { name: /Ideas/ }).click();
 
-  await expect(page).toHaveURL(/\/library$/);
-  await expect(page.getByRole("heading", { name: "Library" })).toBeVisible();
-  await expect(page.getByText("Coming in Milestone 1")).toBeVisible();
+  await expect(page).toHaveURL(/\/ideas$/);
+  await expect(page.getByRole("heading", { name: "Ideas" })).toBeVisible();
+  await expect(page.getByText("Coming in Milestone 2")).toBeVisible();
 });
 
 test("has no horizontal overflow", async ({ page }) => {

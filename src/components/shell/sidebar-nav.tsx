@@ -19,7 +19,9 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
           <ul className="space-y-0.5">
             {group.items.map((item) => {
               const Icon = item.icon;
-              const active = pathname === item.href || pathname.startsWith(item.href + "/");
+              const active = [item.href, ...(item.matches ?? [])].some(
+                (href) => pathname === href || pathname.startsWith(href + "/"),
+              );
               const badge = availabilityLabel(item.availability);
               const isLater = item.availability.status === "later";
               const content = (

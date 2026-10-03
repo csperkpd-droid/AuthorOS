@@ -3,8 +3,9 @@
 AuthorOS is a **modular monolith**: one Next.js application, one PostgreSQL
 database, with the code split into domain modules that have strict boundaries.
 
-> Status: Milestone 0 (foundation). Sections marked _planned_ describe the
-> agreed design for later milestones so that early code doesn't block it.
+> Status: Milestone 1 (writing loop + author identities). Sections marked
+> _planned_ describe the agreed design for later milestones so that early code
+> doesn't block it.
 
 ## Principles → mechanisms
 
@@ -57,22 +58,52 @@ Planned additions, deliberately not built yet:
 Each domain area is a module with the same layout:
 
 ```
-src/modules/books/
-├─ index.ts        # the public API — the only file other code may import
+src/modules/library/
+├─ index.ts        # public DOMAIN API: services, schemas, labels (server-safe)
+├─ ui.ts           # public UI API: components and Server Actions
 ├─ service.ts      # business logic; every function takes AuthorContext first
-├─ actions.ts      # "use server" actions (thin: validate → service → revalidate)
-├─ schemas.ts      # Zod input schemas, shared by actions and forms
+├─ actions.ts      # "use server" actions (thin: context → service → result)
+├─ schemas.ts      # Zod input schemas, shared by services and forms
+├─ labels.ts       # display labels for enums (client-safe)
 └─ components/     # UI owned by this module
 ```
 
-- Lint rule: imports of `@/modules/<name>/<anything>` are errors; use
-  `@/modules/<name>`. Inside a module, use relative imports.
+- **Two entry points.** Other code imports `@/modules/<name>` (domain) or
+  `@/modules/<name>/ui` (UI). Anything deeper is a lint error. Inside a
+  module, use relative imports. The split keeps services free of UI and
+  framework code, so services, tests and future jobs never load React or
+  Auth.js just to call a service.
 - Services never import from `next/*`, so they run anywhere: tests, jobs,
   scripts, a future public API.
 - Modules depend on each other only through public APIs, and only "downward"
   (e.g. `manuscript` may use `books`; `books` must not use `manuscript`).
 
-Current modules: `auth` (sign-in UI and actions), `workspaces`, `pen-names`.
+Current modules:
+
+| Module        | Owns                                                                                                                |
+| ------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `auth`        | Sign-in form and actions (UI only).                                                                                 |
+| `workspaces`  | Personal workspace bootstrap, membership lookup.                                                                    |
+| `pen-names`   | Author identities: create/edit/default/archive/restore, the active identity, the identity switcher.                 |
+| `story-graph` | Story node creation and permanent deletion (the Story Graph extension point).                                       |
+| `library`     | Series and books; pen-name rules for them; series order.                                                            |
+| `manuscript`  | Parts, chapters, scenes (structure, ordering, moves), scene content, autosave, revisions, the binder and editor UI. |
+| `trash`       | Listing, restoring and permanently deleting trashed story objects of every type.                                    |
+
+Dependency direction: `manuscript` → `library` → `pen-names` → `workspaces`;
+`trash` → `library`, `story-graph`. Nothing depends on `trash` or on UI.
+
+### Server Actions
+
+- Every action body runs through `runAction()` (`src/server/action.ts`): it
+  returns `{ ok: true, data }` or `{ ok: false, error, code }` for validation
+  and domain errors (`lib/errors.ts`), and refreshes the current route on
+  success. Unexpected errors propagate.
+- **Actions called from event handlers never `redirect()`.** A redirecting
+  action's promise never resolves, which stalls the client transition that
+  awaits it. Actions return ids; the client navigates (`router.push`).
+- Autosave opts out of the refresh so the editor is never re-rendered under
+  the author.
 
 ### Infrastructure (`src/lib`, `src/server`, `src/config`)
 
@@ -136,21 +167,84 @@ User ──< WorkspaceMember >── Workspace ──< PenName
 - The MVP gives each user one personal workspace and shows no workspace UI.
   The "primary membership" rule in `findPrimaryMembership()` is the single
   place a workspace switcher would replace.
-- **Pen names** belong to the workspace. Books and series will reference a pen
-  name. Data is not separated per pen name: one author's characters and notes
-  can serve several identities.
+- **Pen names** belong to the workspace; series and books reference one (see
+  Author identities below). Data is not separated per pen name: one author's
+  characters and notes can serve several identities.
 
-## Manuscript editor (_planned, Milestone 1_)
+## Author identities (pen names)
 
-- Tiptap (ProseMirror). Scene content is stored as ProseMirror JSON, plus a
-  derived plain-text column used for search and word counts.
-- Autosave goes through a debounced Server Action. Revisions are snapshots
-  taken on a time and size threshold and before any destructive or
-  AI-accepted change.
-- Reordering uses fractional-index `position` keys, so moving a scene
-  updates only that row.
+- A workspace has one or more **pen names**; exactly one is the default
+  (database-enforced). Every series and book belongs to exactly one pen name.
+- **Books in a series always use the series' pen name.** Changing a series'
+  pen name moves its books with it; a book's own pen name applies only when
+  it is standalone. (Per-edition overrides arrive with Publishing in v1.1.)
+- **Archive, don't delete.** Archived pen names disappear from pickers and
+  the switcher; their work keeps its attribution. The default can't be
+  archived.
+- **Active identity** ("Writing as", sidebar): stored per member
+  (`workspace_members.active_pen_name_id`), carried in `AuthorContext`. It
+  narrows the Library and dashboard and is the pen name for new work. "All
+  identities" (null) shows everything, grouped by pen name. The Pen names page
+  is the All Identities view: every identity with its series and books.
+
+## Manuscript
+
+**Structure: Book → (Part) → Chapter → Scene.** Parts are optional. A book's
+top level is an ordered mix of parts and part-less chapters sharing one
+position space (e.g. Prologue · Part One · Part Two · Epilogue). "Remove
+part, keep chapters" dissolves a part in place.
+
+**Ordering.** Fractional-index keys (`lib/ordering.ts`) in `COLLATE "C"`
+columns: a move rewrites one row (siblings are re-keyed only in the rare
+case of a key collision). Creating structure locks the parent row, so
+concurrent adds (double clicks, two tabs) get distinct positions and default
+titles ("Chapter 3", "Scene 2").
+
+**Binder.** Drag-and-drop (mouse, touch, keyboard) reorders within a list;
+"Move to…" moves a scene to another chapter or a chapter into/out of a part.
+Screen-reader announcements name items by title.
+
+**Editor.** Tiptap (ProseMirror). Scene content is ProseMirror JSON plus a
+server-derived plain-text column (search, word counts); the server validates
+the document shape and size.
+
+**Autosave and conflicts.** The editor saves ~1 s after typing stops (and on
+blur and Ctrl/Cmd+S), one save in flight at a time, retrying on failure.
+Every save carries the version it was based on; the server row-locks the
+scene and refuses a stale version. The editor then stops and asks the author
+to reload: **edits made elsewhere are never silently overwritten.** Leaving
+with unsaved text triggers the browser's warning.
+
+**Revisions.** Before content is overwritten, the previous content is
+checkpointed if the last revision is older than 10 minutes. Authors can also
+save named versions. Restoring first saves the current text as a "before
+restore" revision, so restores are always undoable.
+
+**Trash.** Series, books, parts, chapters and scenes are soft-deleted. The
+Trash lists the topmost trashed item of each branch; restoring brings back
+its contents (except things trashed separately). "Delete forever" removes
+the item, its descendants and their revisions.
+
+## Story Graph (extension point for Universal Connections)
+
+Every story object has a row in `story_nodes` (id, workspace, kind), and its
+typed row (series, book, part, chapter, scene) uses that id as its primary
+key, enforced by a composite foreign key and a kind-checking trigger. A
+trigger deletes the node when the typed row is deleted, so the graph never
+holds orphans.
+
+This gives every object one universal, foreign-key-addressable identity.
+The planned **Universal Connection layer** (Character → Inspiration, Scene →
+Song, Research → Scene, Plot Thread → Scene, Note → Romance Arc…) becomes a
+single `connections` table between two `story_nodes`, with no per-type join
+tables. New object types (characters, locations, research, songs) join the
+graph by getting a node. Explicit foreign keys remain for structural
+relationships (a scene's chapter), where the type is fixed and cascades
+matter. See [DATABASE.md](DATABASE.md#universal-connections-target-design).
 
 ## AI boundary (_planned, v1.2_)
+
+Revision `source` already distinguishes `AI_ACCEPTED` from author edits.
 
 - `src/modules/ai` builds prompts from read-only service calls and stores the
   output as `Suggestion` rows (`PENDING`).
@@ -176,11 +270,11 @@ User ──< WorkspaceMember >── Workspace ──< PenName
 
 ## Testing
 
-| Layer       | Tool                   | What                                                                                                    |
-| ----------- | ---------------------- | ------------------------------------------------------------------------------------------------------- |
-| Unit        | Vitest                 | Pure functions (e.g. `safeCallbackUrl`). Co-located `*.test.ts`.                                        |
-| Integration | Vitest + real Postgres | Services against `TEST_DATABASE_URL` (migrated in global setup, truncated per test). No database mocks. |
-| End-to-end  | Playwright             | Real magic-link sign-in through the dev outbox, on desktop and mobile viewports.                        |
+| Layer       | Tool                   | What                                                                                                                                                                                                            |
+| ----------- | ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Unit        | Vitest                 | Pure functions (e.g. `safeCallbackUrl`). Co-located `*.test.ts`.                                                                                                                                                |
+| Integration | Vitest + real Postgres | Services against `TEST_DATABASE_URL` (migrated in global setup, truncated per test). No database mocks. Includes database-level guarantees (cross-workspace FKs, node triggers, concurrency).                   |
+| End-to-end  | Playwright             | Real magic-link sign-in through the dev outbox; the full writing loop (structure, keyboard drag-and-drop, autosave, history, conflicts, Trash, series, identities) on desktop, and writing on a phone viewport. |
 
 CI (`.github/workflows/ci.yml`) runs format check, lint, typecheck,
 migrations, unit/integration tests, production build, and end-to-end tests

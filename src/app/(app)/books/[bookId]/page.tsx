@@ -1,0 +1,133 @@
+import { PenLine, Settings2, Trash2 } from "lucide-react";
+import type { Metadata } from "next";
+import Link from "next/link";
+
+import { PageHeader } from "@/components/shell/page-header";
+import { Badge } from "@/components/ui/badge";
+import { Button, buttonVariants } from "@/components/ui/button";
+import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { Progress } from "@/components/ui/progress";
+import { formatCount, formatWords } from "@/lib/format";
+import { BOOK_STATUS_LABELS, getBook, listSeriesOptions } from "@/modules/library";
+import { BookDialog, trashBookAction } from "@/modules/library/ui";
+import { getBookTree } from "@/modules/manuscript";
+import { BinderManager } from "@/modules/manuscript/ui";
+import { listPenNames } from "@/modules/pen-names";
+import { requireAuthorContext } from "@/server/context";
+import { orNotFound } from "@/server/not-found";
+
+export async function generateMetadata({
+  params,
+}: PageProps<"/books/[bookId]">): Promise<Metadata> {
+  const ctx = await requireAuthorContext();
+  const book = await orNotFound(getBook(ctx, (await params).bookId));
+  return { title: book.title };
+}
+
+export default async function BookPage({ params }: PageProps<"/books/[bookId]">) {
+  const { bookId } = await params;
+  const ctx = await requireAuthorContext();
+  const [book, tree, penNames, seriesOptions] = await Promise.all([
+    orNotFound(getBook(ctx, bookId)),
+    orNotFound(getBookTree(ctx, bookId)),
+    listPenNames(ctx),
+    listSeriesOptions(ctx),
+  ]);
+  const firstScene = tree.sceneOrder[0];
+
+  return (
+    <div className="space-y-8">
+      <nav aria-label="Breadcrumb" className="text-sm text-muted-foreground">
+        <Link href="/library" className="hover:text-foreground">
+          Library
+        </Link>
+        {book.series && (
+          <>
+            {" › "}
+            <Link href={`/library/series/${book.series.id}`} className="hover:text-foreground">
+              {book.series.title}
+            </Link>
+          </>
+        )}
+      </nav>
+
+      <PageHeader
+        title={book.title}
+        description={book.subtitle ?? undefined}
+        actions={
+          <div className="flex flex-wrap gap-2">
+            <BookDialog
+              book={book}
+              penNames={penNames.map((p) => ({ id: p.id, name: p.name }))}
+              seriesOptions={seriesOptions}
+              trigger={
+                <Button variant="outline">
+                  <Settings2 />
+                  Details
+                </Button>
+              }
+            />
+            <ConfirmDialog
+              trigger={
+                <Button variant="ghost" aria-label="Move book to Trash">
+                  <Trash2 />
+                </Button>
+              }
+              title={`Move “${book.title}” to the Trash?`}
+              description="The book and its manuscript will be hidden until you restore it from the Trash."
+              confirmLabel="Move to Trash"
+              destructive
+              onConfirm={trashBookAction.bind(null, book.id)}
+              navigateTo="/library"
+            />
+            {firstScene && (
+              <Link href={`/books/${book.id}/scenes/${firstScene.id}`} className={buttonVariants()}>
+                <PenLine />
+                Write
+              </Link>
+            )}
+          </div>
+        }
+      />
+
+      <dl className="grid gap-4 sm:grid-cols-3">
+        <Stat label="Pen name">
+          {book.penName.name}
+          {book.penName.archivedAt && <Badge className="ml-2">Archived</Badge>}
+        </Stat>
+        <Stat label="Status">{BOOK_STATUS_LABELS[book.status]}</Stat>
+        <Stat label="Words">
+          <span>
+            {formatWords(tree.wordCount)}
+            {book.targetWordCount ? ` of ${book.targetWordCount.toLocaleString("en-US")}` : ""}
+          </span>
+          {book.targetWordCount ? (
+            <div className="mt-2">
+              <Progress
+                value={(tree.wordCount / book.targetWordCount) * 100}
+                label="Progress toward target"
+              />
+            </div>
+          ) : null}
+          <span className="mt-1 block text-xs text-muted-foreground">
+            {formatCount(tree.sceneCount, "scene")}
+          </span>
+        </Stat>
+      </dl>
+      {book.description && <p className="max-w-prose text-muted-foreground">{book.description}</p>}
+
+      <BinderManager bookId={book.id} items={tree.items} />
+    </div>
+  );
+}
+
+function Stat({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="rounded-xl border border-border bg-surface p-4">
+      <dt className="text-xs font-medium tracking-wider text-muted-foreground uppercase">
+        {label}
+      </dt>
+      <dd className="mt-1">{children}</dd>
+    </div>
+  );
+}

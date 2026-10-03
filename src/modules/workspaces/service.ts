@@ -1,7 +1,14 @@
 import type { WorkspaceRole } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 
-export type Membership = { workspaceId: string; role: WorkspaceRole };
+export type Membership = {
+  workspaceId: string;
+  role: WorkspaceRole;
+  /** The identity the member is working as; null = all identities. */
+  activePenNameId: string | null;
+};
+
+const membershipSelect = { workspaceId: true, role: true, activePenNameId: true } as const;
 
 type NewAuthor = { id: string; name?: string | null; email: string };
 
@@ -22,7 +29,7 @@ export async function ensurePersonalWorkspace(user: NewAuthor): Promise<Membersh
     const created = await tx.workspaceMember.findFirst({
       where: { userId: user.id },
       orderBy: { createdAt: "asc" },
-      select: { workspaceId: true, role: true },
+      select: membershipSelect,
     });
     if (created) return created;
 
@@ -35,7 +42,7 @@ export async function ensurePersonalWorkspace(user: NewAuthor): Promise<Membersh
       },
       select: { id: true },
     });
-    return { workspaceId: workspace.id, role: "OWNER" as const };
+    return { workspaceId: workspace.id, role: "OWNER" as const, activePenNameId: null };
   });
 }
 
@@ -47,7 +54,7 @@ export async function findPrimaryMembership(userId: string): Promise<Membership 
   return db.workspaceMember.findFirst({
     where: { userId },
     orderBy: { createdAt: "asc" },
-    select: { workspaceId: true, role: true },
+    select: membershipSelect,
   });
 }
 

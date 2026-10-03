@@ -1,7 +1,7 @@
 import { LogOut, Settings } from "lucide-react";
 import Link from "next/link";
 
-import { signOutAction } from "@/modules/auth";
+import { signOutAction } from "@/modules/auth/ui";
 import type { SessionUser } from "@/server/context";
 
 export function UserMenu({ user }: { user: SessionUser }) {
