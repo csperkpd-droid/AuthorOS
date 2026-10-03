@@ -1,0 +1,141 @@
+// AuthorOS database schema.
+//
+// Conventions (see docs/DATABASE.md):
+// - Every domain row is scoped to a Workspace (the tenancy boundary).
+// - Primary keys are UUIDv7 (time-ordered, index friendly, safe to expose).
+// - Tables and columns are snake_case in Postgres, camelCase in Prisma.
+// - Creative content gets soft delete (`deletedAt`) so authors can restore from Trash.
+//
+// Milestone 0 defines the foundation only: identity, tenancy and pen names.
+// Domain tables (series, books, scenes, characters…) arrive with their milestones.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ─── Identity (Auth.js adapter tables) ──────────────────────────────────────
+
+model User {
+  id            String    @id @default(uuid(7)) @db.Uuid
+  name          String?
+  email         String    @unique
+  emailVerified DateTime? @map("email_verified")
+  image         String?
+  createdAt     DateTime  @default(now()) @map("created_at")
+  updatedAt     DateTime  @updatedAt @map("updated_at")
+
+  accounts    Account[]
+  sessions    Session[]
+  memberships WorkspaceMember[]
+
+  @@map("users")
+}
+
+model Account {
+  userId            String   @map("user_id") @db.Uuid
+  type              String
+  provider          String
+  providerAccountId String   @map("provider_account_id")
+  refresh_token     String?
+  access_token      String?
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String?
+  session_state     String?
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id") @db.Uuid
+  expires      DateTime
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@map("sessions")
+}
+
+model VerificationToken {
+  identifier String
+  token      String
+  expires    DateTime
+
+  @@id([identifier, token])
+  @@map("verification_tokens")
+}
+
+// ─── Tenancy ────────────────────────────────────────────────────────────────
+
+/// The ownership boundary for all author data. In the MVP every user gets
+/// exactly one personal workspace; collaboration later adds members to it.
+model Workspace {
+  id        String   @id @default(uuid(7)) @db.Uuid
+  name      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  members  WorkspaceMember[]
+  penNames PenName[]
+
+  @@map("workspaces")
+}
+
+enum WorkspaceRole {
+  OWNER
+  EDITOR
+  VIEWER
+
+  @@map("workspace_role")
+}
+
+model WorkspaceMember {
+  workspaceId String        @map("workspace_id") @db.Uuid
+  userId      String        @map("user_id") @db.Uuid
+  role        WorkspaceRole @default(OWNER)
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@id([workspaceId, userId])
+  @@index([userId])
+  @@map("workspace_members")
+}
+
+// ─── Author identities ──────────────────────────────────────────────────────
+
+/// A name the author publishes under. Books, series and publishing records
+/// reference a pen name; the MVP creates one default per workspace.
+/// At most one default per workspace is enforced by a partial unique index
+/// (see migration `init_foundation`).
+model PenName {
+  id          String    @id @default(uuid(7)) @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  name        String
+  bio         String?
+  isDefault   Boolean   @default(false) @map("is_default")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+
+  @@index([workspaceId])
+  @@map("pen_names")
+}
