@@ -28,7 +28,9 @@ manuscript. Export closes the MVP with the "you own your data" promise.
 Findings and recommendations in
 [ARCHITECTURE-CHECKPOINT.md](ARCHITECTURE-CHECKPOINT.md). Milestone 7
 (Foundations) implemented the approved direction; the v1.1 order is decided
-after Foundations is reviewed (Timeline is the expected next feature).
+after Foundations is reviewed. A second checkpoint after Foundations
+([MVP-CHECKPOINT.md](MVP-CHECKPOINT.md)) audits MVP scope, safety and
+readiness; Timeline stays in v1.1.
 
 ### v1.1: Timeline, publishing, pen-name branding
 

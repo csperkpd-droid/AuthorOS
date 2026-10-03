@@ -18,6 +18,7 @@ everything is connected · built to grow.
 | [ROADMAP.md](docs/ROADMAP.md)                                 | Milestones and post-MVP releases                            |
 | [DECISIONS.md](docs/DECISIONS.md)                             | Architecture decision log                                   |
 | [ARCHITECTURE-CHECKPOINT.md](docs/ARCHITECTURE-CHECKPOINT.md) | Pre-v1.1 review: findings and recommendations               |
+| [MVP-CHECKPOINT.md](docs/MVP-CHECKPOINT.md)                   | Post-Foundations audit: MVP scope, safety, readiness        |
 
 ## Stack
 

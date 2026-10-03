@@ -616,7 +616,7 @@ or the entire workspace**, then a format:
   first-line indents, title page, a chapter per page, `#` between scenes).
 - **Markdown manuscript:** headings for books, parts and chapters, `* * *`
   between scenes.
-- **Standard backup (JSON)** (`authoros.workspace`, version 1, `kind:
+- **Standard backup (JSON)** (`authoros.workspace`, version 2 since M7, `kind:
 "standard"`): the structured backup. Every story object with its original
   id and story-node kind; the hierarchy with positions; scene and note
   content as ProseMirror JSON; characters, relationships with members and
