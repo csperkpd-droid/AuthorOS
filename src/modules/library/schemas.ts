@@ -1,6 +1,7 @@
 import { z } from "zod";
 
 import { BookStatus, HeatLevel } from "@/generated/prisma/enums";
+import { isDateString } from "@/lib/dates";
 
 /** Empty form fields become null. */
 const optionalText = (max: number, label: string) =>
@@ -54,6 +55,12 @@ export const bookInput = z.object({
             .slice(0, 30),
     ),
   heatLevel: z.preprocess((v) => (v === "" ? null : v), z.enum(HeatLevel).nullish()),
+  /** Draft deadline ("YYYY-MM-DD"); empty clears it. Absent = unchanged. */
+  dueOn: z
+    .string()
+    .nullish()
+    .transform((v) => (v === undefined ? undefined : v ? v : null))
+    .refine((v) => v === undefined || v === null || isDateString(v), "Use a valid date."),
 });
 export type BookInput = z.input<typeof bookInput>;
 

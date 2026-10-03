@@ -13,6 +13,7 @@ import { RevisionsDialog } from "@/modules/history/ui";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
 import { NewNoteDialog } from "@/modules/notes/ui";
+import { TaskDialog } from "@/modules/tasks/ui";
 import { beatsForScene } from "@/modules/structure";
 import { SceneBeats } from "@/modules/structure/ui";
 import { requireAuthorContext } from "@/server/context";
@@ -133,14 +134,24 @@ export default async function ScenePage({ params }: Props) {
               hideKinds={["appears_in"]}
               emptyText="Notes, research, relationship moments and other links for this scene."
               actions={
-                <NewNoteDialog
-                  about={{ id: scene.id, title: scene.title }}
-                  trigger={
-                    <Button variant="outline" size="sm">
-                      New note
-                    </Button>
-                  }
-                />
+                <div className="flex flex-wrap gap-2">
+                  <NewNoteDialog
+                    about={{ id: scene.id, title: scene.title }}
+                    trigger={
+                      <Button variant="outline" size="sm">
+                        New note
+                      </Button>
+                    }
+                  />
+                  <TaskDialog
+                    concerns={{ id: scene.id, title: scene.title }}
+                    trigger={
+                      <Button variant="outline" size="sm">
+                        New task
+                      </Button>
+                    }
+                  />
+                </div>
               }
             />
           </div>

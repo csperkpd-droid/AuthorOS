@@ -3,7 +3,10 @@ import Link from "next/link";
 
 import { PageHeader } from "@/components/shell/page-header";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { listPenNames } from "@/modules/pen-names";
+import { getDailyGoal, getTimeZone } from "@/modules/progress";
+import { DailyGoalDialog, TimeZoneSetting } from "@/modules/progress/ui";
 import { getWorkspace } from "@/modules/workspaces";
 import { getSessionUser, requireAuthorContext } from "@/server/context";
 
@@ -11,11 +14,15 @@ export const metadata: Metadata = { title: "Settings" };
 
 export default async function SettingsPage() {
   const ctx = await requireAuthorContext();
-  const [user, workspace, penNames] = await Promise.all([
+  const [user, workspace, penNames, timeZone, goal] = await Promise.all([
     getSessionUser(),
     getWorkspace(ctx.workspaceId),
     listPenNames(ctx),
+    getTimeZone(ctx),
+    getDailyGoal(ctx),
   ]);
+  const zones = Intl.supportedValuesOf("timeZone");
+  if (!zones.includes(timeZone)) zones.unshift(timeZone);
 
   return (
     <div className="space-y-8">
@@ -34,6 +41,26 @@ export default async function SettingsPage() {
             <dt className="text-muted-foreground">Workspace</dt>
             <dd>{workspace.name}</dd>
           </dl>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Writing</CardTitle>
+          <CardDescription>
+            Daily goal: {goal ? `${goal.toLocaleString("en-US")} words` : "none"}.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <TimeZoneSetting timeZone={timeZone} zones={zones} />
+          <DailyGoalDialog
+            goal={goal}
+            trigger={
+              <Button variant="outline" size="sm">
+                {goal ? "Change daily goal" : "Set a daily goal"}
+              </Button>
+            }
+          />
         </CardContent>
       </Card>
 

@@ -1,16 +1,21 @@
 "use server";
 
+import type { ArcRole } from "@/generated/prisma/enums";
 import { runAction } from "@/server/action";
 import { requireAuthorContext } from "@/server/context";
 
-import type { BeatInput, NewOutlineInput } from "./schemas";
+import type { BeatInput, NewOutlineInput, TemplateInput } from "./schemas";
 import {
   addBeat,
   assignScene,
   createOutline,
   deleteBeat,
+  deleteTemplate,
   moveBeat,
   renameOutline,
+  renameTemplate,
+  saveAsTemplate,
+  setArcRole,
   trashOutline,
   unassignScene,
   updateBeat,
@@ -27,8 +32,24 @@ export async function renameOutlineAction(id: string, title: string) {
   return runAction(async () => renameOutline(await ctx(), id, title));
 }
 
+export async function setArcRoleAction(id: string, arcRole: ArcRole) {
+  return runAction(async () => setArcRole(await ctx(), id, arcRole));
+}
+
 export async function trashOutlineAction(id: string) {
   return runAction(async () => trashOutline(await ctx(), id), { refresh: false });
+}
+
+export async function saveAsTemplateAction(outlineId: string, input: TemplateInput) {
+  return runAction(async () => saveAsTemplate(await ctx(), outlineId, input));
+}
+
+export async function renameTemplateAction(id: string, input: TemplateInput) {
+  return runAction(async () => renameTemplate(await ctx(), id, input));
+}
+
+export async function deleteTemplateAction(id: string) {
+  return runAction(async () => deleteTemplate(await ctx(), id));
 }
 
 export async function addBeatAction(outlineId: string, input: BeatInput) {

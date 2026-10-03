@@ -10,7 +10,12 @@ import { CHARACTER_ROLE_LABELS, getCharacter, listCharacters } from "@/modules/c
 import { CharacterDialog, ProfileForm, trashCharacterAction } from "@/modules/characters/ui";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
-import { getFieldValues, listFieldDefinitions } from "@/modules/fields";
+import {
+  fieldContext,
+  fieldScopeOptions,
+  getFieldValues,
+  listFieldDefinitions,
+} from "@/modules/fields";
 import { CustomFields } from "@/modules/fields/ui";
 import { listSeriesOptions } from "@/modules/library";
 import { NewNoteDialog } from "@/modules/notes/ui";
@@ -55,7 +60,10 @@ export default async function CharacterPage({ params }: Props) {
     getPenNameForNewWork(ctx),
     listOutlines(ctx, { characterId }),
     newStructureOptions(ctx, { penNameId }),
-    listFieldDefinitions(ctx, { nodeKind: "CHARACTER", penNameId }),
+    fieldContext(ctx, characterId).then(async (context) => ({
+      definitions: await listFieldDefinitions(ctx, { nodeKind: "CHARACTER", context }),
+      scopes: await fieldScopeOptions(ctx, context),
+    })),
     getFieldValues(ctx, characterId),
   ]);
   // Relationships stay within the character's pen name (and series, if any).
@@ -126,8 +134,8 @@ export default async function CharacterPage({ params }: Props) {
       <CustomFields
         nodeId={character.id}
         nodeKind="CHARACTER"
-        penNameId={penNameId}
-        definitions={fieldDefinitions}
+        scopeOptions={fieldDefinitions.scopes}
+        definitions={fieldDefinitions.definitions}
         values={fieldValues}
       />
 
@@ -196,7 +204,7 @@ export default async function CharacterPage({ params }: Props) {
             No arcs yet. Map how {character.name} changes, beat by beat, onto your scenes.
           </p>
         ) : (
-          <OutlineList outlines={arcs} showBook />
+          <OutlineList outlines={arcs} showWork />
         )}
       </section>
 

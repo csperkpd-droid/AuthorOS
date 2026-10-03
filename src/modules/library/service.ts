@@ -2,9 +2,9 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { toDbDate } from "@/lib/dates";
 import { NotFoundError, RuleError } from "@/lib/errors";
 import { planInsertAfter, positionAtEnd, sortByPosition } from "@/lib/ordering";
-import { moveSeriesCharacters } from "@/modules/characters";
 import { getPenNameForNewWork, requireAssignablePenName } from "@/modules/pen-names";
 import { createStoryNode, liveBook } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
@@ -31,6 +31,7 @@ const bookCardSelect = {
   targetWordCount: true,
   tropes: true,
   heatLevel: true,
+  dueOn: true,
   seriesId: true,
   seriesPosition: true,
   updatedAt: true,
@@ -158,23 +159,23 @@ export async function createSeries(ctx: AuthorContext, input: SeriesInput) {
   });
 }
 
-/** Changing a series' pen name moves all of its books and characters to that pen name too. */
+export const PEN_NAME_CHANGE_NEEDS_REVIEW =
+  "Changing the pen name moves connected story data too. Use “Change pen name…” to review what moves.";
+
+/**
+ * Updates a series' details. Its pen name changes only through the Change
+ * Impact flow (`impact` module), which moves its books, characters and other
+ * associated story data together after the author has reviewed them.
+ */
 export async function updateSeries(ctx: AuthorContext, id: string, input: SeriesInput) {
   const data = seriesInput.parse(input);
   const current = await getSeries(ctx, id);
-  const penNameId = data.penNameId ?? current.penName.id;
-  if (penNameId !== current.penName.id) await requireAssignablePenName(ctx, penNameId);
-
-  await db.$transaction(async (tx) => {
-    await tx.series.update({
-      where: { id },
-      data: { title: data.title, description: data.description ?? null, penNameId },
-    });
-    await tx.book.updateMany({
-      where: { seriesId: id, workspaceId: ctx.workspaceId },
-      data: { penNameId },
-    });
-    await moveSeriesCharacters(tx, id, penNameId);
+  if (data.penNameId && data.penNameId !== current.penName.id) {
+    throw new RuleError(PEN_NAME_CHANGE_NEEDS_REVIEW);
+  }
+  await db.series.update({
+    where: { id },
+    data: { title: data.title, description: data.description ?? null },
   });
 }
 
@@ -254,15 +255,20 @@ export async function createBook(ctx: AuthorContext, input: NewBookInput) {
   });
 }
 
+/**
+ * Updates a book's details. Its pen name changes only through the Change
+ * Impact flow (`impact` module), so associated characters and other story
+ * data move with it after review.
+ */
 export async function updateBook(ctx: AuthorContext, id: string, input: BookInput) {
   const data = bookInput.parse(input);
   const book = await getBook(ctx, id);
-
-  let penNameId = book.penName.id;
   if (data.penNameId && data.penNameId !== book.penName.id) {
-    if (book.seriesId)
-      throw new RuleError("Books in a series use the series’ pen name. Change it on the series.");
-    penNameId = (await requireAssignablePenName(ctx, data.penNameId)).id;
+    throw new RuleError(
+      book.seriesId
+        ? "Books in a series use the series’ pen name. Change it on the series."
+        : PEN_NAME_CHANGE_NEEDS_REVIEW,
+    );
   }
 
   await db.book.update({
@@ -273,7 +279,7 @@ export async function updateBook(ctx: AuthorContext, id: string, input: BookInpu
       description: data.description ?? null,
       status: data.status,
       targetWordCount: data.targetWordCount,
-      penNameId,
+      ...(data.dueOn !== undefined && { dueOn: data.dueOn ? toDbDate(data.dueOn) : null }),
       ...(data.tropes !== undefined && { tropes: data.tropes }),
       ...(data.heatLevel !== undefined && { heatLevel: data.heatLevel }),
     },
@@ -281,25 +287,30 @@ export async function updateBook(ctx: AuthorContext, id: string, input: BookInpu
 }
 
 /**
- * Puts a book into a series (at the end; it takes the series' pen name), or
- * makes it standalone (`seriesId: null`; it keeps its pen name).
+ * Puts a book into a series of the same pen name (at the end), or makes it
+ * standalone (`seriesId: null`; it keeps its pen name). Joining a series of
+ * another pen name would move the book's story data between identities, so
+ * the author first changes the book's pen name (with its impact review).
  */
 export async function setBookSeries(ctx: AuthorContext, id: string, seriesId: string | null) {
   const book = await getBook(ctx, id);
   if (book.seriesId === seriesId) return;
 
   if (seriesId === null) {
+    await assertNoSeriesCharacters(id, book.seriesId!);
     await db.book.update({ where: { id }, data: { seriesId: null, seriesPosition: null } });
     return;
   }
   const series = await requireVisibleSeries(ctx, seriesId);
+  if (series.penNameId !== book.penName.id) {
+    throw new RuleError(
+      "That series belongs to another pen name. Change this book’s pen name first, so you can review what moves with it.",
+    );
+  }
+  if (book.seriesId) await assertNoSeriesCharacters(id, book.seriesId);
   await db.book.update({
     where: { id },
-    data: {
-      seriesId,
-      seriesPosition: positionAtEnd(await seriesSiblings(seriesId)),
-      penNameId: series.penNameId,
-    },
+    data: { seriesId, seriesPosition: positionAtEnd(await seriesSiblings(seriesId)) },
   });
 }
 
@@ -320,4 +331,23 @@ export async function moveBookInSeries(ctx: AuthorContext, id: string, afterBook
 export async function trashBook(ctx: AuthorContext, id: string) {
   await getBook(ctx, id);
   await db.book.update({ where: { id }, data: { deletedAt: new Date() } });
+}
+
+/**
+ * A series' characters appear only in that series' books. A book that still
+ * has them in its scenes can't leave the series without stranding them.
+ */
+async function assertNoSeriesCharacters(bookId: string, seriesId: string) {
+  const count = await db.connection.count({
+    where: {
+      kind: "appears_in",
+      source: { character: { seriesId } },
+      target: { scene: { bookId } },
+    },
+  });
+  if (count > 0) {
+    throw new RuleError(
+      "Characters of this series appear in this book’s scenes, so it can’t leave the series. Remove them from its scenes first.",
+    );
+  }
 }

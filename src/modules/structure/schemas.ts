@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { StructureKind } from "@/generated/prisma/enums";
+import { ArcRole, StructureKind } from "@/generated/prisma/enums";
 
 const optionalText = (max: number) =>
   z
@@ -10,16 +10,29 @@ const optionalText = (max: number) =>
     .transform((v) => (v === "" ? null : v))
     .nullish();
 
+const optionalId = z
+  .string()
+  .nullish()
+  .transform((v) => (v ? v : null))
+  .pipe(z.uuid().nullable());
+
 export const outlineTitle = z.string().trim().min(1, "Give the structure a name.").max(200);
 
-export const newOutlineInput = z.object({
-  bookId: z.uuid(),
-  kind: z.enum(StructureKind),
-  templateId: z.uuid().nullish(),
-  title: z.string().trim().max(200).nullish(),
-  relationshipId: z.uuid().nullish(),
-  characterId: z.uuid().nullish(),
-});
+/** A structure for one book (`bookId`) or a whole series (`seriesId`). */
+export const newOutlineInput = z
+  .object({
+    bookId: optionalId,
+    seriesId: optionalId,
+    kind: z.enum(StructureKind),
+    templateId: optionalId,
+    title: z.string().trim().max(200).nullish(),
+    relationshipId: optionalId,
+    characterId: optionalId,
+    arcRole: z.enum(ArcRole).nullish(),
+  })
+  .refine((v) => (v.bookId === null) !== (v.seriesId === null), {
+    message: "Choose a book or a series.",
+  });
 export type NewOutlineInput = z.input<typeof newOutlineInput>;
 
 export const beatInput = z.object({
@@ -29,5 +42,13 @@ export const beatInput = z.object({
     (v) => (v === "" || v === null || v === undefined ? null : Number(v)),
     z.number().int().min(0, "Use 0–100.").max(100, "Use 0–100.").nullable(),
   ),
+  /** Series structures: the book this beat is planned for. */
+  bookId: optionalId.optional(),
 });
 export type BeatInput = z.input<typeof beatInput>;
+
+export const templateInput = z.object({
+  name: z.string().trim().min(1, "Name the template.").max(200),
+  description: optionalText(2000),
+});
+export type TemplateInput = z.input<typeof templateInput>;

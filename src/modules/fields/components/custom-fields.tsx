@@ -15,7 +15,8 @@ import { useAction } from "@/hooks/use-action";
 
 import { createFieldAction, deleteFieldAction, setFieldValueAction } from "../actions";
 
-type Definition = { id: string; label: string; type: FieldType; penNameId: string | null };
+type Definition = { id: string; label: string; type: FieldType; scope: string };
+type ScopeOption = { value: string; label: string };
 
 /**
  * The author's own fields for this kind of object (e.g. "Love language" on
@@ -25,13 +26,14 @@ type Definition = { id: string; label: string; type: FieldType; penNameId: strin
 export function CustomFields({
   nodeId,
   nodeKind,
-  penNameId,
+  scopeOptions,
   definitions,
   values,
 }: {
   nodeId: string;
   nodeKind: StoryNodeKind;
-  penNameId: string | null;
+  /** Where a new field may apply; the first is the default (the pen name). */
+  scopeOptions: ScopeOption[];
   definitions: Definition[];
   values: Record<string, string>;
 }) {
@@ -81,7 +83,9 @@ export function CustomFields({
               className={d.type === "LONG_TEXT" ? "space-y-1.5 sm:col-span-2" : "space-y-1.5"}
             >
               <div className="flex items-baseline justify-between gap-2">
-                <Label htmlFor={id}>{d.label}</Label>
+                <Label htmlFor={id} title={d.scope}>
+                  {d.label}
+                </Label>
                 <span className="flex items-center gap-1">
                   {saved === d.id && (
                     <span role="status" className="text-xs text-muted-foreground">
@@ -112,7 +116,11 @@ export function CustomFields({
         })}
       </div>
       {adding && (
-        <NewFieldForm nodeKind={nodeKind} penNameId={penNameId} onDone={() => setAdding(false)} />
+        <NewFieldForm
+          nodeKind={nodeKind}
+          scopeOptions={scopeOptions}
+          onDone={() => setAdding(false)}
+        />
       )}
       <FormError message={save.error} />
     </section>
@@ -121,11 +129,11 @@ export function CustomFields({
 
 function NewFieldForm({
   nodeKind,
-  penNameId,
+  scopeOptions,
   onDone,
 }: {
   nodeKind: StoryNodeKind;
-  penNameId: string | null;
+  scopeOptions: ScopeOption[];
   onDone: () => void;
 }) {
   const create = useAction(createFieldAction);
@@ -134,11 +142,14 @@ function NewFieldForm({
       aria-label="New field"
       className="flex flex-wrap items-end gap-3 rounded-lg border border-dashed border-border p-3"
       action={async (formData) => {
+        const [scope, scopeId] = String(formData.get("scope") ?? "all").split(":");
         const result = await create.run({
           nodeKind,
           label: String(formData.get("label") ?? ""),
           type: formData.get("type") === "LONG_TEXT" ? "LONG_TEXT" : "TEXT",
-          penNameId: formData.get("thisPenName") && penNameId ? penNameId : null,
+          penNameId: scope === "pen" ? scopeId : null,
+          seriesId: scope === "series" ? scopeId : null,
+          bookId: scope === "book" ? scopeId : null,
         });
         if (result.ok) onDone();
       }}
@@ -160,12 +171,16 @@ function NewFieldForm({
           <option value="LONG_TEXT">Long text</option>
         </Select>
       </div>
-      {penNameId && (
-        <label className="flex h-9 items-center gap-2 text-sm">
-          <input type="checkbox" name="thisPenName" />
-          Only this pen name
-        </label>
-      )}
+      <div className="space-y-1.5">
+        <Label htmlFor="new-field-scope">Applies to</Label>
+        <Select id="new-field-scope" name="scope" defaultValue={scopeOptions[0]?.value}>
+          {scopeOptions.map((o) => (
+            <option key={o.value} value={o.value}>
+              {o.label}
+            </option>
+          ))}
+        </Select>
+      </div>
       <div className="flex gap-2">
         <Button type="button" variant="ghost" onClick={onDone}>
           Cancel

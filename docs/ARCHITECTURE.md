@@ -3,7 +3,7 @@
 AuthorOS is a **modular monolith**: one Next.js application, one PostgreSQL
 database, with the code split into domain modules that have strict boundaries.
 
-> Status: Milestone 3 (structure, romance arcs, identity separation). Sections marked
+> Status: Milestone 4 (series arcs, Change Impact, tasks, calendar, progress). Sections marked
 > _planned_ describe the agreed design for later milestones so that early code
 > doesn't block it.
 
@@ -91,16 +91,22 @@ Current modules:
 | `manuscript`    | Parts, chapters, scenes (structure, ordering, moves), scene content and autosave, the binder and editor UI.                               |
 | `history`       | Version history for any versioned story object (scenes, notes): checkpoints, named versions, preview, restore; the History dialog.        |
 | `structure`     | Beat templates, outlines (plot, romance arc, character arc, subplot, custom), beats and their scene assignments; the beat board.          |
-| `fields`        | Author-defined custom fields for any node kind, optionally per identity; the "Your fields" section.                                       |
+| `fields`        | Author-defined custom fields for any node kind, scoped to a pen name (default), all identities, a series or a book.                       |
+| `impact`        | Change Impact: "What will this affect?" reports and reviewed apply, for identity moves of books and series; the review dialog.            |
+| `tasks`         | Tasks (story nodes) with priority and due dates; what they concern is `concerns` connections.                                             |
+| `calendar`      | Calendar events (story nodes) and the merged calendar: events, task due dates, book deadlines, words per day.                             |
+| `progress`      | Words written per day (automatic from scene saves, plus logged), daily goal, streak, book deadline pace, the author's time zone.          |
 | `characters`    | Characters (each of one pen name, optionally one series), profile fields, the scene cast (appearances are connections).                   |
 | `relationships` | Relationships between two characters (story nodes themselves).                                                                            |
 | `notes`         | Notes with rich text; what they're about is connections.                                                                                  |
 | `ideas`         | Quick capture; promotion to a book.                                                                                                       |
 | `trash`         | Listing, restoring and permanently deleting trashed story objects of every type.                                                          |
 
-Dependency direction (domain): `structure` → `characters`,
+Dependency direction (domain): `calendar` → `tasks`, `progress`, `library`;
+`tasks` → `connections`; `impact` → `pen-names`; `fields` → `library`,
+`pen-names`; `manuscript` → `progress` → `library`; `structure` → `characters`,
 `relationships`, `library`, `manuscript`; `ideas` → `library`, `connections`;
-`notes`, `manuscript` → `history`; `library` → `characters`;
+`notes`, `manuscript` → `history`;
 `characters`, `relationships`, `trash`, `fields`, `connections`, `history` →
 `story-graph`; `manuscript` → `library` → `pen-names` → `workspaces`. Pages compose modules; modules never import a page.
 `story-graph` is the bottom of the story layer and knows every typed table.
@@ -193,9 +199,12 @@ User ──< WorkspaceMember >── Workspace ──< PenName
 
 - A workspace has one or more **pen names**; exactly one is the default
   (database-enforced). Every series and book belongs to exactly one pen name.
-- **Books in a series always use the series' pen name.** Changing a series'
-  pen name moves its books with it; a book's own pen name applies only when
-  it is standalone. (Per-edition overrides arrive with Publishing in v1.1.)
+- **Books in a series always use the series' pen name.** A book's own pen
+  name applies only when it is standalone, and it joins only series of its
+  own pen name. (Per-edition overrides arrive with Publishing in v1.1.)
+- **Changing a pen name is a reviewed change (M4).** Moving a standalone
+  book or a series to another pen name goes through Change Impact (below):
+  never as a side effect of editing details.
 - **Archive, don't delete.** Archived pen names disappear from pickers and
   the switcher; their work keeps its attribution. The default can't be
   archived.
@@ -209,9 +218,14 @@ User ──< WorkspaceMember >── Workspace ──< PenName
   narrows characters, relationships, structures and pickers to that identity;
   "All identities" shows everything. Nothing links across identities: the
   connection service refuses it, relationships and outlines require one
-  identity, and a linked character can't change pen name. Moving a series to
-  another pen name moves its books and characters with it. Notes and ideas
-  have no pen name (shared) and may link to anything. **Extension point:** a
+  identity, and a linked character can't change pen name on its own. Notes,
+  ideas, tasks and events have no pen name (author-level, shared) and may
+  link to anything; capturing them never asks for an identity. **Extension
+  point (notes and ideas):** an optional scope (all identities, a pen name, a
+  series, a book) would be nullable columns on those tables; the resolver
+  already derives each object's identity per kind, so a scoped note would
+  report its scope's pen name and every identity rule (`sameIdentity()`,
+  pickers, Change Impact) would apply to it unchanged. **Extension point:** a
   future "shared resource" (e.g. a world bible used by two pen names) would be
   an explicit opt-in, modeled as a null/shared identity on that object, which
   `sameIdentity()` already treats as linkable.
@@ -286,6 +300,7 @@ connection against it; the UI builds the "Connect" picker from it.
 | `develops_in` | Relationship → Scene   | Develops in / Relationship moments |                                                   |
 | `about`       | Note → any             | About / Notes                      |                                                   |
 | `inspired`    | Idea → any             | Inspired / Inspired by             |                                                   |
+| `concerns`    | Task/Event → any       | Concerns / Tasks & dates           |                                                   |
 | `related`     | any ↔ any (undirected) | Related to                         |                                                   |
 
 **Resolution.** `story-graph/resolve.ts` turns node ids into summaries
@@ -324,15 +339,82 @@ beat board shows each beat's scenes in reading order with where they fall
 in the book (%), against the beat's target %, and flags unplaced beats. The
 scene editor shows every beat the scene carries, across structures.
 
-Romance arcs are scoped to one book in M3; a relationship can have an arc in
-each book of a series.
+**Series structures (M4).** An outline belongs to exactly one book _or_ one
+series (database CHECK). A series structure, such as a series-long romance
+arc, spans every book of the series: each beat may be **planned for a book**
+(`outline_beats.book_id`, grouping only) and placed in scenes of any of the
+series' books. The beat board shows the whole series or one book at a time;
+every book page lists its own structures and its series' structures. This is
+the same structure/beat architecture, not a separate romance system.
+
+**Series Romance Center** (`/library/series/[id]/romance`) shows every
+romance arc of a series grouped by relationship, as a progression book by
+book: a beat appears under the books its scenes are in, or else its planned
+book. Arcs carry a couple role (main or secondary). Any number of
+relationships is shown, so secondary couples, love triangles and
+multi-partner romances (as their pairwise relationships) appear side by side.
+_Extension point:_ a group relationship (more than two characters) would be
+a relationship with a members table; the Center already groups by owner.
+
+**Templates.** "Save as template" copies a structure's beats (and, for a
+series structure, each beat's book number) into a workspace template.
+Applying a template creates a new structure with new beats; templates and
+structures never share beat records or scene placements, so editing either
+never changes the other. Series templates plan beats onto the matching books
+of the series they're applied to. _Extension point:_ template kits (a main
+plot, romance and character arcs applied together) would group templates;
+the copy-on-apply rule stays.
 
 ## Custom fields
 
 `fields` lets authors define their own fields ("Love language", "Magic type")
-for any node kind, for every identity or only one. Values attach to story
-nodes, so new object types get custom fields with no schema change. M3 shows
-them on characters; other kinds only need the section added to their page.
+for any node kind. A field's scope is the **current pen name** (the default:
+pen names often write different genres), all pen names, one series, or one
+book. A field applies to an object in that scope: characters are in their
+pen name and series, and in the books whose scenes they appear in. Values
+attach to story nodes, so new object types get custom fields with no schema
+change. Characters show them today; other kinds only need the section added.
+
+## Change Impact
+
+Meaningful changes that affect connected story data are previewed before
+they happen. A service produces an **impact report**: the affected objects,
+grouped by kind with what happens to each, plus **blockers** (things that
+must be resolved first), and a **token** that fingerprints the report. The
+UI ("What will this affect?") offers **Move everything**, **Review changes**
+(every affected item, linked) and **Cancel**. Applying recomputes the plan
+under a row lock and refuses if the token no longer matches, so the author
+only ever applies what they reviewed. Nothing is moved silently or orphaned.
+
+First use: **identity moves.** Moving a standalone book (or a series, with
+all its books) to another pen name carries its associated story data: its
+manuscript and structures; every character of the old pen name connected to
+it (appearing in its scenes, owning its arcs, in a relationship with such a
+character, or linked to it, transitively; a series' own characters always);
+their relationships; and values of fields limited to the old pen name (the
+field is copied to the new pen name). Shared notes, ideas, tasks and events
+keep their links. If anything of the old pen name that belongs to other work
+is linked in (another book's scene, a character of another series), the move
+is blocked and the report says what and why.
+
+## Planning: tasks, calendar and progress
+
+- **Tasks** and **calendar events** are story nodes (author-level, like
+  notes): what they're for is `concerns` connections, so any story object
+  shows its tasks and dates in its Connections panel, and "New task" is
+  offered on books and scenes.
+- **The calendar** merges events, task due dates, book deadlines
+  (`books.due_on`, filtered by "Writing as") and words written per day. Month
+  grid on wider screens, a list of busy days on phones.
+- **Words written** are recorded automatically: each scene save adds its
+  change in words to one row per author, book and day, in the save's
+  transaction (database-unique, atomic under concurrent saves). Restores
+  don't count. Authors can also log words written elsewhere. "Today" is the
+  author's own day (`users.time_zone`, detected from the browser once,
+  changeable in Settings).
+- **The dashboard** shows words today against the daily goal, the streak,
+  the last 30 days, the next 7 days, and each book's pace toward its target
+  and deadline.
 
 **Shared editor.** `components/editor/rich-text-editor.tsx` provides
 autosave, Ctrl/Cmd+S, the leave-page warning and conflict protection for any

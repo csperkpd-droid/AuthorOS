@@ -2,7 +2,6 @@ export {
   createCharacter,
   getCharacter,
   listCharacters,
-  moveSeriesCharacters,
   trashCharacter,
   updateCharacter,
   updateProfileField,

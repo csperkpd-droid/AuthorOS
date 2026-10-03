@@ -4,12 +4,18 @@ import { createBook, expectSaved } from "./manuscript";
 
 const post = (page: Page) => page.waitForResponse((r) => r.request().method() === "POST");
 
-export async function createCharacter(page: Page, name: string, role?: string) {
+export async function createCharacter(
+  page: Page,
+  name: string,
+  role?: string,
+  { series }: { series?: string } = {},
+) {
   await page.goto("/characters");
   await page.getByRole("button", { name: "New character" }).click();
   const dialog = page.getByRole("dialog", { name: "New character" });
   await dialog.getByLabel("Name", { exact: true }).fill(name);
   if (role) await dialog.getByLabel("Role").selectOption({ label: role });
+  if (series) await dialog.getByLabel("Series").selectOption({ label: series });
   await dialog.getByRole("button", { name: "Create character" }).click();
   await expect(page.getByRole("heading", { level: 1, name })).toBeVisible();
   return page.url();

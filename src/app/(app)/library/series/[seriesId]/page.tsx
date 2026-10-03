@@ -1,14 +1,17 @@
-import { BookPlus, Settings2, Trash2 } from "lucide-react";
+import { BookPlus, Heart, Plus, Settings2, Trash2, UserRound } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
 import { PageHeader } from "@/components/shell/page-header";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatCount, formatWords } from "@/lib/format";
 import { getSeries, listSeriesOptions } from "@/modules/library";
 import { BookDialog, SeriesBookOrder, SeriesDialog, trashSeriesAction } from "@/modules/library/ui";
+import { ChangePenNameDialog } from "@/modules/impact/ui";
 import { listPenNames } from "@/modules/pen-names";
+import { listOutlines, newStructureOptions } from "@/modules/structure";
+import { NewStructureDialog, OutlineList } from "@/modules/structure/ui";
 import { requireAuthorContext } from "@/server/context";
 import { orNotFound } from "@/server/not-found";
 
@@ -23,10 +26,12 @@ export async function generateMetadata({
 export default async function SeriesPage({ params }: PageProps<"/library/series/[seriesId]">) {
   const { seriesId } = await params;
   const ctx = await requireAuthorContext();
-  const [series, penNames, seriesOptions] = await Promise.all([
-    orNotFound(getSeries(ctx, seriesId)),
+  const series = await orNotFound(getSeries(ctx, seriesId));
+  const [penNames, seriesOptions, outlines, structureOptions] = await Promise.all([
     listPenNames(ctx),
     listSeriesOptions(ctx),
+    listOutlines(ctx, { seriesId }),
+    newStructureOptions(ctx, { penNameId: series.penName.id }),
   ]);
   const penOptions = penNames.map((p) => ({ id: p.id, name: p.name }));
   const totalWords = series.books.reduce((n, b) => n + b.wordCount, 0);
@@ -51,6 +56,19 @@ export default async function SeriesPage({ params }: PageProps<"/library/series/
                 <Button variant="outline">
                   <Settings2 />
                   Details
+                </Button>
+              }
+            />
+            <ChangePenNameDialog
+              kind="SERIES"
+              id={series.id}
+              title={series.title}
+              currentPenNameId={series.penName.id}
+              penNames={penOptions}
+              trigger={
+                <Button variant="outline">
+                  <UserRound />
+                  Change pen name…
                 </Button>
               }
             />
@@ -97,6 +115,45 @@ export default async function SeriesPage({ params }: PageProps<"/library/series/
           <SeriesBookOrder books={series.books} seriesTitle={series.title} />
         </section>
       )}
+
+      <section aria-labelledby="series-structures-heading" className="space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h2 id="series-structures-heading" className="font-serif text-xl">
+            Structures
+          </h2>
+          <div className="flex flex-wrap gap-2">
+            <Link
+              href={`/library/series/${series.id}/romance`}
+              className={buttonVariants({ variant: "outline", size: "sm" })}
+            >
+              <Heart />
+              Romance Center
+            </Link>
+            {series.books.length > 0 && (
+              <NewStructureDialog
+                {...structureOptions}
+                books={series.books.map((b) => ({ id: b.id, label: b.title }))}
+                series={[{ id: series.id, label: series.title }]}
+                defaults={{ seriesId: series.id }}
+                trigger={
+                  <Button variant="outline" size="sm">
+                    <Plus />
+                    New structure
+                  </Button>
+                }
+              />
+            )}
+          </div>
+        </div>
+        {outlines.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Plan arcs that span the whole series, such as a slow-burn romance, or structures for
+            single books.
+          </p>
+        ) : (
+          <OutlineList outlines={outlines} showWork />
+        )}
+      </section>
     </div>
   );
 }

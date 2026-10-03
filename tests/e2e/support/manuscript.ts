@@ -7,7 +7,10 @@ export async function createBook(page: Page, title: string) {
   const dialog = page.getByRole("dialog", { name: "New book" });
   await dialog.getByLabel("Title", { exact: true }).fill(title);
   await dialog.getByRole("button", { name: "Create book" }).click();
-  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible();
+  // The first visit to a book page can be slow while the dev server compiles it.
+  await expect(page.getByRole("heading", { level: 1, name: title })).toBeVisible({
+    timeout: 15_000,
+  });
   return page.url().split("/books/")[1];
 }
 

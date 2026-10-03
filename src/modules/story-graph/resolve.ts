@@ -8,6 +8,7 @@ import {
   liveBook,
   liveChapter,
   liveCharacter,
+  liveEvent,
   liveIdea,
   liveNote,
   liveOutline,
@@ -15,6 +16,7 @@ import {
   liveRelationship,
   liveScene,
   liveSeries,
+  liveTask,
 } from "./visibility";
 
 /** Enough about any story object to show and link to it, and to check scope. */
@@ -227,20 +229,27 @@ async function load(
         where: {
           ...ws,
           ...liveOutline,
-          ...(penNameId ? { book: pen } : {}),
+          ...(penNameId ? { AND: [{ OR: [{ book: pen }, { series: pen }] }] } : {}),
           title: contains(query),
         },
-        select: { id: true, title: true, book: bookScope },
+        select: {
+          id: true,
+          title: true,
+          seriesId: true,
+          book: bookScope,
+          series: { select: { title: true, penNameId: true } },
+        },
         ...page,
       });
+      // A structure belongs to a book or to a whole series.
       return rows.map((r) => ({
         id: r.id,
         kind,
         title: r.title,
-        context: r.book.title,
+        context: r.book?.title ?? r.series?.title ?? null,
         href: `/structure/${r.id}`,
-        penNameId: r.book.penNameId,
-        seriesId: r.book.seriesId,
+        penNameId: r.book?.penNameId ?? r.series!.penNameId,
+        seriesId: r.book ? r.book.seriesId : r.seriesId,
       }));
     }
     case "NOTE": {
@@ -271,6 +280,38 @@ async function load(
         title: r.title,
         context: null,
         href: `/ideas/${r.id}`,
+        penNameId: null,
+        seriesId: null,
+      }));
+    }
+    case "TASK": {
+      const rows = await db.task.findMany({
+        where: { ...ws, ...liveTask, title: contains(query) },
+        select: { id: true, title: true, status: true },
+        ...page,
+      });
+      return rows.map((r) => ({
+        id: r.id,
+        kind,
+        title: r.title,
+        context: r.status === "DONE" ? "Done" : null,
+        href: `/tasks/${r.id}`,
+        penNameId: null,
+        seriesId: null,
+      }));
+    }
+    case "EVENT": {
+      const rows = await db.calendarEvent.findMany({
+        where: { ...ws, ...liveEvent, title: contains(query) },
+        select: { id: true, title: true, startsOn: true },
+        ...page,
+      });
+      return rows.map((r) => ({
+        id: r.id,
+        kind,
+        title: r.title,
+        context: r.startsOn.toISOString().slice(0, 10),
+        href: `/calendar/events/${r.id}`,
         penNameId: null,
         seriesId: null,
       }));

@@ -29,6 +29,8 @@ model User {
   email         String    @unique
   emailVerified DateTime? @map("email_verified")
   image         String?
+  /// IANA time zone for "today" (writing days, due dates). Null = not set yet.
+  timeZone      String?   @map("time_zone")
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
@@ -37,6 +39,7 @@ model User {
   memberships WorkspaceMember[]
   revisions   ContentRevision[]
   connections Connection[]
+  writing     WritingSession[]
 
   @@map("users")
 }
@@ -98,6 +101,8 @@ model Workspace {
   members    WorkspaceMember[]
   penNames   PenName[]
   storyNodes StoryNode[]
+  templates  StructureTemplate[]
+  writing    WritingSession[]
 
   @@map("workspaces")
 }
@@ -116,6 +121,8 @@ model WorkspaceMember {
   role            WorkspaceRole @default(OWNER)
   /// The identity this member is currently working as. Null = all identities.
   activePenNameId String?       @map("active_pen_name_id") @db.Uuid
+  /// Words per day this member aims for. Null = no daily goal.
+  dailyWordGoal   Int?          @map("daily_word_goal")
   createdAt       DateTime      @default(now()) @map("created_at")
 
   workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
@@ -169,6 +176,8 @@ enum StoryNodeKind {
   NOTE
   IDEA
   OUTLINE
+  TASK
+  EVENT
 
   @@map("story_node_kind")
 }
@@ -194,6 +203,8 @@ model StoryNode {
   note         Note?
   idea         Idea?
   outline      Outline?
+  task         Task?
+  event        CalendarEvent?
   outgoing     Connection[]      @relation("ConnectionSource")
   incoming     Connection[]      @relation("ConnectionTarget")
   revisions    ContentRevision[]
@@ -216,10 +227,12 @@ model Series {
   updatedAt   DateTime  @updatedAt @map("updated_at")
   deletedAt   DateTime? @map("deleted_at")
 
-  node       StoryNode   @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  penName    PenName     @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
+  node       StoryNode         @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  penName    PenName           @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
   characters Character[]
   books      Book[]
+  outlines   Outline[]
+  fields     FieldDefinition[]
 
   @@unique([id, workspaceId])
   @@index([workspaceId])
@@ -252,17 +265,22 @@ model Book {
   /// Romance metadata (any genre may use tropes).
   tropes          String[]   @default([])
   heatLevel       HeatLevel? @map("heat_level")
+  /// Deadline for the current draft (shown on the calendar and dashboard).
+  dueOn           DateTime?  @map("due_on") @db.Date
   createdAt       DateTime   @default(now()) @map("created_at")
   updatedAt       DateTime   @updatedAt @map("updated_at")
   deletedAt       DateTime?  @map("deleted_at")
 
-  node     StoryNode @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  penName  PenName   @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
-  series   Series?   @relation(fields: [seriesId], references: [id], onDelete: Cascade)
-  parts    Part[]
-  chapters Chapter[]
-  scenes   Scene[]
-  outlines Outline[]
+  node         StoryNode         @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  penName      PenName           @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
+  series       Series?           @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  parts        Part[]
+  chapters     Chapter[]
+  scenes       Scene[]
+  outlines     Outline[]
+  plannedBeats OutlineBeat[]
+  fields       FieldDefinition[]
+  writing      WritingSession[]
 
   @@unique([id, workspaceId])
   @@index([workspaceId])
@@ -572,10 +590,14 @@ model StructureTemplate {
   name        String
   description String?
   source      String?
+  /// Saved from a series structure: beats carry a book number.
+  forSeries   Boolean       @default(false) @map("for_series")
   createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @default(now()) @updatedAt @map("updated_at")
 
-  beats    TemplateBeat[]
-  outlines Outline[]
+  workspace Workspace?     @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  beats     TemplateBeat[]
+  outlines  Outline[]
 
   @@index([workspaceId])
   @@map("structure_templates")
@@ -589,6 +611,8 @@ model TemplateBeat {
   /// Where the beat usually falls, as a percentage of the book.
   targetPercent Int?    @map("target_percent")
   position      String
+  /// Series templates: which book (1 = first) the beat belongs to.
+  bookIndex     Int?    @map("book_index")
 
   template     StructureTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
   outlineBeats OutlineBeat[]
@@ -601,21 +625,34 @@ model TemplateBeat {
 /// relationship), a character arc (owned by a character), a subplot or a
 /// custom structure. A story node, so notes and other objects connect to it.
 /// CHECK: romance arcs have a relationship, character arcs a character.
+enum ArcRole {
+  MAIN
+  SECONDARY
+
+  @@map("arc_role")
+}
+
 model Outline {
   id             String        @id @db.Uuid
   workspaceId    String        @map("workspace_id") @db.Uuid
-  bookId         String        @map("book_id") @db.Uuid
+  /// Exactly one of book_id / series_id: a structure for one book, or one
+  /// spanning a whole series (e.g. a series-long romance arc).
+  bookId         String?       @map("book_id") @db.Uuid
+  seriesId       String?       @map("series_id") @db.Uuid
   kind           StructureKind
   title          String
   templateId     String?       @map("template_id") @db.Uuid
   relationshipId String?       @map("relationship_id") @db.Uuid
   characterId    String?       @map("character_id") @db.Uuid
+  /// For romance arcs: main or secondary couple (Romance Center ordering).
+  arcRole        ArcRole?      @map("arc_role")
   createdAt      DateTime      @default(now()) @map("created_at")
   updatedAt      DateTime      @updatedAt @map("updated_at")
   deletedAt      DateTime?     @map("deleted_at")
 
   node         StoryNode          @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  book         Book               @relation(fields: [bookId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  book         Book?              @relation(fields: [bookId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  series       Series?            @relation(fields: [seriesId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   template     StructureTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   relationship Relationship?      @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
   character    Character?         @relation(fields: [characterId], references: [id], onDelete: Cascade)
@@ -623,6 +660,7 @@ model Outline {
 
   @@unique([id, workspaceId])
   @@index([bookId])
+  @@index([seriesId])
   @@index([relationshipId])
   @@index([characterId])
   @@map("outlines")
@@ -638,12 +676,16 @@ model OutlineBeat {
   description    String?
   targetPercent  Int?     @map("target_percent")
   position       String
+  /// In a series structure, the book this beat is planned for (grouping only;
+  /// its scenes may be in any book of the series).
+  bookId         String?  @map("book_id") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
   outline      Outline       @relation(fields: [outlineId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   templateBeat TemplateBeat? @relation(fields: [templateBeatId], references: [id], onDelete: SetNull)
   scenes       BeatScene[]
+  book         Book?         @relation(fields: [bookId], references: [id], onDelete: SetNull)
 
   @@unique([id, workspaceId])
   @@index([outlineId])
@@ -681,7 +723,10 @@ enum FieldType {
 model FieldDefinition {
   id          String        @id @default(uuid(7)) @db.Uuid
   workspaceId String        @map("workspace_id") @db.Uuid
+  /// Scope: at most one of pen name, series, book. None = all identities.
   penNameId   String?       @map("pen_name_id") @db.Uuid
+  seriesId    String?       @map("series_id") @db.Uuid
+  bookId      String?       @map("book_id") @db.Uuid
   nodeKind    StoryNodeKind @map("node_kind")
   label       String
   type        FieldType     @default(TEXT)
@@ -689,6 +734,8 @@ model FieldDefinition {
   createdAt   DateTime      @default(now()) @map("created_at")
 
   penName PenName?         @relation(fields: [penNameId], references: [id], onDelete: Cascade)
+  series  Series?          @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  book    Book?            @relation(fields: [bookId], references: [id], onDelete: Cascade)
   values  NodeFieldValue[]
 
   @@unique([id, workspaceId])
@@ -710,4 +757,101 @@ model NodeFieldValue {
   @@id([nodeId, fieldId])
   @@index([fieldId])
   @@map("node_field_values")
+}
+
+// ─── Milestone 4: getting work done ─────────────────────────────────────────
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+
+  @@map("task_status")
+}
+
+enum TaskPriority {
+  LOW
+  NORMAL
+  HIGH
+
+  @@map("task_priority")
+}
+
+/// A to-do. A story node, so what it concerns is a set of `concerns`
+/// connections. Author-level (shared across identities), like notes.
+model Task {
+  id          String       @id @db.Uuid
+  workspaceId String       @map("workspace_id") @db.Uuid
+  title       String
+  notes       String?
+  status      TaskStatus   @default(TODO)
+  priority    TaskPriority @default(NORMAL)
+  dueOn       DateTime?    @map("due_on") @db.Date
+  completedAt DateTime?    @map("completed_at")
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  deletedAt   DateTime?    @map("deleted_at")
+
+  node StoryNode @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+
+  @@unique([id, workspaceId])
+  @@index([workspaceId, dueOn])
+  @@map("tasks")
+}
+
+/// A dated event on the author's calendar (launch, conference, edit due…).
+/// A story node, so it can concern books and other story objects.
+model CalendarEvent {
+  id          String    @id @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  title       String
+  description String?
+  startsOn    DateTime  @map("starts_on") @db.Date
+  /// Last day of a multi-day event (inclusive). Null = one day.
+  endsOn      DateTime? @map("ends_on") @db.Date
+  /// "HH:MM" local time. Null = all day.
+  startTime   String?   @map("start_time")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  node StoryNode @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+
+  @@unique([id, workspaceId])
+  @@index([workspaceId, startsOn])
+  @@map("calendar_events")
+}
+
+enum WritingSource {
+  /// Recorded automatically from scene saves (one row per user, book, day).
+  EDITOR
+  /// Logged by the author (words written elsewhere).
+  MANUAL
+
+  @@map("writing_source")
+}
+
+/// Words written per day: the basis for daily totals, streaks and goals.
+model WritingSession {
+  id           String        @id @default(uuid(7)) @db.Uuid
+  workspaceId  String        @map("workspace_id") @db.Uuid
+  userId       String        @map("user_id") @db.Uuid
+  bookId       String?       @map("book_id") @db.Uuid
+  /// The author's local date.
+  date         DateTime      @db.Date
+  source       WritingSource
+  wordsAdded   Int           @default(0) @map("words_added")
+  wordsRemoved Int           @default(0) @map("words_removed")
+  minutes      Int?
+  note         String?
+  createdAt    DateTime      @default(now()) @map("created_at")
+  updatedAt    DateTime      @updatedAt @map("updated_at")
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  book      Book?     @relation(fields: [bookId], references: [id], onDelete: SetNull)
+
+  @@index([workspaceId, userId, date])
+  @@index([bookId])
+  @@map("writing_sessions")
 }

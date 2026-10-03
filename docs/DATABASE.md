@@ -85,6 +85,11 @@ erDiagram
   structure_templates ||--o{ template_beats : ""
   story_nodes ||--o{ node_field_values : ""
   field_definitions ||--o{ node_field_values : ""
+  series ||--o{ outlines : "series-wide"
+  story_nodes ||--o| tasks : "is"
+  story_nodes ||--o| calendar_events : "is"
+  users ||--o{ writing_sessions : ""
+  books |o--o{ writing_sessions : ""
 ```
 
 ### Identity and tenancy (Milestone 0)
@@ -103,9 +108,9 @@ erDiagram
 
 ### Story graph (Milestone 1)
 
-| Table         | Key columns                                                                                                                | Notes                                                   |
-| ------------- | -------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
-| `story_nodes` | `id`, `workspace_id`, `kind` (`SERIES`/`BOOK`/`PART`/`CHAPTER`/`SCENE`/`CHARACTER`/`RELATIONSHIP`/`OUTLINE`/`NOTE`/`IDEA`) | Unique `(id, workspace_id)` for tenant-safe references. |
+| Table         | Key columns                                                                                                                               | Notes                                                   |
+| ------------- | ----------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------- |
+| `story_nodes` | `id`, `workspace_id`, `kind` (`SERIES`/`BOOK`/`PART`/`CHAPTER`/`SCENE`/`CHARACTER`/`RELATIONSHIP`/`OUTLINE`/`NOTE`/`IDEA`/`TASK`/`EVENT`) | Unique `(id, workspace_id)` for tenant-safe references. |
 
 Typed tables use their node id as primary key via the composite FK
 `(id, workspace_id) → story_nodes(id, workspace_id) ON DELETE CASCADE`.
@@ -142,7 +147,7 @@ Any two story nodes can be linked. One table holds every link:
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `id`, `workspace_id`                        |                                                                                                                              |
 | `source_id`, `target_id`                    | Composite tenant-safe FKs to `story_nodes (id, workspace_id)`, `ON DELETE CASCADE`: a connection disappears with either end. |
-| `kind`                                      | Registry key (`appears_in`, `develops_in`, `about`, `inspired`, `related`). CHECK: lowercase identifier.                     |
+| `kind`                                      | Registry key (`appears_in`, `develops_in`, `about`, `inspired`, `concerns`, `related`). CHECK: lowercase identifier.         |
 | `label`, `note`                             | The author's own wording and a short note.                                                                                   |
 | `attributes`                                | `jsonb` object (CHECK) holding kind-specific values validated by the registry, e.g. `{ "role": "POV" }`.                     |
 | `created_by_id`, `created_at`, `updated_at` |                                                                                                                              |
@@ -177,27 +182,41 @@ something in the Trash) are hidden, not deleted, and reappear on restore.
 
 All four use the story-node triggers (kind check, node cleanup).
 
-### Story structure (Milestone 3)
+### Story structure (Milestones 3–4)
 
 Four separate concepts, never mixed: story objects (nodes), the structural
 manuscript (book → part → chapter → scene), **beat assignments** (below), and
 universal connections. A scene is never copied: plot, romance, character-arc
 and subplot beats all point at the same scene row.
 
-| Table                 | Key columns                                                                                                                                                  | Notes                                                                                                                                                                                                                   |
-| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `structure_templates` | `workspace_id?`, `kind`, `name`, `description`, `source`                                                                                                     | `workspace_id` null = built-in, seeded by the migration with fixed ids (Three-Act, Save the Cat, Hero's Journey, Romancing the Beat, Positive Change Arc). Workspace templates ("save as template") use the same table. |
-| `template_beats`      | `template_id`, `title`, `description`, `target_percent?`, `position`                                                                                         | CHECK 0–100.                                                                                                                                                                                                            |
-| `outlines`            | node id, `book_id`, `kind` (`PLOT`/`ROMANCE`/`CHARACTER_ARC`/`SUBPLOT`/`CUSTOM`), `title`, `template_id?`, `relationship_id?`, `character_id?`, `deleted_at` | A story node (so notes and links attach to it). CHECK `outlines_owner_matches_kind`: a romance arc has a relationship, a character arc a character, others neither. Owner and book share the pen name (service rule).   |
-| `outline_beats`       | `outline_id`, `template_beat_id?`, `title`, `description`, `target_percent?`, `position` (C collation)                                                       | Copied from the template on creation: the beats are then the author's own.                                                                                                                                              |
-| `beat_scenes`         | PK `(beat_id, scene_id)`, `workspace_id`, `created_at`                                                                                                       | **Structural assignment**, many-to-many: a beat may span scenes, a scene may carry beats of many outlines. Tenant-safe FKs, cascade both ways. Same-book rule enforced by the service.                                  |
+| Table                 | Key columns                                                                                                                                                                                                   | Notes                                                                                                                                                                                                                                                                                                                                                                      |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `structure_templates` | `workspace_id?`, `kind`, `name`, `description`, `source`, `for_series`, `updated_at`                                                                                                                          | `workspace_id` null = built-in, seeded by the migration with fixed ids (Three-Act, Save the Cat, Hero's Journey, Romancing the Beat, Positive Change Arc). Workspace templates ("Save as template") use the same table, FK to the workspace (cascade). `for_series`: saved from a series structure.                                                                        |
+| `template_beats`      | `template_id`, `title`, `description`, `target_percent?`, `book_index?`, `position`                                                                                                                           | CHECK 0–100. `book_index` (1 = first book, CHECK ≥ 1): the book a series template's beat is planned for.                                                                                                                                                                                                                                                                   |
+| `outlines`            | node id, `book_id?`, `series_id?`, `kind` (`PLOT`/`ROMANCE`/`CHARACTER_ARC`/`SUBPLOT`/`CUSTOM`), `title`, `template_id?`, `relationship_id?`, `character_id?`, `arc_role?` (`MAIN`/`SECONDARY`), `deleted_at` | A story node (so notes and links attach to it). CHECK `outlines_book_or_series`: exactly one of book and series (a series structure spans its books). CHECK `outlines_owner_matches_kind`: a romance arc has a relationship, a character arc a character, others neither. CHECK: `arc_role` only on romance arcs. Owner and book/series share the pen name (service rule). |
+| `outline_beats`       | `outline_id`, `template_beat_id?`, `book_id?`, `title`, `description`, `target_percent?`, `position` (C collation)                                                                                            | Copied from the template on creation: the beats are then the author's own. `book_id` (series structures only, service rule; FK `SET NULL`): the book the beat is planned for.                                                                                                                                                                                              |
+| `beat_scenes`         | PK `(beat_id, scene_id)`, `workspace_id`, `created_at`                                                                                                                                                        | **Structural assignment**, many-to-many: a beat may span scenes (and, in a series structure, books), a scene may carry beats of many outlines. Tenant-safe FKs, cascade both ways. The scene must be in the structure's book, or in a book of its series (service rule).                                                                                                   |
 
-### Custom fields (Milestone 3)
+### Custom fields (Milestones 3–4)
 
-| Table               | Key columns                                                                                   | Notes                                                                                                                                        |
-| ------------------- | --------------------------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `field_definitions` | `workspace_id`, `pen_name_id?`, `node_kind`, `label`, `type` (`TEXT`/`LONG_TEXT`), `position` | Author-defined fields for any node kind; `pen_name_id` limits a field to one identity. Unique per (workspace, kind, identity, lower(label)). |
-| `node_field_values` | PK `(node_id, field_id)`, `workspace_id`, `value`                                             | Values attach to story nodes, so any object type gains custom fields without a migration. Cascade with the node and the definition.          |
+| Table               | Key columns                                                                                                                      | Notes                                                                                                                                                                                                |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `field_definitions` | `workspace_id`, `node_kind`, `label`, `type` (`TEXT`/`LONG_TEXT`), `position`, scope: `pen_name_id?` / `series_id?` / `book_id?` | Author-defined fields for any node kind. Scope: one pen name (the UI default), one series, one book, or none = all identities; CHECK at most one. Unique per (workspace, kind, scope, lower(label)). |
+| `node_field_values` | PK `(node_id, field_id)`, `workspace_id`, `value`                                                                                | Values attach to story nodes, so any object type gains custom fields without a migration. Cascade with the node and the definition.                                                                  |
+
+### Planning and progress (Milestone 4)
+
+| Table                   | Key columns                                                                                                                                               | Notes                                                                                                                                                                                                                                                                                             |
+| ----------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tasks`                 | node id, `title`, `notes`, `status` (`TODO`/`IN_PROGRESS`/`DONE`), `priority` (`LOW`/`NORMAL`/`HIGH`), `due_on?` (date), `completed_at?`, `deleted_at`    | Story node, author-level (no pen name). What a task is for: `concerns` connections.                                                                                                                                                                                                               |
+| `calendar_events`       | node id, `title`, `description`, `starts_on` (date), `ends_on?`, `start_time?` ("HH:MM"), `deleted_at`                                                    | Story node; `concerns` connections. CHECKs: ends on or after it starts; time format.                                                                                                                                                                                                              |
+| `writing_sessions`      | `workspace_id`, `user_id`, `book_id?`, `date` (the author's local date), `source` (`EDITOR`/`MANUAL`), `words_added`, `words_removed`, `minutes?`, `note` | `EDITOR` rows are written by scene saves in the same transaction; partial unique index: one per (user, book, date), upserted atomically. `MANUAL` rows are words the author logs. Net words per day = added − removed. CHECK non-negative. `book_id` → `SET NULL` (stats survive a deleted book). |
+| `books` (+)             | `due_on?` (date)                                                                                                                                          | Draft deadline: calendar and dashboard pace.                                                                                                                                                                                                                                                      |
+| `users` (+)             | `time_zone?`                                                                                                                                              | IANA zone deciding "today".                                                                                                                                                                                                                                                                       |
+| `workspace_members` (+) | `daily_word_goal?`                                                                                                                                        | Per member (collaborators each get their own). CHECK > 0.                                                                                                                                                                                                                                         |
+
+Date-only columns store UTC midnight; `lib/dates.ts` converts without
+drifting a day.
 
 ### Retention
 
@@ -220,24 +239,32 @@ the archive is "not now", and history is earlier versions of live content.
 
 Every new object type gets a node kind, a typed table using the node id, the
 two triggers, and a case in the resolver; it can then take part in
-connections. Outlines joined in M3. Planned: tasks (M4), timeline
+connections. Outlines joined in M3, tasks and events in M4. Planned: timeline
 events (v1.1), and later locations, research items, songs, plot threads and
 worldbuilding entries. New connection kinds join the registry as needed
-(e.g. `concerns` for Task → any story object, `set_in` for Scene → Location,
+(e.g. `set_in` for Scene → Location,
 `soundtrack` for Scene → Song).
 
 | Table               | Notes                                                                                  |
 | ------------------- | -------------------------------------------------------------------------------------- |
 | `tags`, `node_tags` | `node_tags(node_id, tag_id)`: tags attach to story nodes, so they work for every type. |
 
-### Milestone 4: tasks, calendar, progress
+### Later: scopes for notes and ideas
 
-| Table              | Key columns                                                                | Notes                                                                                                               |
-| ------------------ | -------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `tasks`            | node id, `title`, `status`, `priority`, `due_at?`, `completed_at?`         | Story node. What a task concerns is one or more connections (`concerns`), not fixed foreign keys.                   |
-| `calendar_events`  | `workspace_id`, `title`, `starts_at`, `ends_at?`, `all_day`                | The calendar merges events, task due dates and (v1.1) publishing deadlines; links to story objects via connections. |
-| `writing_sessions` | `workspace_id`, `user_id`, `book_id?`, `date`, `words_written`, `minutes?` |                                                                                                                     |
-| `writing_goals`    | `workspace_id`, `book_id?`, `kind`, `target`, `period`                     |                                                                                                                     |
+Notes and ideas are author-level and shared across pen names. An optional
+scope would add nullable `pen_name_id`, `series_id`, `book_id` (CHECK at
+most one) to `notes` and `ideas`; capture stays scope-free. The resolver
+derives each object's identity per kind, so identity rules would apply to
+scoped notes without other changes.
+
+### Later: template kits and group relationships
+
+- `template_kits(workspace_id, name)` + `template_kit_items(kit_id,
+template_id, position)`: apply a main plot, romance and character arcs
+  together; each still creates its own new structure.
+- `relationship_members(relationship_id, character_id)` for relationships
+  of more than two characters; the Romance Center already groups arcs by
+  relationship.
 
 ### Milestone 5: search and export
 

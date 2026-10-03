@@ -70,39 +70,55 @@ describe("series and books", () => {
       updateBook(ctx, book.id, { title: "Book 1", targetWordCount: null, penNameId: def.id }),
     ).rejects.toBeInstanceOf(RuleError);
 
-    // Changing the series' pen name moves its books with it.
-    await updateSeries(ctx, series.id, { title: "Saga", penNameId: def.id });
-    expect((await getBook(ctx, book.id)).penName.id).toBe(def.id);
+    // The series' pen name changes only through a reviewed Change Impact
+    // (see impact.test.ts), never as a side effect of editing details.
+    await expect(
+      updateSeries(ctx, series.id, { title: "Saga", penNameId: def.id }),
+    ).rejects.toThrow(/Change pen name/);
+    await updateSeries(ctx, series.id, { title: "Saga Renamed" });
+    expect((await getBook(ctx, book.id)).penName.id).toBe(other.id);
   });
 
-  it("moves books into and out of a series", async () => {
+  it("moves books into and out of a series of the same pen name", async () => {
     const other = await createPenName(ctx, { name: "Other" });
-    const series = await createSeries(ctx, { title: "Saga", penNameId: other.id });
+    const theirs = await createSeries(ctx, { title: "Their saga", penNameId: other.id });
+    const mine = await createSeries(ctx, { title: "My saga" });
     const book = await createBook(ctx, { title: "Loose" });
 
-    await setBookSeries(ctx, book.id, series.id);
+    // Joining another identity's series would move story data: refused here.
+    await expect(setBookSeries(ctx, book.id, theirs.id)).rejects.toThrow(/another pen name/);
+
+    await setBookSeries(ctx, book.id, mine.id);
     let b = await getBook(ctx, book.id);
-    expect(b.seriesId).toBe(series.id);
-    expect(b.penName.id).toBe(other.id);
+    expect(b.seriesId).toBe(mine.id);
 
     await setBookSeries(ctx, book.id, null);
     b = await getBook(ctx, book.id);
     expect(b.seriesId).toBeNull();
     expect(b.seriesPosition).toBeNull();
-    expect(b.penName.id).toBe(other.id);
   });
 
-  it("assigns standalone books to another pen name", async () => {
+  it("edits book details, deadline included, but not the pen name directly", async () => {
     const other = await createPenName(ctx, { name: "Other" });
     const book = await createBook(ctx, { title: "Loose" });
+    await expect(
+      updateBook(ctx, book.id, { title: "Loose", targetWordCount: null, penNameId: other.id }),
+    ).rejects.toThrow(/Change pen name/);
+
     await updateBook(ctx, book.id, {
       title: "Loose",
       targetWordCount: "80000",
-      penNameId: other.id,
+      dueOn: "2027-01-31",
     });
-    const b = await getBook(ctx, book.id);
-    expect(b.penName.id).toBe(other.id);
+    let b = await getBook(ctx, book.id);
     expect(b.targetWordCount).toBe(80000);
+    expect(b.dueOn?.toISOString().slice(0, 10)).toBe("2027-01-31");
+    // Absent leaves the deadline alone; empty clears it.
+    await updateBook(ctx, book.id, { title: "Loose", targetWordCount: "80000" });
+    expect((await getBook(ctx, book.id)).dueOn).not.toBeNull();
+    await updateBook(ctx, book.id, { title: "Loose", targetWordCount: "80000", dueOn: "" });
+    b = await getBook(ctx, book.id);
+    expect(b.dueOn).toBeNull();
   });
 
   it("filters the library by identity", async () => {

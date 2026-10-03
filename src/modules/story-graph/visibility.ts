@@ -38,9 +38,16 @@ export const liveNote = { deletedAt: null } satisfies Prisma.NoteWhereInput;
 
 export const liveIdea = { deletedAt: null } satisfies Prisma.IdeaWhereInput;
 
+export const liveTask = { deletedAt: null } satisfies Prisma.TaskWhereInput;
+
+export const liveEvent = { deletedAt: null } satisfies Prisma.CalendarEventWhereInput;
+
+/** A structure is visible when its book (or series) and its owner are. */
 export const liveOutline = {
   deletedAt: null,
-  book: liveBook,
-  OR: [{ relationshipId: null }, { relationship: liveRelationship }],
-  AND: [{ OR: [{ characterId: null }, { character: liveCharacter }] }],
+  OR: [{ book: liveBook }, { series: liveSeries }],
+  AND: [
+    { OR: [{ relationshipId: null }, { relationship: liveRelationship }] },
+    { OR: [{ characterId: null }, { character: liveCharacter }] },
+  ],
 } satisfies Prisma.OutlineWhereInput;

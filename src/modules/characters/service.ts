@@ -166,18 +166,6 @@ async function isLinked(id: string) {
   return connections + relationships + outlines > 0;
 }
 
-/**
- * When a series moves to another pen name, its characters move with it
- * (like its books). Called by the library inside its transaction.
- */
-export function moveSeriesCharacters(
-  tx: Prisma.TransactionClient,
-  seriesId: string,
-  penNameId: string,
-) {
-  return tx.character.updateMany({ where: { seriesId }, data: { penNameId } });
-}
-
 /** Sets one profile field; an empty value removes it. */
 export async function updateProfileField(
   ctx: AuthorContext,

@@ -2,12 +2,12 @@ import "server-only";
 
 import { generateNKeysBetween } from "fractional-indexing";
 
-import { Prisma, type StructureKind } from "@/generated/prisma/client";
+import { Prisma, type ArcRole, type StructureKind } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { ConflictError, NotFoundError, RuleError } from "@/lib/errors";
 import { planInsertAfter, positionAtEnd, sortByPosition } from "@/lib/ordering";
 import { getCharacter, listCharacters } from "@/modules/characters";
-import { getBook, listLibrary } from "@/modules/library";
+import { getBook, getSeries, listLibrary } from "@/modules/library";
 import { getBookTree } from "@/modules/manuscript";
 import { getRelationship, listRelationships } from "@/modules/relationships";
 import { createStoryNode, liveOutline, liveScene } from "@/modules/story-graph";
@@ -18,15 +18,18 @@ import {
   beatInput,
   newOutlineInput,
   outlineTitle,
+  templateInput,
   type BeatInput,
   type NewOutlineInput,
+  type TemplateInput,
 } from "./schemas";
 
 /**
- * Story structures. An outline is a structure applied to a book (plot,
- * romance arc, character arc, subplot, custom); its beats are assigned to the
- * book's real scenes. Assignments are structural (beat_scenes), many-to-many:
- * one beat may span scenes, one scene may carry beats of many structures, and
+ * Story structures. An outline is a structure applied to one book or to a
+ * whole series (plot, romance arc, character arc, subplot, custom); its beats
+ * are assigned to real scenes (of that book, or of any book in the series).
+ * Assignments are structural (beat_scenes), many-to-many: one beat may span
+ * scenes (and books), one scene may carry beats of many structures, and
  * scenes are never copied.
  */
 
@@ -46,6 +49,7 @@ export async function listTemplates(ctx: AuthorContext, { kind }: { kind?: Struc
       name: true,
       description: true,
       source: true,
+      forSeries: true,
       workspaceId: true,
       _count: { select: { beats: true } },
     },
@@ -57,10 +61,93 @@ export async function listTemplates(ctx: AuthorContext, { kind }: { kind?: Struc
   }));
 }
 
+async function requireOwnTemplate(ctx: AuthorContext, id: string) {
+  const template = await db.structureTemplate.findFirst({
+    where: { id, workspaceId: ctx.workspaceId },
+    select: { id: true },
+  });
+  if (!template) throw new NotFoundError("Template");
+  return template;
+}
+
+/**
+ * Saves a structure's beats as a reusable template. The template is a copy:
+ * later edits to either never affect the other. Beats of a series structure
+ * keep which book (1st, 2nd…) they were planned for.
+ */
+export async function saveAsTemplate(ctx: AuthorContext, outlineId: string, input: TemplateInput) {
+  const data = templateInput.parse(input);
+  const outline = await requireOutline(ctx, outlineId);
+  const [beats, seriesBooks] = await Promise.all([
+    db.outlineBeat.findMany({
+      where: { outlineId },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        targetPercent: true,
+        position: true,
+        bookId: true,
+      },
+    }),
+    outline.seriesId ? seriesBookIds(ctx, outline.seriesId) : Promise.resolve([]),
+  ]);
+  const ordered = sortByPosition(beats);
+  const keys = ordered.length ? generateNKeysBetween(null, null, ordered.length) : [];
+
+  return db.$transaction(async (tx) => {
+    const template = await tx.structureTemplate.create({
+      data: {
+        workspaceId: ctx.workspaceId,
+        kind: outline.kind,
+        name: data.name,
+        description: data.description ?? null,
+        forSeries: outline.seriesId !== null,
+      },
+      select: { id: true },
+    });
+    if (ordered.length) {
+      await tx.templateBeat.createMany({
+        data: ordered.map((b, i) => {
+          const index = b.bookId ? seriesBooks.indexOf(b.bookId) : -1;
+          return {
+            templateId: template.id,
+            title: b.title,
+            description: b.description,
+            targetPercent: b.targetPercent,
+            position: keys[i],
+            bookIndex: index >= 0 ? index + 1 : null,
+          };
+        }),
+      });
+    }
+    return template;
+  });
+}
+
+export async function renameTemplate(ctx: AuthorContext, id: string, input: TemplateInput) {
+  const data = templateInput.parse(input);
+  await requireOwnTemplate(ctx, id);
+  await db.structureTemplate.update({
+    where: { id },
+    data: { name: data.name, description: data.description ?? null },
+  });
+}
+
+/**
+ * Deletes one of the author's templates. Structures made from it keep their
+ * beats (they were copies); only the "made from" reference is cleared.
+ */
+export async function deleteTemplate(ctx: AuthorContext, id: string) {
+  await requireOwnTemplate(ctx, id);
+  await db.structureTemplate.delete({ where: { id } });
+}
+
 // ─── Outlines ───────────────────────────────────────────────────────────────
 
 const outlineRefs = {
-  book: { select: { id: true, title: true, penNameId: true } },
+  book: { select: { id: true, title: true, penNameId: true, seriesId: true } },
+  series: { select: { id: true, title: true, penNameId: true } },
   relationship: {
     select: {
       id: true,
@@ -75,20 +162,59 @@ const outlineRefs = {
 async function requireOutline(ctx: AuthorContext, id: string) {
   const outline = await db.outline.findFirst({
     where: { id, workspaceId: ctx.workspaceId, ...liveOutline },
-    select: { id: true, bookId: true, kind: true, title: true, ...outlineRefs },
+    select: {
+      id: true,
+      bookId: true,
+      seriesId: true,
+      kind: true,
+      title: true,
+      arcRole: true,
+      ...outlineRefs,
+    },
   });
   if (!outline) throw new NotFoundError("Structure");
   return outline;
 }
 
+/** Ids of a series' visible books, in reading order. */
+async function seriesBookIds(ctx: AuthorContext, seriesId: string) {
+  return (await getSeries(ctx, seriesId)).books.map((b) => b.id);
+}
+
+type Scope = { penNameId: string; seriesId: string | null; title: string };
+
+/** The identity (and series) a new structure lives in: its book's, or its series'. */
+async function resolveScope(
+  ctx: AuthorContext,
+  { bookId, seriesId }: { bookId: string | null; seriesId: string | null },
+): Promise<Scope> {
+  if (bookId) {
+    const book = await getBook(ctx, bookId);
+    return { penNameId: book.penName.id, seriesId: book.seriesId, title: book.title };
+  }
+  const series = await getSeries(ctx, seriesId!);
+  return { penNameId: series.penName.id, seriesId: series.id, title: series.title };
+}
+
+function assertSameScope(owner: { penNameId: string; seriesId: string | null }, scope: Scope) {
+  if (owner.penNameId !== scope.penNameId) {
+    throw new RuleError("That belongs to a different pen name than this structure’s work.");
+  }
+  if (owner.seriesId && owner.seriesId !== scope.seriesId) {
+    throw new RuleError("That character belongs to a different series.");
+  }
+}
+
 /**
- * Applies a structure to a book. Romance arcs belong to a relationship and
- * character arcs to a character, of the book's identity (and series). With a
- * template, its beats are copied: the outline's beats are then the author's.
+ * Applies a structure to a book or a whole series. Romance arcs belong to a
+ * relationship and character arcs to a character, of the same identity (and
+ * series). With a template, its beats are copied: the new structure's beats
+ * are the author's own, and the template never changes. A series template's
+ * beats are planned for the matching books of the series.
  */
 export async function createOutline(ctx: AuthorContext, input: NewOutlineInput) {
   const data = newOutlineInput.parse(input);
-  const book = await getBook(ctx, data.bookId);
+  const scope = await resolveScope(ctx, data);
 
   let relationshipId: string | null = null;
   let characterId: string | null = null;
@@ -97,11 +223,11 @@ export async function createOutline(ctx: AuthorContext, input: NewOutlineInput) 
     if (!data.relationshipId)
       throw new RuleError("Choose the relationship this romance arc follows.");
     const rel = await getRelationship(ctx, data.relationshipId);
-    const [a] = await db.character.findMany({
+    const a = await db.character.findUniqueOrThrow({
       where: { id: rel.characterA.id },
       select: { penNameId: true, seriesId: true },
     });
-    assertSameScope(a, book);
+    assertSameScope(a, scope);
     relationshipId = rel.id;
     ownerName = `${rel.characterA.name} & ${rel.characterB.name}`;
   } else if (data.kind === "CHARACTER_ARC") {
@@ -109,7 +235,7 @@ export async function createOutline(ctx: AuthorContext, input: NewOutlineInput) 
     const character = await getCharacter(ctx, data.characterId);
     assertSameScope(
       { penNameId: character.penNameId, seriesId: character.series?.id ?? null },
-      book,
+      scope,
     );
     characterId = character.id;
     ownerName = character.name;
@@ -132,6 +258,7 @@ export async function createOutline(ctx: AuthorContext, input: NewOutlineInput) 
               description: true,
               targetPercent: true,
               position: true,
+              bookIndex: true,
             },
           },
         },
@@ -152,6 +279,7 @@ export async function createOutline(ctx: AuthorContext, input: NewOutlineInput) 
 
   const beats = template ? sortByPosition(template.beats) : [];
   const keys = beats.length ? generateNKeysBetween(null, null, beats.length) : [];
+  const books = data.seriesId ? await seriesBookIds(ctx, data.seriesId) : [];
 
   return db.$transaction(async (tx) => {
     const id = await createStoryNode(tx, ctx.workspaceId, "OUTLINE");
@@ -159,12 +287,14 @@ export async function createOutline(ctx: AuthorContext, input: NewOutlineInput) 
       data: {
         id,
         workspaceId: ctx.workspaceId,
-        bookId: book.id,
+        bookId: data.bookId,
+        seriesId: data.seriesId,
         kind: data.kind,
         title: outlineTitle.parse(title),
         templateId: template?.id ?? null,
         relationshipId,
         characterId,
+        arcRole: data.kind === "ROMANCE" ? (data.arcRole ?? "MAIN") : null,
       },
     });
     if (beats.length) {
@@ -177,6 +307,7 @@ export async function createOutline(ctx: AuthorContext, input: NewOutlineInput) 
           description: b.description,
           targetPercent: b.targetPercent,
           position: keys[i],
+          bookId: b.bookIndex ? (books[b.bookIndex - 1] ?? null) : null,
         })),
       });
     }
@@ -184,42 +315,47 @@ export async function createOutline(ctx: AuthorContext, input: NewOutlineInput) 
   });
 }
 
-function assertSameScope(
-  owner: { penNameId: string; seriesId: string | null },
-  book: { penName: { id: string }; seriesId: string | null },
-) {
-  if (owner.penNameId !== book.penName.id) {
-    throw new RuleError("That belongs to a different pen name than this book.");
-  }
-  if (owner.seriesId && owner.seriesId !== book.seriesId) {
-    throw new RuleError("That character belongs to a different series than this book.");
-  }
-}
-
 /** Structures with progress (how many beats are placed in scenes). */
 export async function listOutlines(
   ctx: AuthorContext,
   filter: {
+    /** A book's structures, plus those of its series (which span it). */
     bookId?: string;
+    seriesId?: string;
     relationshipId?: string;
     characterId?: string;
     penNameId?: string | null;
   } = {},
 ) {
+  const scoped: Prisma.OutlineWhereInput[] = [];
+  if (filter.bookId) {
+    const book = await getBook(ctx, filter.bookId);
+    scoped.push({
+      OR: [{ bookId: book.id }, ...(book.seriesId ? [{ seriesId: book.seriesId }] : [])],
+    });
+  }
+  if (filter.seriesId) {
+    scoped.push({ OR: [{ seriesId: filter.seriesId }, { book: { seriesId: filter.seriesId } }] });
+  }
+  if (filter.penNameId) {
+    scoped.push({
+      OR: [{ book: { penNameId: filter.penNameId } }, { series: { penNameId: filter.penNameId } }],
+    });
+  }
   const rows = await db.outline.findMany({
     where: {
       workspaceId: ctx.workspaceId,
       ...liveOutline,
-      ...(filter.bookId ? { bookId: filter.bookId } : {}),
       ...(filter.relationshipId ? { relationshipId: filter.relationshipId } : {}),
       ...(filter.characterId ? { characterId: filter.characterId } : {}),
-      ...(filter.penNameId ? { book: { penNameId: filter.penNameId } } : {}),
+      AND: [...liveOutline.AND, ...scoped],
     },
-    orderBy: [{ book: { title: "asc" } }, { createdAt: "asc" }],
+    orderBy: [{ createdAt: "asc" }],
     select: {
       id: true,
       kind: true,
       title: true,
+      arcRole: true,
       ...outlineRefs,
       beats: { select: { _count: { select: { scenes: { where: { scene: liveScene } } } } } },
     },
@@ -231,14 +367,27 @@ export async function listOutlines(
   }));
 }
 
+type SceneRef = {
+  id: string;
+  title: string;
+  chapterTitle: string;
+  bookId: string;
+  bookTitle: string;
+  /** 1-based place of the book in the series (1 for a single book). */
+  bookNumber: number;
+  /** Where the scene falls in its book, as a percentage. */
+  percent: number;
+};
+
 /**
  * An outline with its beats in order, each with the scenes it is placed in
- * (in reading order, with where each falls in the book) and the book's scenes
- * for assigning.
+ * (in reading order, with where each falls in its book) and the scenes that
+ * can be assigned: the book's, or every book's in a series structure.
  */
 export async function getOutline(ctx: AuthorContext, id: string) {
   const outline = await requireOutline(ctx, id);
-  const [beats, tree] = await Promise.all([
+  const bookIds = outline.bookId ? [outline.bookId] : await seriesBookIds(ctx, outline.seriesId!);
+  const [beats, trees, books] = await Promise.all([
     db.outlineBeat.findMany({
       where: { outlineId: id },
       select: {
@@ -247,45 +396,53 @@ export async function getOutline(ctx: AuthorContext, id: string) {
         description: true,
         targetPercent: true,
         position: true,
+        bookId: true,
         scenes: { where: { scene: liveScene }, select: { sceneId: true } },
       },
     }),
-    getBookTree(ctx, outline.bookId),
+    Promise.all(bookIds.map((b) => getBookTree(ctx, b))),
+    db.book.findMany({ where: { id: { in: bookIds } }, select: { id: true, title: true } }),
   ]);
 
-  const order = new Map(tree.sceneOrder.map((s, i) => [s.id, i]));
-  const total = tree.sceneOrder.length;
-  // Where a scene falls in the book: the middle of its slot, as a percentage.
-  const percentOf = (sceneId: string) => {
-    const i = order.get(sceneId);
-    return i === undefined || total === 0 ? null : Math.round(((i + 0.5) / total) * 100);
-  };
+  const titles = new Map(books.map((b) => [b.id, b.title]));
+  // Every scene of the structure's book(s), in reading order across books.
+  const sceneOrder: SceneRef[] = trees.flatMap((tree, bookIndex) =>
+    tree.sceneOrder.map((s, i) => ({
+      ...s,
+      bookId: bookIds[bookIndex],
+      bookTitle: titles.get(bookIds[bookIndex]) ?? "",
+      bookNumber: bookIndex + 1,
+      // The middle of the scene's slot in its book.
+      percent: Math.round(((i + 0.5) / tree.sceneOrder.length) * 100),
+    })),
+  );
+  const order = new Map(sceneOrder.map((s, i) => [s.id, i]));
 
   return {
     ...outline,
+    books: bookIds.map((b, i) => ({ id: b, title: titles.get(b) ?? "", number: i + 1 })),
     beats: sortByPosition(beats).map(({ scenes, ...b }) => ({
       ...b,
       scenes: scenes
         .map((s) => s.sceneId)
         .filter((sceneId) => order.has(sceneId))
         .sort((x, y) => order.get(x)! - order.get(y)!)
-        .map((sceneId) => {
-          const scene = tree.sceneOrder[order.get(sceneId)!];
-          return {
-            id: sceneId,
-            title: scene.title,
-            chapterTitle: scene.chapterTitle,
-            percent: percentOf(sceneId),
-          };
-        }),
+        .map((sceneId) => sceneOrder[order.get(sceneId)!]),
     })),
-    bookScenes: tree.sceneOrder,
+    bookScenes: sceneOrder,
   };
 }
 
 export async function renameOutline(ctx: AuthorContext, id: string, title: string) {
   await requireOutline(ctx, id);
   await db.outline.update({ where: { id }, data: { title: outlineTitle.parse(title) } });
+}
+
+/** Main or secondary couple (romance arcs only). */
+export async function setArcRole(ctx: AuthorContext, id: string, arcRole: ArcRole) {
+  const outline = await requireOutline(ctx, id);
+  if (outline.kind !== "ROMANCE") throw new RuleError("Only romance arcs have a couple role.");
+  await db.outline.update({ where: { id }, data: { arcRole } });
 }
 
 export async function trashOutline(ctx: AuthorContext, id: string) {
@@ -311,9 +468,24 @@ const beatSiblings = (outlineId: string, exclude?: string) =>
     select: { id: true, position: true },
   });
 
+/** The planned book of a beat must be a book of the series structure. */
+async function plannedBook(
+  ctx: AuthorContext,
+  outline: { seriesId: string | null },
+  bookId: string | null | undefined,
+) {
+  if (!bookId) return null;
+  if (!outline.seriesId) throw new RuleError("Only series structures plan beats per book.");
+  if (!(await seriesBookIds(ctx, outline.seriesId)).includes(bookId)) {
+    throw new RuleError("That book isn’t part of this series.");
+  }
+  return bookId;
+}
+
 export async function addBeat(ctx: AuthorContext, outlineId: string, input: BeatInput) {
   const data = beatInput.parse(input);
-  await requireOutline(ctx, outlineId);
+  const outline = await requireOutline(ctx, outlineId);
+  const bookId = await plannedBook(ctx, outline, data.bookId);
   return db.$transaction(async (tx) => {
     // Serialize appends to one outline.
     await tx.$queryRaw`SELECT 1 FROM "outlines" WHERE "id" = ${outlineId}::uuid FOR UPDATE`;
@@ -328,6 +500,7 @@ export async function addBeat(ctx: AuthorContext, outlineId: string, input: Beat
         title: data.title,
         description: data.description ?? null,
         targetPercent: data.targetPercent,
+        bookId,
         position: positionAtEnd(siblings),
       },
       select: { id: true },
@@ -337,13 +510,16 @@ export async function addBeat(ctx: AuthorContext, outlineId: string, input: Beat
 
 export async function updateBeat(ctx: AuthorContext, beatId: string, input: BeatInput) {
   const data = beatInput.parse(input);
-  await requireBeat(ctx, beatId);
+  const beat = await requireBeat(ctx, beatId);
+  const bookId =
+    data.bookId === undefined ? undefined : await plannedBook(ctx, beat.outline, data.bookId);
   await db.outlineBeat.update({
     where: { id: beatId },
     data: {
       title: data.title,
       description: data.description ?? null,
       targetPercent: data.targetPercent,
+      ...(bookId !== undefined && { bookId }),
     },
   });
 }
@@ -368,16 +544,26 @@ export async function deleteBeat(ctx: AuthorContext, beatId: string) {
 
 // ─── Beat → scene placements ────────────────────────────────────────────────
 
-/** Records that a beat happens in a scene of the outline's book. */
+/**
+ * Records that a beat happens in a scene: a scene of the structure's book, or
+ * of any book in its series.
+ */
 export async function assignScene(ctx: AuthorContext, beatId: string, sceneId: string) {
   const beat = await requireBeat(ctx, beatId);
   const scene = await db.scene.findFirst({
     where: { id: sceneId, workspaceId: ctx.workspaceId, ...liveScene },
-    select: { bookId: true },
+    select: { bookId: true, book: { select: { seriesId: true } } },
   });
   if (!scene) throw new NotFoundError("Scene");
-  if (scene.bookId !== beat.outline.bookId) {
-    throw new RuleError("Beats can only be placed in scenes of this structure’s book.");
+  const fits = beat.outline.seriesId
+    ? scene.book.seriesId === beat.outline.seriesId
+    : scene.bookId === beat.outline.bookId;
+  if (!fits) {
+    throw new RuleError(
+      beat.outline.seriesId
+        ? "Beats can only be placed in scenes of this series’ books."
+        : "Beats can only be placed in scenes of this structure’s book.",
+    );
   }
   try {
     await db.beatScene.create({ data: { workspaceId: ctx.workspaceId, beatId, sceneId } });
@@ -403,7 +589,7 @@ export async function beatsForScene(ctx: AuthorContext, sceneId: string) {
         select: {
           id: true,
           title: true,
-          outline: { select: { id: true, title: true, kind: true } },
+          outline: { select: { id: true, title: true, kind: true, seriesId: true } },
         },
       },
     },
@@ -415,12 +601,124 @@ export async function beatsForScene(ctx: AuthorContext, sceneId: string) {
     outlineId: r.beat.outline.id,
     outlineTitle: r.beat.outline.title,
     kind: r.beat.outline.kind,
+    seriesWide: r.beat.outline.seriesId !== null,
   }));
 }
 
+// ─── Series Romance Center ──────────────────────────────────────────────────
+
+export type RomanceCell = {
+  beatId: string;
+  title: string;
+  outlineId: string;
+  /** Placed in at least one scene of this book. */
+  placed: boolean;
+};
+
 /**
- * What the "New structure" dialog offers: books, relationships and characters
- * of one identity (null = all), and the templates.
+ * Every romance arc in a series, grouped by relationship, as a progression
+ * across the series' books: series-wide arcs (beats grouped by planned book,
+ * or by where they are placed) and arcs of single books alike. Any number of
+ * relationships (main and secondary couples, triangles…) is supported.
+ */
+export async function seriesRomance(ctx: AuthorContext, seriesId: string) {
+  const series = await getSeries(ctx, seriesId);
+  const bookIds = series.books.map((b) => b.id);
+  const arcs = await db.outline.findMany({
+    where: {
+      workspaceId: ctx.workspaceId,
+      kind: "ROMANCE",
+      ...liveOutline,
+      AND: [...liveOutline.AND, { OR: [{ seriesId }, { bookId: { in: bookIds } }] }],
+    },
+    orderBy: { createdAt: "asc" },
+    select: {
+      id: true,
+      title: true,
+      bookId: true,
+      seriesId: true,
+      arcRole: true,
+      relationship: {
+        select: {
+          id: true,
+          type: true,
+          characterA: { select: { id: true, name: true } },
+          characterB: { select: { id: true, name: true } },
+        },
+      },
+      beats: {
+        select: {
+          id: true,
+          title: true,
+          position: true,
+          bookId: true,
+          scenes: { where: { scene: liveScene }, select: { scene: { select: { bookId: true } } } },
+        },
+      },
+    },
+  });
+
+  const byRelationship = new Map<
+    string,
+    {
+      relationship: NonNullable<(typeof arcs)[number]["relationship"]>;
+      arcRole: ArcRole;
+      arcs: { id: string; title: string; seriesWide: boolean; bookId: string | null }[];
+      /** Beats per book id, in arc then beat order. */
+      books: Map<string, RomanceCell[]>;
+      unplanned: RomanceCell[];
+    }
+  >();
+
+  for (const arc of arcs) {
+    const rel = arc.relationship!;
+    const entry = byRelationship.get(rel.id) ?? {
+      relationship: rel,
+      arcRole: arc.arcRole ?? "MAIN",
+      arcs: [],
+      books: new Map(bookIds.map((b) => [b, [] as RomanceCell[]])),
+      unplanned: [],
+    };
+    if (arc.arcRole === "MAIN") entry.arcRole = "MAIN";
+    entry.arcs.push({
+      id: arc.id,
+      title: arc.title,
+      seriesWide: arc.seriesId !== null,
+      bookId: arc.bookId,
+    });
+    for (const beat of sortByPosition(arc.beats)) {
+      const placedIn = new Set(beat.scenes.map((s) => s.scene.bookId));
+      // A beat shows under every book it is placed in; otherwise under its
+      // planned book (or, for a single-book arc, that book).
+      const targets = placedIn.size
+        ? [...placedIn]
+        : [beat.bookId ?? arc.bookId].filter((b): b is string => Boolean(b));
+      const cell = { beatId: beat.id, title: beat.title, outlineId: arc.id };
+      if (targets.length === 0) entry.unplanned.push({ ...cell, placed: false });
+      for (const b of targets) entry.books.get(b)?.push({ ...cell, placed: placedIn.has(b) });
+    }
+    byRelationship.set(rel.id, entry);
+  }
+
+  const relationships = [...byRelationship.values()]
+    .sort((a, b) => (a.arcRole === b.arcRole ? 0 : a.arcRole === "MAIN" ? -1 : 1))
+    .map((r) => ({
+      ...r,
+      books: series.books.map((b) => ({ bookId: b.id, beats: r.books.get(b.id) ?? [] })),
+    }));
+
+  return {
+    series: { id: series.id, title: series.title, penNameId: series.penName.id },
+    books: series.books.map((b, i) => ({ id: b.id, title: b.title, number: i + 1 })),
+    relationships,
+  };
+}
+
+// ─── Pickers ────────────────────────────────────────────────────────────────
+
+/**
+ * What the "New structure" dialog offers: books, series, relationships and
+ * characters of one identity (null = all), and the templates.
  */
 export async function newStructureOptions(
   ctx: AuthorContext,
@@ -439,6 +737,9 @@ export async function newStructureOptions(
       ),
       ...library.standalone.map((b) => ({ id: b.id, label: b.title })),
     ],
+    series: library.series
+      .filter((s) => s.books.length > 0)
+      .map((s) => ({ id: s.id, label: s.title })),
     relationships: relationships.map((r) => ({
       id: r.id,
       label: `${r.characterA.name} & ${r.characterB.name}`,

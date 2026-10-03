@@ -8,7 +8,8 @@ import {
   updateCharacter,
 } from "@/modules/characters";
 import { connect } from "@/modules/connections";
-import { createBook, createSeries, updateSeries } from "@/modules/library";
+import { createBook, createSeries } from "@/modules/library";
+import { applyIdentityMove, previewIdentityMove } from "@/modules/impact";
 import { createChapter, createScene } from "@/modules/manuscript";
 import { createNote } from "@/modules/notes";
 import { createPenName, getDefaultPenName, setActiveIdentity } from "@/modules/pen-names";
@@ -69,7 +70,9 @@ describe("characters belong to an identity", () => {
   it("move with their series when the series changes pen name", async () => {
     const series = await createSeries(ctx, { title: "Saga" });
     const c = await createCharacter(ctx, { name: "Hero", seriesId: series.id });
-    await updateSeries(ctx, series.id, { title: "Saga", penNameId: rose });
+    const move = { kind: "SERIES" as const, id: series.id, toPenNameId: rose };
+    const report = await previewIdentityMove(ctx, move);
+    await applyIdentityMove(ctx, move, report.token);
     expect((await getCharacter(ctx, c.id)).penNameId).toBe(rose);
   });
 

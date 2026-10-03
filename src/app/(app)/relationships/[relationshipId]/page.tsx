@@ -111,7 +111,7 @@ export default async function RelationshipPage({ params }: Props) {
             in your scenes.
           </p>
         ) : (
-          <OutlineList outlines={arcs} showBook />
+          <OutlineList outlines={arcs} showWork />
         )}
       </section>
 

@@ -2,26 +2,29 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import type { StructureKind } from "@/generated/prisma/enums";
+import type { ArcRole, StructureKind } from "@/generated/prisma/enums";
 
-import { STRUCTURE_KIND_LABELS } from "../labels";
+import { ARC_ROLE_LABELS, STRUCTURE_KIND_LABELS } from "../labels";
 
 type Outline = {
   id: string;
   kind: StructureKind;
   title: string;
+  arcRole?: ArcRole | null;
   beatCount: number;
   placedCount: number;
-  book: { title: string };
+  book: { title: string } | null;
+  series: { title: string } | null;
 };
 
 /** Structures with how many beats are placed in scenes. */
 export function OutlineList({
   outlines,
-  showBook = false,
+  showWork = false,
 }: {
   outlines: Outline[];
-  showBook?: boolean;
+  /** Name the book (or series) each structure belongs to. */
+  showWork?: boolean;
 }) {
   return (
     <ul
@@ -38,9 +41,12 @@ export function OutlineList({
               <p className="font-medium">{o.title}</p>
               <p className="text-xs text-muted-foreground">
                 {STRUCTURE_KIND_LABELS[o.kind].one}
-                {showBook && ` · ${o.book.title}`}
+                {o.arcRole === "SECONDARY" && ` · ${ARC_ROLE_LABELS.SECONDARY}`}
+                {showWork && o.book && ` · ${o.book.title}`}
+                {o.series && ` · Whole series: ${o.series.title}`}
               </p>
             </div>
+            {o.series && <Badge className="bg-primary/10 text-primary">Series</Badge>}
             <div className="w-40 space-y-1">
               <p className="text-right text-xs text-muted-foreground">
                 {o.placedCount} of {o.beatCount} beats placed
@@ -50,7 +56,6 @@ export function OutlineList({
                 label={`${o.title}: beats placed`}
               />
             </div>
-            <Badge className="sr-only">{o.kind}</Badge>
           </Link>
         </li>
       ))}

@@ -1,4 +1,4 @@
-import type { StructureKind } from "@/generated/prisma/enums";
+import type { ArcRole, StructureKind } from "@/generated/prisma/enums";
 
 export const STRUCTURE_KIND_LABELS: Record<StructureKind, { one: string; hint: string }> = {
   PLOT: { one: "Plot", hint: "The main story structure of the book." },
@@ -6,4 +6,9 @@ export const STRUCTURE_KIND_LABELS: Record<StructureKind, { one: string; hint: s
   CHARACTER_ARC: { one: "Character arc", hint: "How one character changes." },
   SUBPLOT: { one: "Subplot", hint: "A secondary storyline." },
   CUSTOM: { one: "Custom", hint: "Your own structure." },
+};
+
+export const ARC_ROLE_LABELS: Record<ArcRole, string> = {
+  MAIN: "Main couple",
+  SECONDARY: "Secondary couple",
 };

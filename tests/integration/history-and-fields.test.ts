@@ -6,11 +6,16 @@ import { createCharacter } from "@/modules/characters";
 import {
   createFieldDefinition,
   deleteFieldDefinition,
+  fieldContext,
+  fieldScopeOptions,
   getFieldValues,
   listFieldDefinitions,
   renameFieldDefinition,
   setFieldValue,
 } from "@/modules/fields";
+import { connect } from "@/modules/connections";
+import { createBook, createSeries } from "@/modules/library";
+import { createChapter, createScene } from "@/modules/manuscript";
 import { getRevision, listRevisions, restoreRevision, saveVersion } from "@/modules/history";
 import { createIdea } from "@/modules/ideas";
 import { createNote, getNote, saveNoteBody } from "@/modules/notes";
@@ -88,7 +93,10 @@ describe("custom fields", () => {
     expect(await getFieldValues(ctx, mara.id)).toEqual({});
 
     await renameFieldDefinition(ctx, field.id, "Love languages");
-    const defs = await listFieldDefinitions(ctx, { nodeKind: "CHARACTER", penNameId: null });
+    const defs = await listFieldDefinitions(ctx, {
+      nodeKind: "CHARACTER",
+      context: await fieldContext(ctx, mara.id),
+    });
     expect(defs.map((d) => d.label)).toEqual(["Love languages", "Zodiac sign"]);
   });
 
@@ -111,10 +119,76 @@ describe("custom fields", () => {
     await expect(setFieldValue(ctx, note.id, roseOnly.id, "Fire")).rejects.toBeInstanceOf(
       RuleError,
     );
-    expect(await listFieldDefinitions(ctx, { nodeKind: "CHARACTER", penNameId: jane })).toEqual([]);
     expect(
-      await listFieldDefinitions(ctx, { nodeKind: "CHARACTER", penNameId: rose }),
-    ).toHaveLength(1);
+      await listFieldDefinitions(ctx, {
+        nodeKind: "CHARACTER",
+        context: await fieldContext(ctx, janeChar.id),
+      }),
+    ).toEqual([]);
+    const forRose = await listFieldDefinitions(ctx, {
+      nodeKind: "CHARACTER",
+      context: await fieldContext(ctx, roseChar.id),
+    });
+    expect(forRose.map((d) => [d.label, d.scope])).toEqual([["Magic type", "Rose"]]);
+  });
+
+  it("scopes fields to a series or a book, and offers the pen name first", async () => {
+    const saga = await createSeries(ctx, { title: "Saga" });
+    const book1 = await createBook(ctx, { title: "Saga 1", seriesId: saga.id });
+    const loose = await createBook(ctx, { title: "Loose" });
+    const hero = await createCharacter(ctx, { name: "Hero", seriesId: saga.id });
+    const other = await createCharacter(ctx, { name: "Other" });
+    const chapter = await createChapter(ctx, book1.id);
+    const scene = await createScene(ctx, chapter.id);
+    await connect(ctx, { sourceId: hero.id, targetId: scene.id, kind: "appears_in" });
+
+    const options = await fieldScopeOptions(ctx, await fieldContext(ctx, hero.id));
+    expect(options.map((o) => o.label)).toEqual([
+      "This pen name (Test Author)",
+      "All pen names",
+      "This series (Saga)",
+      "Book: Saga 1",
+    ]);
+
+    const bySeries = await createFieldDefinition(ctx, {
+      nodeKind: "CHARACTER",
+      label: "House",
+      seriesId: saga.id,
+    });
+    const byBook = await createFieldDefinition(ctx, {
+      nodeKind: "CHARACTER",
+      label: "Book 1 secret",
+      bookId: book1.id,
+    });
+    await createFieldDefinition(ctx, {
+      nodeKind: "CHARACTER",
+      label: "Elsewhere",
+      bookId: loose.id,
+    });
+    await expect(
+      createFieldDefinition(ctx, {
+        nodeKind: "CHARACTER",
+        label: "Both",
+        seriesId: saga.id,
+        bookId: book1.id,
+      }),
+    ).rejects.toThrow();
+    // The same name may exist once per scope.
+    await createFieldDefinition(ctx, { nodeKind: "CHARACTER", label: "House" });
+
+    const heroFields = await listFieldDefinitions(ctx, {
+      nodeKind: "CHARACTER",
+      context: await fieldContext(ctx, hero.id),
+    });
+    expect(heroFields.map((d) => d.scope).sort()).toEqual([
+      "All pen names",
+      "Book: Saga 1",
+      "Series: Saga",
+    ]);
+    await setFieldValue(ctx, hero.id, bySeries.id, "Ravenhold");
+    await setFieldValue(ctx, hero.id, byBook.id, "Is a prince");
+    await expect(setFieldValue(ctx, other.id, bySeries.id, "x")).rejects.toBeInstanceOf(RuleError);
+    await expect(setFieldValue(ctx, other.id, byBook.id, "x")).rejects.toBeInstanceOf(RuleError);
   });
 
   it("deleting a field removes its values everywhere", async () => {

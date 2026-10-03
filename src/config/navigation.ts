@@ -112,14 +112,14 @@ export const navigation: NavGroup[] = [
         href: "/tasks",
         icon: SquareCheck,
         description: "Writing to-dos with due dates and priorities.",
-        availability: { status: "planned", milestone: "Milestone 4" },
+        availability: { status: "available" },
       },
       {
         label: "Calendar",
         href: "/calendar",
         icon: CalendarDays,
-        description: "Deadlines, events and writing sessions in one view.",
-        availability: { status: "planned", milestone: "Milestone 4" },
+        description: "Deadlines, events, due tasks and the words you wrote, in one view.",
+        availability: { status: "available" },
       },
       {
         label: "Trash",

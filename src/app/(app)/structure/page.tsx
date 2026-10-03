@@ -1,8 +1,9 @@
-import { Plus } from "lucide-react";
+import { LayoutTemplate, Plus } from "lucide-react";
 import type { Metadata } from "next";
+import Link from "next/link";
 
 import { PageHeader } from "@/components/shell/page-header";
-import { Button } from "@/components/ui/button";
+import { Button, buttonVariants } from "@/components/ui/button";
 import { listOutlines, newStructureOptions } from "@/modules/structure";
 import { NewStructureDialog, OutlineList } from "@/modules/structure/ui";
 import { requireAuthorContext } from "@/server/context";
@@ -23,17 +24,23 @@ export default async function StructurePage() {
         title="Story structure"
         description="Plot, romance and character arcs, beat by beat, placed in your real scenes."
         actions={
-          options.books.length > 0 ? (
-            <NewStructureDialog
-              {...options}
-              trigger={
-                <Button>
-                  <Plus />
-                  New structure
-                </Button>
-              }
-            />
-          ) : undefined
+          <div className="flex flex-wrap gap-2">
+            <Link href="/structure/templates" className={buttonVariants({ variant: "outline" })}>
+              <LayoutTemplate />
+              Templates
+            </Link>
+            {options.books.length > 0 && (
+              <NewStructureDialog
+                {...options}
+                trigger={
+                  <Button>
+                    <Plus />
+                    New structure
+                  </Button>
+                }
+              />
+            )}
+          </div>
         }
       />
       {outlines.length === 0 ? (
@@ -43,7 +50,7 @@ export default async function StructurePage() {
             : "Create a book first, then give it a structure."}
         </p>
       ) : (
-        <OutlineList outlines={outlines} showBook />
+        <OutlineList outlines={outlines} showWork />
       )}
     </div>
   );

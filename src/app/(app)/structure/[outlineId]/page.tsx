@@ -9,7 +9,13 @@ import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
 import { NewNoteDialog } from "@/modules/notes/ui";
 import { getOutline, STRUCTURE_KIND_LABELS } from "@/modules/structure";
-import { BeatBoard, OutlineTitle, trashOutlineAction } from "@/modules/structure/ui";
+import {
+  ArcRoleSelect,
+  BeatBoard,
+  OutlineTitle,
+  SaveTemplateDialog,
+  trashOutlineAction,
+} from "@/modules/structure/ui";
 import { requireAuthorContext } from "@/server/context";
 import { orNotFound } from "@/server/not-found";
 
@@ -38,10 +44,15 @@ export default async function OutlinePage({ params }: Props) {
         </Link>
       </nav>
       <div className="space-y-3 border-b border-border pb-6">
-        <div className="flex items-start gap-2">
-          <div className="min-w-0 flex-1">
+        <div className="flex flex-wrap items-start gap-2">
+          <div className="min-w-0 flex-1 basis-64">
             <OutlineTitle id={outline.id} title={outline.title} />
           </div>
+          <SaveTemplateDialog
+            outlineId={outline.id}
+            defaultName={outline.title}
+            forSeries={outline.series !== null}
+          />
           <ConfirmDialog
             trigger={
               <Button variant="ghost" aria-label="Move structure to Trash">
@@ -58,9 +69,22 @@ export default async function OutlinePage({ params }: Props) {
         </div>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted-foreground">
           <Badge>{STRUCTURE_KIND_LABELS[outline.kind].one}</Badge>
-          <Link href={`/books/${outline.book.id}`} className="text-primary hover:underline">
-            {outline.book.title}
-          </Link>
+          {outline.book && (
+            <Link href={`/books/${outline.book.id}`} className="text-primary hover:underline">
+              {outline.book.title}
+            </Link>
+          )}
+          {outline.series && (
+            <Link
+              href={`/library/series/${outline.series.id}`}
+              className="text-primary hover:underline"
+            >
+              Whole series: {outline.series.title}
+            </Link>
+          )}
+          {outline.kind === "ROMANCE" && outline.arcRole && (
+            <ArcRoleSelect outlineId={outline.id} value={outline.arcRole} />
+          )}
           {outline.relationship && (
             <Link
               href={`/relationships/${outline.relationship.id}`}
@@ -91,7 +115,7 @@ export default async function OutlinePage({ params }: Props) {
 
       <BeatBoard
         outlineId={outline.id}
-        bookId={outline.book.id}
+        books={outline.books}
         beats={outline.beats}
         bookScenes={outline.bookScenes}
       />

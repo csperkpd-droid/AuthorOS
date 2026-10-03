@@ -3,6 +3,7 @@ import "server-only";
 import { db } from "@/lib/db";
 import type { Doc } from "@/lib/text";
 import { saveContent, type SaveResult } from "@/modules/history";
+import { recordEditorWords, today } from "@/modules/progress";
 import type { AuthorContext } from "@/server/context";
 
 import { sceneDetailsInput, type SceneDetailsInput } from "./schemas";
@@ -39,14 +40,23 @@ export async function getSceneForEditor(ctx: AuthorContext, id: string) {
 
 /**
  * Saves scene content through the shared history layer: stale versions are
- * refused (never overwritten) and earlier content is checkpointed.
+ * refused (never overwritten) and earlier content is checkpointed. The change
+ * in words is added to today's writing for the book, in the same transaction.
  */
 export async function saveSceneContent(
   ctx: AuthorContext,
   { sceneId, content, baseVersion }: { sceneId: string; content: unknown; baseVersion: number },
 ): Promise<SaveResult> {
-  await requireScene(ctx, sceneId);
-  return saveContent(ctx, { nodeId: sceneId, content, baseVersion });
+  const scene = await requireScene(ctx, sceneId);
+  const date = await today(ctx);
+  return saveContent(
+    ctx,
+    { nodeId: sceneId, content, baseVersion },
+    {
+      afterWrite: (tx, words) =>
+        recordEditorWords(tx, ctx, { bookId: scene.bookId, date, ...words }),
+    },
+  );
 }
 
 export async function updateSceneDetails(ctx: AuthorContext, id: string, input: SceneDetailsInput) {

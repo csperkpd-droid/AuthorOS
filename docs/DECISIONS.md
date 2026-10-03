@@ -422,7 +422,7 @@ character profile (jsonb) stays for the built-in fields.
 (enum). **Why on books:** they describe what readers get from a book; a
 trope taxonomy table can come later without changing the column's meaning.
 
-### 50. Romance arcs are scoped to a book — Proposed (M3)
+### 50. Romance arcs are scoped to a book — Superseded by 52 (M4)
 
 An outline belongs to one book, so a series-long slow burn is one arc per
 book. **Open question for approval:** add series-level outlines (an outline
@@ -434,3 +434,89 @@ Connection and cast pickers search within the pen name of the object they
 are opened from (for shared objects, the identity being written as), and a
 scene is only offered characters of its own series or none. New characters
 created from a scene join that scene's pen name and series.
+
+## Milestone 4
+
+### 52. Series structures extend the structure architecture — Accepted (M4)
+
+An outline belongs to exactly one book or one series (CHECK). A series
+structure's beats can be planned for a book (`outline_beats.book_id`,
+grouping only) and placed in scenes of any book in the series. A
+series-long romance arc is simply a series outline of kind `ROMANCE` owned
+by a relationship: no separate romance system, and the four concepts (story
+objects, structural hierarchy, beat assignments, connections) stay
+separate. Books still have their own structures; each book page lists both.
+**Rejected:** linking per-book arcs into a chain (a series arc would be N
+objects to keep in sync, and beats couldn't span books).
+
+### 53. The Series Romance Center groups arcs by relationship — Accepted (M4)
+
+The Center reads every romance arc of a series (series-wide and per-book)
+and lays each relationship out book by book; arcs carry a couple role
+(`MAIN`/`SECONDARY`) for ordering. It handles any number of relationships,
+so secondary couples and love triangles work today, and multi-partner
+romances work as their pairwise relationships. **Extension point:** group
+relationships (a members table) for Why Choose/RH; the Center already groups
+by owner.
+
+### 54. Notes and ideas stay shared; scope is an extension point — Accepted (M4)
+
+Notes and ideas are author-level creative resources, shared across pen
+names, and capturing one never asks for an identity. A future optional
+scope (all identities, a pen name, a series, a book) would be nullable
+columns on those tables; identity rules derive from the resolver, so they
+would apply without other changes. Tasks and events follow the same rule.
+
+### 55. Change Impact: review, then apply exactly what was reviewed — Accepted (M4)
+
+Changes that affect connected story data produce an impact report (groups of
+affected objects with their effect, blockers, a token). The author chooses
+Move everything, Review changes or Cancel. Applying recomputes the plan
+under a row lock and refuses a changed token, so nothing the author didn't
+see is moved, and nothing is silently moved or orphaned. Built as its own
+module so other changes (deleting forever, removing a field in use) can
+produce reports later. **Note:** this is the first implementation of the
+Change Impact idea; earlier milestones had no such system.
+
+### 56. Pen-name moves carry associated story data — Accepted (M4)
+
+Moving a standalone book (or a series) to another pen name moves the
+characters of the old pen name connected to it (scenes, arcs, relationships,
+links, transitively), their relationships, its structures, and values of
+pen-limited fields (copied to the new pen name). Anything of the old pen
+name linked in that belongs to other work blocks the move, with an
+explanation. Pen names no longer change through "Details": books and series
+show "Change pen name…", a book joins only series of its own pen name, and a
+book with series characters in its scenes can't leave the series.
+**Supersedes** the M3 rule that only a series' own characters moved with it
+(which could leave other characters linked across identities).
+
+### 57. Templates are copied on save and on apply — Accepted (M4)
+
+"Save as template" copies beats into a workspace template (series templates
+keep each beat's book number); applying copies them into a new structure.
+Templates and structures never share beat records or scene placements.
+Deleting a template keeps every structure made from it. **Extension point:**
+template kits (several templates applied together).
+
+### 58. Custom fields default to the current pen name — Accepted (M4)
+
+Scopes: current pen name (default), all pen names, a series, a book (CHECK
+at most one). Characters are in their pen name and series, and in the books
+whose scenes they appear in.
+
+### 59. Words written are recorded from saves, per author, book and day — Accepted (M4)
+
+Each scene save adds its change in words to one `writing_sessions` row per
+(user, book, date) in the save's transaction, via an atomic upsert on a
+partial unique index. Restores don't count; logged words are separate rows.
+"Today" is the author's local date (`users.time_zone`, detected from the
+browser once). **Why not compute from revisions:** checkpoints are 10
+minutes apart and per scene; daily totals need every save.
+
+### 60. Tasks and events are story nodes linked by `concerns` — Accepted (M4)
+
+As the M0 plan said: what a task or event is for is a set of connections,
+not fixed foreign keys, so any story object can have tasks and dates and
+shows them in its Connections panel. Book deadlines are a column on books
+(`due_on`), merged into the calendar with events and task due dates.

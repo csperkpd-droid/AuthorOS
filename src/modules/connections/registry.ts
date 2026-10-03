@@ -82,6 +82,14 @@ export const CONNECTION_KINDS = {
     to: "*",
     hint: "Something this idea led to.",
   },
+  concerns: {
+    label: "Concerns",
+    inverseLabel: "Tasks & dates",
+    directed: true,
+    from: ["TASK", "EVENT"],
+    to: "*",
+    hint: "What a task or calendar event is for.",
+  },
   related: {
     label: "Related to",
     inverseLabel: "Related to",

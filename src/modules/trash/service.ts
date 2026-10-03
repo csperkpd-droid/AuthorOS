@@ -3,7 +3,13 @@ import "server-only";
 import type { Prisma, StoryNodeKind } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { NotFoundError } from "@/lib/errors";
-import { liveBook, liveCharacter, liveRelationship, purgeStoryNodes } from "@/modules/story-graph";
+import {
+  liveBook,
+  liveCharacter,
+  liveRelationship,
+  liveSeries,
+  purgeStoryNodes,
+} from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 
 /**
@@ -54,13 +60,18 @@ function whereFor(ctx: AuthorContext) {
     } satisfies Prisma.RelationshipWhereInput,
     note: ws satisfies Prisma.NoteWhereInput,
     idea: ws satisfies Prisma.IdeaWhereInput,
-    // A structure is listed on its own only while its book and owner are live.
+    // A structure is listed on its own only while its book (or series) and
+    // owner are live.
     outline: {
       ...ws,
-      book: liveBook,
-      OR: [{ relationshipId: null }, { relationship: liveRelationship }],
-      AND: [{ OR: [{ characterId: null }, { character: liveCharacter }] }],
+      AND: [
+        { OR: [{ book: liveBook }, { series: liveSeries }] },
+        { OR: [{ relationshipId: null }, { relationship: liveRelationship }] },
+        { OR: [{ characterId: null }, { character: liveCharacter }] },
+      ],
     } satisfies Prisma.OutlineWhereInput,
+    task: ws satisfies Prisma.TaskWhereInput,
+    event: ws satisfies Prisma.CalendarEventWhereInput,
   };
 }
 
@@ -78,6 +89,8 @@ export async function listTrash(ctx: AuthorContext): Promise<TrashItem[]> {
     notes,
     ideas,
     outlines,
+    tasks,
+    events,
   ] = await Promise.all([
     db.series.findMany({
       where: where.series,
@@ -128,8 +141,15 @@ export async function listTrash(ctx: AuthorContext): Promise<TrashItem[]> {
     db.idea.findMany({ where: where.idea, select: { ...base, title: true } }),
     db.outline.findMany({
       where: where.outline,
-      select: { ...base, title: true, book: { select: { title: true } } },
+      select: {
+        ...base,
+        title: true,
+        book: { select: { title: true } },
+        series: { select: { title: true } },
+      },
     }),
+    db.task.findMany({ where: where.task, select: { ...base, title: true } }),
+    db.calendarEvent.findMany({ where: where.event, select: { ...base, title: true } }),
   ]);
 
   const items: TrashItem[] = [
@@ -144,7 +164,9 @@ export async function listTrash(ctx: AuthorContext): Promise<TrashItem[]> {
     ),
     ...notes.map((n) => item(n, "NOTE", n.title, null)),
     ...ideas.map((i) => item(i, "IDEA", i.title, null)),
-    ...outlines.map((o) => item(o, "OUTLINE", o.title, o.book.title)),
+    ...outlines.map((o) => item(o, "OUTLINE", o.title, o.book?.title ?? o.series?.title ?? null)),
+    ...tasks.map((t) => item(t, "TASK", t.title, null)),
+    ...events.map((e) => item(e, "EVENT", e.title, null)),
   ];
   return items.sort((a, b) => b.deletedAt.getTime() - a.deletedAt.getTime());
 }
@@ -192,6 +214,10 @@ async function requireTrashed(ctx: AuthorContext, kind: StoryNodeKind, id: strin
         return db.idea.findFirst({ where: { ...where.idea, id }, select });
       case "OUTLINE":
         return db.outline.findFirst({ where: { ...where.outline, id }, select });
+      case "TASK":
+        return db.task.findFirst({ where: { ...where.task, id }, select });
+      case "EVENT":
+        return db.calendarEvent.findFirst({ where: { ...where.event, id }, select });
       default:
         return unreachable(kind);
     }
@@ -223,6 +249,10 @@ export async function restoreFromTrash(ctx: AuthorContext, kind: StoryNodeKind, 
       return void (await db.idea.update(args));
     case "OUTLINE":
       return void (await db.outline.update(args));
+    case "TASK":
+      return void (await db.task.update(args));
+    case "EVENT":
+      return void (await db.calendarEvent.update(args));
     default:
       return unreachable(kind);
   }

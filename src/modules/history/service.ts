@@ -39,6 +39,18 @@ async function requireVersioned(ctx: AuthorContext, nodeId: string): Promise<Ver
 export async function saveContent(
   ctx: AuthorContext,
   { nodeId, content, baseVersion }: { nodeId: string; content: unknown; baseVersion: number },
+  {
+    afterWrite,
+  }: {
+    /**
+     * Runs in the save's transaction with the word counts before and after
+     * (e.g. to record words written). Restores don't call it.
+     */
+    afterWrite?: (
+      tx: Prisma.TransactionClient,
+      words: { before: number; after: number },
+    ) => Promise<void>;
+  } = {},
 ): Promise<SaveResult> {
   const kind = await requireVersioned(ctx, nodeId);
   const doc = docSchema.parse(content);
@@ -56,11 +68,13 @@ export async function saveContent(
       );
     }
     await checkpointIfDue(tx, ctx, kind, nodeId);
+    const before = afterWrite ? (await access.read(tx, nodeId)).wordCount : 0;
     const written = await access.write(tx, nodeId, {
       content: doc as Prisma.JsonValue,
       text,
       wordCount,
     });
+    if (afterWrite) await afterWrite(tx, { before, after: wordCount });
     return { ...written, wordCount };
   });
 }

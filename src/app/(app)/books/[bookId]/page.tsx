@@ -1,4 +1,4 @@
-import { PenLine, Plus, Settings2, Trash2 } from "lucide-react";
+import { CalendarClock, PenLine, Plus, Settings2, Trash2, UserRound } from "lucide-react";
 import type { Metadata } from "next";
 import Link from "next/link";
 
@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { Progress } from "@/components/ui/progress";
+import { formatDay } from "@/lib/dates";
 import { formatCount, formatWords } from "@/lib/format";
 import {
   BOOK_STATUS_LABELS,
@@ -17,10 +18,12 @@ import {
 import { BookDialog, trashBookAction } from "@/modules/library/ui";
 import { getBookTree } from "@/modules/manuscript";
 import { BinderManager } from "@/modules/manuscript/ui";
+import { ChangePenNameDialog } from "@/modules/impact/ui";
 import { listPenNames } from "@/modules/pen-names";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
 import { NewNoteDialog } from "@/modules/notes/ui";
+import { TaskDialog } from "@/modules/tasks/ui";
 import { listOutlines, newStructureOptions } from "@/modules/structure";
 import { NewStructureDialog, OutlineList } from "@/modules/structure/ui";
 import { requireAuthorContext } from "@/server/context";
@@ -81,6 +84,23 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
                 </Button>
               }
             />
+            {!book.seriesId && (
+              <ChangePenNameDialog
+                kind="BOOK"
+                id={book.id}
+                title={book.title}
+                currentPenNameId={book.penName.id}
+                penNames={penNames
+                  .filter((p) => !p.archivedAt)
+                  .map((p) => ({ id: p.id, name: p.name }))}
+                trigger={
+                  <Button variant="outline">
+                    <UserRound />
+                    Change pen name…
+                  </Button>
+                }
+              />
+            )}
             <ConfirmDialog
               trigger={
                 <Button variant="ghost" aria-label="Move book to Trash">
@@ -126,6 +146,16 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
           <span className="mt-1 block text-xs text-muted-foreground">
             {formatCount(tree.sceneCount, "scene")}
           </span>
+          {book.dueOn && (
+            <span className="mt-1 flex items-center gap-1 text-xs text-muted-foreground">
+              <CalendarClock className="size-3.5" aria-hidden />
+              Due{" "}
+              {formatDay(book.dueOn.toISOString().slice(0, 10), {
+                weekday: undefined,
+                year: "numeric",
+              })}
+            </span>
+          )}
         </Stat>
       </dl>
       {book.description && <p className="max-w-prose text-muted-foreground">{book.description}</p>}
@@ -156,6 +186,7 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
           <NewStructureDialog
             {...structureOptions}
             books={[{ id: book.id, label: book.title }]}
+            series={book.series ? [{ id: book.series.id, label: book.series.title }] : []}
             defaults={{ bookId: book.id }}
             trigger={
               <Button variant="outline" size="sm">
@@ -181,14 +212,24 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
         heading="Notes & links"
         emptyText="Notes, research, ideas and other links for this book."
         actions={
-          <NewNoteDialog
-            about={{ id: book.id, title: book.title }}
-            trigger={
-              <Button variant="outline" size="sm">
-                New note
-              </Button>
-            }
-          />
+          <div className="flex flex-wrap gap-2">
+            <NewNoteDialog
+              about={{ id: book.id, title: book.title }}
+              trigger={
+                <Button variant="outline" size="sm">
+                  New note
+                </Button>
+              }
+            />
+            <TaskDialog
+              concerns={{ id: book.id, title: book.title }}
+              trigger={
+                <Button variant="outline" size="sm">
+                  New task
+                </Button>
+              }
+            />
+          </div>
         }
       />
     </div>

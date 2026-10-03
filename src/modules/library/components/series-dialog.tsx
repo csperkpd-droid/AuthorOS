@@ -62,27 +62,23 @@ export function SeriesDialog({
               autoFocus
             />
           </Field>
-          <Field
-            label="Pen name"
-            htmlFor={`${id}-pen`}
-            hint={
-              series
-                ? "Changing this also changes the pen name of every book in the series."
-                : undefined
-            }
-          >
-            <Select
-              id={`${id}-pen`}
-              name="penNameId"
-              defaultValue={series?.penName.id ?? defaultPenNameId}
-            >
-              {penOptions.map((p) => (
-                <option key={p.id} value={p.id}>
-                  {p.name}
-                </option>
-              ))}
-            </Select>
-          </Field>
+          {series ? (
+            <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+              Published as <strong className="text-foreground">{series.penName.name}</strong>. To
+              move the series to another pen name, use “Change pen name…”: you’ll see what moves
+              with it first.
+            </p>
+          ) : (
+            <Field label="Pen name" htmlFor={`${id}-pen`}>
+              <Select id={`${id}-pen`} name="penNameId" defaultValue={defaultPenNameId}>
+                {penOptions.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <Field label="Description" htmlFor={`${id}-description`}>
             <Textarea
               id={`${id}-description`}

@@ -27,6 +27,7 @@ export type EditableBook = {
   targetWordCount: number | null;
   tropes: string[];
   heatLevel: HeatLevel | null;
+  dueOn: Date | null;
   seriesId: string | null;
   penName: { id: string; name: string };
 };
@@ -58,6 +59,11 @@ export function BookDialog({
   const pending = create.pending || update.pending;
   const error = create.error ?? update.error;
   const series = seriesOptions.find((s) => s.id === seriesId);
+  // An existing book only joins series of its own pen name (moving identity
+  // is a separate, reviewed change).
+  const seriesChoices = book
+    ? seriesOptions.filter((s) => s.penName.id === book.penName.id)
+    : seriesOptions;
   // An archived pen name still shows for the book that uses it.
   const penOptions =
     book && !penNames.some((p) => p.id === book.penName.id)
@@ -104,7 +110,7 @@ export function BookDialog({
               onChange={(e) => setSeriesId(e.target.value)}
             >
               <option value="">Standalone (no series)</option>
-              {seriesOptions.map((s) => (
+              {seriesChoices.map((s) => (
                 <option key={s.id} value={s.id}>
                   {s.title}
                 </option>
@@ -117,13 +123,14 @@ export function BookDialog({
               Published as <strong className="text-foreground">{series.penName.name}</strong>, the
               series’ pen name.
             </p>
+          ) : book ? (
+            <p className="rounded-md bg-muted px-3 py-2 text-sm text-muted-foreground">
+              Published as <strong className="text-foreground">{book.penName.name}</strong>. To move
+              it to another pen name, use “Change pen name…”: you’ll see what moves with it first.
+            </p>
           ) : (
             <Field label="Pen name" htmlFor={`${id}-pen`}>
-              <Select
-                id={`${id}-pen`}
-                name="penNameId"
-                defaultValue={book?.penName.id ?? defaultPenNameId}
-              >
+              <Select id={`${id}-pen`} name="penNameId" defaultValue={defaultPenNameId}>
                 {penOptions.map((p) => (
                   <option key={p.id} value={p.id}>
                     {p.name}
@@ -157,6 +164,19 @@ export function BookDialog({
                   />
                 </Field>
               </div>
+              <Field
+                label="Draft deadline"
+                htmlFor={`${id}-due`}
+                hint="Shown on your calendar; the dashboard paces you toward it."
+              >
+                <Input
+                  id={`${id}-due`}
+                  name="dueOn"
+                  type="date"
+                  defaultValue={book.dueOn ? book.dueOn.toISOString().slice(0, 10) : ""}
+                  className="w-48"
+                />
+              </Field>
               <Field label="Description" htmlFor={`${id}-description`}>
                 <Textarea
                   id={`${id}-description`}

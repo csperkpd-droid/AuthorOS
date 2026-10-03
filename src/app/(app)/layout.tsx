@@ -6,6 +6,8 @@ import { SidebarNav } from "@/components/shell/sidebar-nav";
 import { UserMenu } from "@/components/shell/user-menu";
 import { listPenNames } from "@/modules/pen-names";
 import { IdentitySwitcher } from "@/modules/pen-names/ui";
+import { hasTimeZone } from "@/modules/progress";
+import { TimeZoneSync } from "@/modules/progress/ui";
 import { getSessionUser, requireAuthorContext } from "@/server/context";
 
 // The layout fetches the user and identities for the shell UI only.
@@ -15,7 +17,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   const user = await getSessionUser();
   if (!user) redirect("/sign-in");
   const ctx = await requireAuthorContext();
-  const penNames = await listPenNames(ctx);
+  const [penNames, timeZoneKnown] = await Promise.all([listPenNames(ctx), hasTimeZone(ctx)]);
   const switcher = (
     <IdentitySwitcher
       penNames={penNames.map((p) => ({ id: p.id, name: p.name }))}
@@ -25,6 +27,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[16rem_1fr]">
+      <TimeZoneSync needed={!timeZoneKnown} />
       <aside className="hidden border-r border-border bg-surface lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col">
         <div className="px-6 py-5">
           <Brand />

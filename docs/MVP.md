@@ -17,7 +17,7 @@ the suggestion boundary).
 | **1: Writing loop + identities** ✅           | Series, books, optional parts, chapters, scenes; binder with drag-and-drop and Move to…; Tiptap editor with autosave and conflict protection; word counts; scene status and synopsis; revision history with named versions and restore; Trash; full pen-name management (create, edit, default, archive, assign, switch identity, All Identities view); Story Graph extension point | An author can draft a full manuscript under any of their pen names, reorganize it, and recover any earlier version or deleted item.                |
 | **2: Story bible + Universal Connections** ✅ | Characters (profile, role, series scope, scene cast with POV); relationships (story nodes with their own scenes and notes); notes (rich text, about anything); ideas (capture, promote to book); Universal Connections (registry, panel, picker, backlinks); Trash for every new kind                                                                                               | From any scene you can see who is in it and what notes are about it; from any character, where they appear; anything can be connected to anything. |
 | **3: Structure and romance** ✅               | Built-in beat templates; outlines per book (plot, romance arc per relationship, character arc, subplot, custom); beats placed in real scenes (many-to-many, no copies); notes version history; characters scoped to pen names; custom fields; tropes and heat level                                                                                                                 | An author can lay a beat sheet over the manuscript and see gaps.                                                                                   |
-| **4: Getting work done**                      | Tasks; calendar (events, due dates); writing sessions; goals; dashboard progress                                                                                                                                                                                                                                                                                                    | An author can plan their week and track daily words.                                                                                               |
+| **4: Getting work done** ✅                   | Tasks; calendar (events, due dates, deadlines, words per day); automatic writing sessions and logged words; daily goal, streak, deadline pace on the dashboard; plus series-long structures and the Series Romance Center, Save as template, Change Impact for pen-name moves, scoped custom fields                                                                                 | An author can plan their week and track daily words.                                                                                               |
 | **5: Ownership**                              | Global search; export manuscript (DOCX, Markdown); export the whole workspace (JSON)                                                                                                                                                                                                                                                                                                | An author can find anything and take all their data with them.                                                                                     |
 
 ## Out of MVP scope (and where it goes)
@@ -30,6 +30,18 @@ the suggestion boundary).
 | Collaboration                                 | v1.3+ | Workspaces, memberships and roles exist; database sessions.          |
 | Pen-name branding, links, publishing accounts | v1.1  | Pen names, archive, assignment and identity switching shipped in M1. |
 | Imports (DOCX, Scrivener)                     | Later | Revisions record `IMPORT` source.                                    |
+
+## Milestone 4 checklist
+
+- [x] Series structures: one structure spanning a series, beats planned per book and placed in any of its books' scenes; whole-series or per-book view; shown on every book of the series
+- [x] Series Romance Center: every romance arc of a series, grouped by relationship (main and secondary couples), as a progression book by book
+- [x] Save as template; templates page (rename, delete); applying creates new, independent structures and beats; series templates plan beats onto books
+- [x] Change Impact: "What will this affect?" with Move everything / Review changes / Cancel; moving a standalone book or a series to another pen name moves its characters, relationships, structures and pen-limited field values; blockers instead of orphans; stale reviews refused
+- [x] Custom fields scoped to the current pen name (default), all pen names, a series or a book
+- [x] Tasks: quick add, priority, due dates, complete/reopen, Done view, "New task" from books and scenes, Trash
+- [x] Calendar: month grid (phone: list), events (multi-day, time), task due dates, book deadlines, words per day
+- [x] Writing progress: words recorded per book and day from scene saves (not restores), logged words, time zone, daily goal, streak, 30-day chart, deadline pace
+- [x] Tests: integration tests for every rule above (incl. concurrency of daily totals, time zones, stale impact reviews); end-to-end flows on desktop and phone
 
 ## Milestone 3 checklist
 
