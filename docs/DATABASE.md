@@ -126,14 +126,14 @@ triggers remove the children's nodes.
 
 ### Library and manuscript (Milestone 1)
 
-| Table               | Key columns                                                                                                                                                                    | Notes                                                                                                                                                                                    |
-| ------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `series`            | `pen_name_id`, `title`, `description`, `deleted_at`                                                                                                                            | Pen name via tenant-safe FK.                                                                                                                                                             |
-| `books`             | `pen_name_id`, `series_id?`, `series_position?` (C collation), `title`, `subtitle`, `description`, `status`, `target_word_count`, `tropes text[]`, `heat_level?`, `deleted_at` | CHECK: `series_position` set exactly when `series_id` is. Books in a series share the series' pen name (service rule).                                                                   |
-| `parts`             | `book_id`, `title`, `position`, `deleted_at`                                                                                                                                   | Optional level. Unique `(id, book_id)` so chapters can reference parts safely.                                                                                                           |
-| `chapters`          | `book_id`, `part_id?`, `title`, `position`, `deleted_at`                                                                                                                       | `part_id` null = book top level, sharing the position space with parts.                                                                                                                  |
-| `scenes`            | `book_id`, `chapter_id`, `title`, `position`, `status`, `synopsis`, `content` (jsonb), `content_text`, `word_count`, `version`, `deleted_at`                                   | FK `(chapter_id, book_id) → chapters(id, book_id)`: a scene's book is always its chapter's book. `version` increments on each content save (optimistic concurrency).                     |
-| `content_revisions` | `node_id`, `content`, `content_text`, `word_count`, `source` (`AUTOSAVE`/`MANUAL`/`BEFORE_RESTORE`/`AI_ACCEPTED`/`IMPORT`), `label`, `created_by_id`, `created_at`             | Append-only history of any versioned story object (scenes, notes); renamed from `scene_revisions` in M3. Tenant-safe FK to `story_nodes`, cascade. Indexed `(node_id, created_at DESC)`. |
+| Table               | Key columns                                                                                                                                                                                               | Notes                                                                                                                                                                                    |
+| ------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `series`            | `pen_name_id`, `title`, `description`, `deleted_at`                                                                                                                                                       | Pen name via tenant-safe FK.                                                                                                                                                             |
+| `books`             | `pen_name_id`, `series_id?`, `series_position?` (C collation), `title`, `subtitle`, `description`, `writing_status` (M8; was `status`), `target_word_count`, `tropes text[]`, `heat_level?`, `deleted_at` | CHECK: `series_position` set exactly when `series_id` is. Books in a series share the series' pen name (service rule).                                                                   |
+| `parts`             | `book_id`, `title`, `position`, `deleted_at`                                                                                                                                                              | Optional level. Unique `(id, book_id)` so chapters can reference parts safely.                                                                                                           |
+| `chapters`          | `book_id`, `part_id?`, `title`, `position`, `deleted_at`                                                                                                                                                  | `part_id` null = book top level, sharing the position space with parts.                                                                                                                  |
+| `scenes`            | `book_id`, `chapter_id`, `title`, `position`, `status`, `synopsis`, `content` (jsonb), `content_text`, `word_count`, `version`, `deleted_at`                                                              | FK `(chapter_id, book_id) → chapters(id, book_id)`: a scene's book is always its chapter's book. `version` increments on each content save (optimistic concurrency).                     |
+| `content_revisions` | `node_id`, `content`, `content_text`, `word_count`, `source` (`AUTOSAVE`/`MANUAL`/`BEFORE_RESTORE`/`AI_ACCEPTED`/`IMPORT`), `label`, `created_by_id`, `created_at`                                        | Append-only history of any versioned story object (scenes, notes); renamed from `scene_revisions` in M3. Tenant-safe FK to `story_nodes`, cascade. Indexed `(node_id, created_at DESC)`. |
 
 The **manuscript** is a view, not a table: a book's parts, chapters and
 scenes in `position` order. Book and part word totals are computed from
@@ -257,12 +257,36 @@ marks text saved before an import replaced it.
 - Migrations: `20261009090000_pen_name_node_kind` (adds the enum value on
   its own: it must be committed before use), `20261009090100_foundations`.
 
+### Safety and readiness (Milestone 8)
+
+- **`books.writing_status`** (`writing_status` enum: `IDEA`, `PLANNING`,
+  `DRAFTING`, `DRAFTED`, `REVISING`, `EDITING`, `PROOFREADING`, `COMPLETE`)
+  replaced `books.status` / `book_status`. Writing status never says
+  "Published": books that were `PUBLISHED` became `COMPLETE`, and the fact
+  was kept as a book field "Publication status" = "Published", so no
+  information was lost. Publication belongs to editions (v1.1).
+- **`field_revisions`**: `workspace_id`, `node_id` (composite FK →
+  `story_nodes`, cascade), `field` (a column such as `synopsis`, a profile
+  field `profile.<key>`, or `beat:<id>.description` on an outline; CHECK
+  1–200 chars), `value`, `source` (`revision_source`), `created_by_id?`,
+  `created_at`. Index `(node_id, field, created_at DESC)`. Earlier values of
+  long-form text that isn't a rich-text document.
+- **Document format versions:** `scenes.content_format`,
+  `notes.body_format`, `content_revisions.content_format` (int, default 1).
+  Documents are upgraded when read (`lib/doc-format.ts`); a document newer
+  than the app understands is refused on import, never misread.
+- **`revision_source`** gains `BEFORE_LARGE_EDIT` (checkpoint before a save
+  that removes much of a document) and `BEFORE_EDIT` (field history).
+- Migration: `20261010090000_safety_and_readiness`. Data migrations run
+  statement by statement: don't rely on `ON COMMIT DROP` temporary tables.
+
 ### Retention
 
 Nothing is pruned automatically:
 
-- **History.** `content_revisions` rows are kept indefinitely, whatever their
-  source: autosave checkpoints, named versions, before-restore copies, and
+- **History.** `content_revisions` and `field_revisions` rows are kept
+  indefinitely, whatever their source: autosave and large-edit checkpoints,
+  named versions, earlier field values, before-restore copies, imports, and
   future publication snapshots.
 - **Trash** keeps items until the author deletes them forever or empties it.
 - **Archive** (pen names; ideas' `ARCHIVED` status) hides without deleting.
@@ -320,6 +344,19 @@ template_id, position)`: apply a main plot, romance and character arcs
 | `editions`                                 | `book_id`, `pen_name_id?`, `format`, `isbn?`, `release_date?`                                           | **The extension point for a book-level publication identity.** A book's pen name follows its series; an edition may be published under a different identity via `pen_name_id`. Built with Publishing (v1.1); nothing earlier depends on it. |
 | `retail_listings`                          | `edition_id`, `retailer`, `url`, `asin?`                                                                |                                                                                                                                                                                                                                             |
 | `pen_names` (+)                            | `pen_name_links` (website, socials), brand kit                                                          | Pen-name branding and publishing accounts.                                                                                                                                                                                                  |
+
+### Decided shapes for later systems (M8)
+
+Recorded so nothing built now blocks them (decisions 87–92):
+
+| Future table(s)                                | Shape                                                                                                                                                                                                                                                          |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `editions`, `edition_status`                   | Book → Edition (ebook, paperback, hardcover, audiobook) → publishing status per edition ("Ebook: Published", "Audiobook: Not started"). `books.writing_status` stays about the writing.                                                                        |
+| `tropes` (node kind `TROPE`), `book_tropes`…   | A reusable object: a controlled common list plus custom tropes per workspace, linked to books, series, arcs and relationships (connections or a join table), used by search, marketing and analytics. `books.tropes text[]` is migrated into it, then dropped. |
+| `beats` (node kind `BEAT`), `beat_assignments` | The beat (name, description, purpose, target position, required, structure, template source) separate from where it happens (assignment: structure/arc → book → scene). One scene can satisfy beats of several structures without copies.                      |
+| `comments`, `comment_anchors`                  | Comments are metadata, never in the text: anchor = node, document version, position, quoted text and surrounding context. When the text changes, the anchor is re-found or the comment is flagged for review, never silently moved.                            |
+| `project_access` (or `book_grants`)            | Workspace membership ≠ access to every book: per-book/series/pen-name grants for co-authors and editors. Private projects, pen names and business records stay isolated.                                                                                       |
+| Life Planner (separate boundary)               | Its own tables and permissions; shares only explicit task/event references (`shared_items` with a grant). No reads of AuthorOS story data; no personal/household data inside AuthorOS. Enforced in services and schema, not the UI.                            |
 
 ### v1.2: AI suggestions
 

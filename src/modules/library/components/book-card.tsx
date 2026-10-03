@@ -2,10 +2,10 @@ import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
-import type { BookStatus } from "@/generated/prisma/enums";
+import type { WritingStatus } from "@/generated/prisma/enums";
 import { formatWords } from "@/lib/format";
 
-import { BOOK_STATUS_LABELS } from "../labels";
+import { WRITING_STATUS_LABELS } from "../labels";
 
 export function BookCard({
   book,
@@ -15,7 +15,7 @@ export function BookCard({
     id: string;
     title: string;
     subtitle: string | null;
-    status: BookStatus;
+    writingStatus: WritingStatus;
     wordCount: number;
     targetWordCount: number | null;
     penName: { name: string; archivedAt: Date | null };
@@ -32,7 +32,7 @@ export function BookCard({
         {book.subtitle && <p className="text-sm text-muted-foreground">{book.subtitle}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
-        <Badge>{BOOK_STATUS_LABELS[book.status]}</Badge>
+        <Badge>{WRITING_STATUS_LABELS[book.writingStatus]}</Badge>
         {showPenName && (
           <Badge className="bg-primary/10 text-primary">
             {book.penName.name}

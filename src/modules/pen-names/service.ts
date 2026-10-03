@@ -1,9 +1,11 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { assertNotStale, staleError, type EditGuard } from "@/lib/concurrency";
 import { createStoryNode } from "@/modules/story-graph";
 import { NotFoundError, RuleError } from "@/lib/errors";
 import type { AuthorContext } from "@/server/context";
+import { recordFieldHistory } from "@/modules/history";
 import { assertCan } from "@/server/policy";
 
 import { penNameInput, type PenNameInput } from "./schemas";
@@ -15,6 +17,7 @@ const penNameSelect = {
   isDefault: true,
   archivedAt: true,
   language: true,
+  updatedAt: true,
 } as const;
 
 export type PenNameSummary = {
@@ -25,6 +28,7 @@ export type PenNameSummary = {
   archivedAt: Date | null;
   /** Writing language (BCP 47), for search stemming. */
   language: string | null;
+  updatedAt: Date;
 };
 
 /** Pen names in display order: default first, then by creation. */
@@ -122,18 +126,28 @@ export async function updatePenName(
   ctx: AuthorContext,
   id: string,
   input: PenNameInput,
+  guard: EditGuard = {},
 ): Promise<PenNameSummary> {
   assertCan(ctx, "manage", "identity");
   const data = penNameInput.parse(input);
   await getPenName(ctx, id);
-  return db.penName.update({
-    where: { id },
-    data: {
-      name: data.name,
-      bio: data.bio ?? null,
-      ...(data.language !== undefined && { language: data.language }),
-    },
-    select: penNameSelect,
+  return db.$transaction(async (tx) => {
+    const row = await tx.penName.findUniqueOrThrow({
+      where: { id },
+      select: { bio: true, updatedAt: true },
+    });
+    assertNotStale(row.updatedAt, guard.expectedUpdatedAt, "pen name");
+    await recordFieldHistory(tx, ctx, id, row, { bio: data.bio ?? null });
+    const { count } = await tx.penName.updateMany({
+      where: { id, updatedAt: row.updatedAt },
+      data: {
+        name: data.name,
+        bio: data.bio ?? null,
+        ...(data.language !== undefined && { language: data.language }),
+      },
+    });
+    if (count === 0) throw staleError("pen name");
+    return tx.penName.findUniqueOrThrow({ where: { id }, select: penNameSelect });
   });
 }
 

@@ -31,7 +31,8 @@ export function ImpactDialog({
   /** Shown while the report loads. */
   title: string;
   loadReport: () => Promise<Result<ImpactReport>>;
-  onConfirm: (token: string) => Promise<Result<unknown>>;
+  /** Applies with the report's token and the suggestions the author accepted. */
+  onConfirm: (token: string, accepted: string[]) => Promise<Result<unknown>>;
   confirmLabel: string;
   navigateTo?: string;
   open?: boolean;
@@ -91,9 +92,9 @@ export function ImpactDialog({
             pending={pending}
             error={error}
             onCancel={() => setOpen(false)}
-            onConfirm={async () => {
+            onConfirm={async (accepted) => {
               setPending(true);
-              const result = await onConfirm(report.token);
+              const result = await onConfirm(report.token, accepted);
               setPending(false);
               if (!result.ok) {
                 setError(result.error);

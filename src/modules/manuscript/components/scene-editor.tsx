@@ -4,6 +4,7 @@ import { useCallback } from "react";
 
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import type { Doc } from "@/lib/text";
+import { keepDeviceDraftAction } from "@/modules/history/ui";
 
 import { saveSceneContentAction } from "../actions";
 
@@ -23,12 +24,18 @@ export function SceneEditor({
     (doc: Doc, baseVersion: number) => saveSceneContentAction(sceneId, doc, baseVersion),
     [sceneId],
   );
+  const keep = useCallback(
+    (doc: Doc, writtenAt: string) => keepDeviceDraftAction(sceneId, doc, writtenAt),
+    [sceneId],
+  );
   return (
     <RichTextEditor
       content={content}
       version={version}
       wordCount={wordCount}
       onSave={save}
+      onKeepDraft={keep}
+      draftKey={`scene:${sceneId}`}
       label="Scene text"
       thing="scene"
     />

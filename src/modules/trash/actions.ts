@@ -23,8 +23,15 @@ export async function previewDeleteForeverAction(kind: StoryNodeKind, id: string
   });
 }
 
-export async function deleteForeverAction(kind: StoryNodeKind, id: string, token: string) {
-  return runAction(async () => deleteForever(await requireAuthorContext(), kind, id, token));
+export async function deleteForeverAction(
+  kind: StoryNodeKind,
+  id: string,
+  token: string,
+  accepted: string[] = [],
+) {
+  return runAction(async () =>
+    deleteForever(await requireAuthorContext(), kind, id, token, accepted),
+  );
 }
 
 export async function previewEmptyTrashAction() {
@@ -33,6 +40,6 @@ export async function previewEmptyTrashAction() {
   });
 }
 
-export async function emptyTrashAction(token: string) {
-  return runAction(async () => emptyTrash(await requireAuthorContext(), token));
+export async function emptyTrashAction(token: string, accepted: string[] = []) {
+  return runAction(async () => emptyTrash(await requireAuthorContext(), token, accepted));
 }

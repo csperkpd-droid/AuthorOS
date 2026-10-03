@@ -4,15 +4,18 @@ import { generateNKeysBetween } from "fractional-indexing";
 
 import { Prisma, type ArcRole, type StructureKind } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { assertNotStale, staleError, type EditGuard } from "@/lib/concurrency";
 import { ConflictError, NotFoundError, RuleError } from "@/lib/errors";
 import { planInsertAfter, positionAtEnd, sortByPosition } from "@/lib/ordering";
 import { getCharacter, listCharacters } from "@/modules/characters";
 import { getBook, getSeries, listLibrary } from "@/modules/library";
+import { createNote, saveNoteBody } from "@/modules/notes";
 import { getBookTree } from "@/modules/manuscript";
 import { getRelationship, listRelationships, relationshipTitle } from "@/modules/relationships";
 import { assertReviewed, buildReport } from "@/modules/impact";
 import { createStoryNode, liveOutline, liveScene } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { recordFieldHistory } from "@/modules/history";
 import { assertCan } from "@/server/policy";
 
 import { STRUCTURE_KIND_LABELS } from "./labels";
@@ -474,6 +477,7 @@ export async function getOutline(ctx: AuthorContext, id: string) {
         id: true,
         title: true,
         description: true,
+        updatedAt: true,
         targetPercent: true,
         position: true,
         bookId: true,
@@ -593,20 +597,41 @@ export async function addBeat(ctx: AuthorContext, outlineId: string, input: Beat
   });
 }
 
-export async function updateBeat(ctx: AuthorContext, beatId: string, input: BeatInput) {
+export async function updateBeat(
+  ctx: AuthorContext,
+  beatId: string,
+  input: BeatInput,
+  guard: EditGuard = {},
+) {
   assertCan(ctx, "edit", "structure");
   const data = beatInput.parse(input);
   const beat = await requireBeat(ctx, beatId);
   const bookId =
     data.bookId === undefined ? undefined : await plannedBook(ctx, beat.outline, data.bookId);
-  await db.outlineBeat.update({
-    where: { id: beatId },
-    data: {
-      title: data.title,
-      description: data.description ?? null,
-      targetPercent: data.targetPercent,
-      ...(bookId !== undefined && { bookId }),
-    },
+  await db.$transaction(async (tx) => {
+    const row = await tx.outlineBeat.findUniqueOrThrow({
+      where: { id: beatId },
+      select: { description: true, updatedAt: true },
+    });
+    assertNotStale(row.updatedAt, guard.expectedUpdatedAt, "beat");
+    // A beat's description is kept on its structure's history.
+    await recordFieldHistory(
+      tx,
+      ctx,
+      beat.outlineId,
+      { [`beat:${beatId}.description`]: row.description },
+      { [`beat:${beatId}.description`]: data.description ?? null },
+    );
+    const { count } = await tx.outlineBeat.updateMany({
+      where: { id: beatId, updatedAt: row.updatedAt },
+      data: {
+        title: data.title,
+        description: data.description ?? null,
+        targetPercent: data.targetPercent,
+        ...(bookId !== undefined && { bookId }),
+      },
+    });
+    if (count === 0) throw staleError("beat");
   });
 }
 
@@ -628,7 +653,10 @@ export async function moveBeat(ctx: AuthorContext, beatId: string, afterBeatId: 
 export async function previewDeleteBeat(ctx: AuthorContext, beatId: string) {
   const beat = await requireBeat(ctx, beatId);
   const [row, placements] = await Promise.all([
-    db.outlineBeat.findUniqueOrThrow({ where: { id: beatId }, select: { title: true } }),
+    db.outlineBeat.findUniqueOrThrow({
+      where: { id: beatId },
+      select: { title: true, description: true },
+    }),
     db.beatScene.findMany({
       where: { workspaceId: ctx.workspaceId, beatId },
       select: { scene: { select: { id: true, title: true, bookId: true } } },
@@ -649,14 +677,49 @@ export async function previewDeleteBeat(ctx: AuthorContext, beatId: string) {
           href: `/books/${p.scene.bookId}/scenes/${p.scene.id}`,
         })),
       },
+      {
+        // Yellow: the description goes with the beat unless kept.
+        key: "KEEP_DESCRIPTION",
+        level: "suggested" as const,
+        label: "The beat’s description",
+        noun: { one: "description", many: "descriptions" },
+        effect: "Deleted with the beat",
+        suggestion: "Keep it as a note about this structure",
+        items: row.description?.trim()
+          ? [{ id: beatId, title: row.description.slice(0, 120), href: null }]
+          : [],
+      },
     ],
-    extra: [beatId],
+    extra: [beatId, row.description],
   });
 }
 
-export async function deleteBeat(ctx: AuthorContext, beatId: string, token?: string) {
+export async function deleteBeat(
+  ctx: AuthorContext,
+  beatId: string,
+  token?: string,
+  /** Suggested consequences the author accepted ("KEEP_DESCRIPTION"). */
+  accepted: string[] = [],
+) {
   assertCan(ctx, "edit", "structure");
-  assertReviewed(await previewDeleteBeat(ctx, beatId), token);
+  const chosen = assertReviewed(await previewDeleteBeat(ctx, beatId), token, accepted);
+  if (chosen.has("KEEP_DESCRIPTION")) {
+    const beat = await db.outlineBeat.findUniqueOrThrow({
+      where: { id: beatId },
+      select: { title: true, description: true, outlineId: true },
+    });
+    const note = await createNote(ctx, { title: beat.title, aboutId: beat.outlineId });
+    await saveNoteBody(ctx, {
+      noteId: note.id,
+      content: {
+        type: "doc",
+        content: beat
+          .description!.split(/\n{2,}/)
+          .map((text) => ({ type: "paragraph", content: [{ type: "text", text }] })),
+      },
+      baseVersion: 0,
+    });
+  }
   await db.outlineBeat.delete({ where: { id: beatId } });
 }
 

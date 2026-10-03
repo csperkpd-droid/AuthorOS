@@ -48,6 +48,8 @@ type Beat = {
   targetPercent: number | null;
   bookId: string | null;
   scenes: SceneRef[];
+  /** When the beat was loaded (stale-edit protection). */
+  updatedAt?: Date | string;
 };
 type BookRef = { id: string; title: string; number: number };
 
@@ -297,7 +299,7 @@ function BeatCard({
           onOpenChange={setRemoving}
           title={`Remove the beat “${beat.title}”?`}
           loadReport={() => previewDeleteBeatAction(beat.id)}
-          onConfirm={(token) => deleteBeatAction(beat.id, token)}
+          onConfirm={(token, accepted) => deleteBeatAction(beat.id, token, accepted)}
           confirmLabel="Remove beat"
         />
       </div>
@@ -337,7 +339,11 @@ function BeatDialog({
                 ...(books.length > 0 && { bookId: String(formData.get("bookId") ?? "") }),
               };
               const result = existing
-                ? await update.run(existing.id, input)
+                ? await update.run(
+                    existing.id,
+                    input,
+                    existing.updatedAt ? new Date(existing.updatedAt).toISOString() : undefined,
+                  )
                 : await add.run(outlineId, input);
               if (result.ok) onClose();
             }}

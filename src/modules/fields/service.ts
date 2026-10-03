@@ -4,6 +4,7 @@ import { Prisma, type StoryNodeKind } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { ConflictError, NotFoundError, RuleError } from "@/lib/errors";
 import { positionAtEnd, sortByPosition } from "@/lib/ordering";
+import { CORE_CHARACTER_FIELD_LABELS } from "@/modules/characters";
 import { getBook, getSeries } from "@/modules/library";
 import { getPenName, requireAssignablePenName } from "@/modules/pen-names";
 import { buildReport } from "@/modules/impact";
@@ -142,9 +143,21 @@ export async function fieldScopeOptions(ctx: AuthorContext, context: FieldContex
   ];
 }
 
+/** Core fields of a kind, which custom fields never duplicate. */
+const CORE_FIELDS: Partial<Record<StoryNodeKind, string[]>> = {
+  CHARACTER: CORE_CHARACTER_FIELD_LABELS,
+};
+
+function assertNotCoreField(kind: StoryNodeKind, label: string) {
+  const core = CORE_FIELDS[kind]?.find((l) => l.toLowerCase() === label.trim().toLowerCase());
+  if (core)
+    throw new RuleError(`“${core}” is already a core field. Use it instead of a custom field.`);
+}
+
 export async function createFieldDefinition(ctx: AuthorContext, input: NewFieldInput) {
   assertCan(ctx, "edit", "storyBible");
   const data = newFieldInput.parse(input);
+  assertNotCoreField(data.nodeKind, data.label);
   if (data.penNameId) await requireAssignablePenName(ctx, data.penNameId);
   if (data.seriesId) await getSeries(ctx, data.seriesId);
   if (data.bookId) await getBook(ctx, data.bookId);
@@ -187,7 +200,8 @@ async function requireDefinition(ctx: AuthorContext, id: string) {
 
 export async function renameFieldDefinition(ctx: AuthorContext, id: string, label: string) {
   assertCan(ctx, "edit", "storyBible");
-  await requireDefinition(ctx, id);
+  const definition = await requireDefinition(ctx, id);
+  assertNotCoreField(definition.nodeKind, label);
   await db.fieldDefinition.update({ where: { id }, data: { label: fieldLabel.parse(label) } });
 }
 

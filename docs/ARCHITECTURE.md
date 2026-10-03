@@ -280,8 +280,10 @@ Screen-reader announcements name items by title.
 server-derived plain-text column (search, word counts); the server validates
 the document shape and size.
 
-**Autosave and conflicts.** The editor saves ~1 s after typing stops (and on
-blur and Ctrl/Cmd+S), one save in flight at a time, retrying on failure.
+**Autosave and conflicts.** Text goes to this device first (a local draft,
+M8: see Author content safety), then the editor saves to the cloud ~1 s
+after typing stops (and on blur and Ctrl/Cmd+S), one save in flight at a
+time, retrying on failure.
 Every save carries the version it was based on; the server row-locks the
 scene and refuses a stale version. The editor then stops and asks the author
 to reload: **edits made elsewhere are never silently overwritten.** Leaving
@@ -298,6 +300,55 @@ node; a new versioned kind adds one accessor in `history/versioned.ts`.
 Trash lists the topmost trashed item of each branch; restoring brings back
 its contents (except things trashed separately). "Delete forever" removes
 the item, its descendants and their revisions.
+
+## Author content safety (M8)
+
+Protecting the author's work comes before features. Four layers, each
+honest about where the text is:
+
+1. **This device, immediately.** The editor writes the document to
+   IndexedDB (`lib/local-drafts.ts`, keyed `scene:<id>` / `note:<id>`) about
+   150 ms after each change, with the version it was based on. The draft is
+   deleted only when the cloud has exactly that text. On open, a newer draft
+   on the same version is restored ("Recovered from this device"); a draft
+   based on an older version is kept as a separate version ("From this
+   device, not synced"), never merged or dropped. Without IndexedDB the
+   status says so.
+2. **The cloud, in the background.** Autosave as above. Offline, writing
+   continues and the status reads "Saved on this device · offline, will
+   sync"; it syncs when the connection returns. The status never says
+   "saved" for text only this device has (`data-state` / `data-device` on
+   the status element).
+3. **Version snapshots.** Checkpoints every 10 minutes of editing, plus a
+   **large-edit checkpoint** (`BEFORE_LARGE_EDIT`) before any save that
+   removes ≥ 200 words or ≥ 20 % of a document of at least 50 words
+   (pasting over, select-all delete). Named versions; restore keeps the
+   current text first.
+4. **Field history** for long-form text that isn't a document: scene
+   synopses, character summaries and profile fields, descriptions (books,
+   series, relationships, events), idea bodies, task notes, pen-name bios
+   and beat descriptions. Every edit, restore and import that replaces a
+   non-empty value keeps the old one (`history/fields.ts`, same
+   transaction). "Earlier versions" on each page lists and restores them.
+
+**Stale-edit protection for metadata.** Documents use versions; metadata
+forms send the `updatedAt` they opened with (`lib/concurrency.ts`). The
+service reads the row, refuses a changed one, and writes with `updatedAt`
+in the WHERE clause, so two tabs can't overwrite each other silently; the
+form keeps the author's input. Single fields edited in place (profile
+fields, scene synopsis) are guarded by the value the author started from.
+Actions that change an object in several steps check the guard once, first.
+
+**Document format versions.** Scene and note documents carry a format
+number (`CURRENT_DOC_FORMAT`); `upgradeDoc()` brings older documents
+forward when read, so the editor never sees an old shape, and imports
+refuse documents from a newer app. Revisions store the format they were
+saved with.
+
+**Towards local-first.** The local draft is the first copy and the server
+the shared one; versions are explicit (`baseVersion`). A later
+offline-first editor can extend the same draft store into a queue of
+changes without changing the server contract.
 
 ## Story Graph and Universal Connections
 
@@ -435,6 +486,13 @@ pen name and series, and in the books whose scenes they appear in. Values
 attach to story nodes, so new object types get custom fields with no schema
 change. Characters show them today; other kinds only need the section added.
 
+**Core fields vs custom fields (M8).** A character's core fields (name,
+role, summary and the profile: age, occupation, appearance, personality,
+backstory, goal, motivation, inner conflict, voice) are fixed and named in
+one place (`CORE_CHARACTER_FIELD_LABELS`). Custom fields add to them; a
+custom field can't take a core field's name, so there are never two
+competing "Goal" fields.
+
 ## Change Impact
 
 Meaningful changes that affect connected story data are previewed before
@@ -445,6 +503,18 @@ UI ("What will this affect?") offers **Move everything**, **Review changes**
 (every affected item, linked) and **Cancel**. Applying recomputes the plan
 under a row lock and refuses if the token no longer matches, so the author
 only ever applies what they reviewed. Nothing is moved silently or orphaned.
+
+**Levels (M8).** Every report has a level:
+
+- **Green**: automatic, factual propagation (e.g. a scene's word count);
+  no review.
+- **Yellow**: a **suggested consequence** the author may accept or ignore,
+  one by one ("Keep the beat's description as a note", "Also move notes
+  and tasks that are only about this book to the Trash"). Ignored unless
+  accepted; `assertReviewed(report, token, accepted)` validates the
+  accepted keys against the reviewed report.
+- **Red**: the change affects other data and needs the author's approval
+  before it happens (the reviewed token), or is blocked.
 
 **Presentation is factual, not alarming:** a one-line summary with concrete
 counts ("This will affect 7 items: 3 characters, 2 relationships, 1 romance
@@ -616,10 +686,10 @@ or the entire workspace**, then a format:
   first-line indents, title page, a chapter per page, `#` between scenes).
 - **Markdown manuscript:** headings for books, parts and chapters, `* * *`
   between scenes.
-- **Standard backup (JSON)** (`authoros.workspace`, version 2 since M7, `kind:
+- **Standard backup (JSON)** (`authoros.workspace`, version 3 since M8, `kind:
 "standard"`): the structured backup. Every story object with its original
   id and story-node kind; the hierarchy with positions; scene and note
-  content as ProseMirror JSON; characters, relationships with members and
+  content as ProseMirror JSON with its format version; characters, relationships with members and
   roles, connections (kind, label, note, attributes), structures, beats and
   beat → scene assignments, templates, kits, custom fields and values,
   tasks, events, writing sessions, pen names (with language). Items in the
@@ -627,7 +697,8 @@ or the entire workspace**, then a format:
   by their fixed ids. `checkExportIntegrity()` verifies every reference
   resolves inside the export; the import validates with it first.
 - **Complete archive (JSON)** (`kind: "archive"`, M6): the standard backup
-  plus version history (every saved version of scenes and notes). Larger;
+  plus version history (every saved version of scenes and notes, and earlier
+  values of long-form fields). Larger;
   the file name ends in `-archive-<date>.json`.
 
 DOCX and Markdown are for reading and sharing (visible manuscript only);
@@ -698,6 +769,31 @@ proxy, which would buffer them). The browser gzips the file
 (`CompressionStream`); the server checks the origin (route handlers don't
 get Server Actions' CSRF protection), the session, and caps the upload (60
 MB compressed, 200 MB decompressed).
+
+## Decided boundaries for later systems (M8)
+
+Decided now, built later (decisions 87–92); nothing built today may
+contradict them:
+
+- **Comments are metadata**, never in the manuscript text: an anchor
+  outside the document (node, version, position, quoted text and context).
+  When the text changes the anchor is re-found or the comment is flagged
+  for review; it is never silently attached to other text.
+- **The Life Planner is a separate privacy boundary.** It shares only
+  explicit task/event references with explicit permission. It has no
+  access to manuscripts, characters, private notes, research, contracts or
+  business records, and its household and personal data never appears in
+  AuthorOS. Enforced in the data and permission layer, not by hiding UI.
+- **Workspace membership is not access to everything.** Co-authoring will
+  add per-book/series/pen-name grants (the `can()` resource parameter is
+  the hook); private projects, pen names and business data stay isolated.
+- **Beats become story objects** with **beat assignments**: the beat
+  (definition) is separate from where it happens, so one scene can satisfy
+  several structures without duplication.
+- **Writing status ≠ publication.** Books have a writing status (Idea …
+  Complete); publication will be per edition (Book → Edition → status).
+- **Tropes become a reusable object** (common list plus custom), not
+  permanent plain text; `books.tropes` is transitional.
 
 ## AI boundary (_planned, v1.2_)
 

@@ -5,6 +5,7 @@ import { notFound } from "next/navigation";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FieldHistoryDialog } from "@/modules/history/ui";
 import { getBook } from "@/modules/library";
 import { getSceneForEditor } from "@/modules/manuscript";
 import { BinderNav, SceneDetails, SceneEditor, trashSceneAction } from "@/modules/manuscript/ui";
@@ -86,6 +87,9 @@ export default async function ScenePage({ params }: Props) {
           status={scene.status}
           synopsis={scene.synopsis}
         />
+        <div className="flex justify-end">
+          <FieldHistoryDialog nodeId={scene.id} title="Earlier synopses" />
+        </div>
         <SceneBeats beats={beats} />
         <SceneCast sceneId={scene.id} cast={cast} />
         <SceneEditor

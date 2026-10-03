@@ -2,12 +2,14 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { assertNotStale, staleError, type EditGuard } from "@/lib/concurrency";
 import { NotFoundError, RuleError } from "@/lib/errors";
 import { planInsertAfter, positionAtEnd, sortByPosition } from "@/lib/ordering";
 import { assertReviewed, buildReport } from "@/modules/impact";
 import { getPenNameForNewWork, requireAssignablePenName } from "@/modules/pen-names";
 import { createStoryNode, liveBook } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { recordFieldHistory } from "@/modules/history";
 import { assertCan } from "@/server/policy";
 
 import {
@@ -28,7 +30,7 @@ const bookCardSelect = {
   id: true,
   title: true,
   subtitle: true,
-  status: true,
+  writingStatus: true,
   targetWordCount: true,
   tropes: true,
   heatLevel: true,
@@ -121,6 +123,7 @@ export async function getSeries(ctx: AuthorContext, id: string) {
       id: true,
       title: true,
       description: true,
+      updatedAt: true,
       penName: penNameRef,
       books: { where: { deletedAt: null }, select: bookCardSelect },
     },
@@ -168,16 +171,30 @@ export const PEN_NAME_CHANGE_NEEDS_REVIEW =
  * Impact flow (`impact` module), which moves its books, characters and other
  * associated story data together after the author has reviewed them.
  */
-export async function updateSeries(ctx: AuthorContext, id: string, input: SeriesInput) {
+export async function updateSeries(
+  ctx: AuthorContext,
+  id: string,
+  input: SeriesInput,
+  guard: EditGuard = {},
+) {
   assertCan(ctx, "edit", "manuscript");
   const data = seriesInput.parse(input);
   const current = await getSeries(ctx, id);
   if (data.penNameId && data.penNameId !== current.penName.id) {
     throw new RuleError(PEN_NAME_CHANGE_NEEDS_REVIEW);
   }
-  await db.series.update({
-    where: { id },
-    data: { title: data.title, description: data.description ?? null },
+  await db.$transaction(async (tx) => {
+    const row = await tx.series.findUniqueOrThrow({
+      where: { id },
+      select: { description: true, updatedAt: true },
+    });
+    assertNotStale(row.updatedAt, guard.expectedUpdatedAt, "series");
+    await recordFieldHistory(tx, ctx, id, row, { description: data.description ?? null });
+    const { count } = await tx.series.updateMany({
+      where: { id, updatedAt: row.updatedAt },
+      data: { title: data.title, description: data.description ?? null },
+    });
+    if (count === 0) throw staleError("series");
   });
 }
 
@@ -251,7 +268,7 @@ export async function createBook(ctx: AuthorContext, input: NewBookInput) {
         title: data.title,
         subtitle: data.subtitle ?? null,
         description: data.description ?? null,
-        status: data.status,
+        writingStatus: data.writingStatus,
         targetWordCount: data.targetWordCount ?? null,
       },
       select: { id: true },
@@ -260,11 +277,27 @@ export async function createBook(ctx: AuthorContext, input: NewBookInput) {
 }
 
 /**
+ * Refuses an edit that started from an older version of the book. Actions
+ * that change a book in several steps (series, then details) check this
+ * first, so their own earlier steps don't count as "changed elsewhere".
+ */
+export async function assertBookUnchanged(ctx: AuthorContext, id: string, guard: EditGuard) {
+  await getBook(ctx, id);
+  const row = await db.book.findUniqueOrThrow({ where: { id }, select: { updatedAt: true } });
+  assertNotStale(row.updatedAt, guard.expectedUpdatedAt, "book");
+}
+
+/**
  * Updates a book's details. Its pen name changes only through the Change
  * Impact flow (`impact` module), so associated characters and other story
  * data move with it after review.
  */
-export async function updateBook(ctx: AuthorContext, id: string, input: BookInput) {
+export async function updateBook(
+  ctx: AuthorContext,
+  id: string,
+  input: BookInput,
+  guard: EditGuard = {},
+) {
   assertCan(ctx, "edit", "manuscript");
   const data = bookInput.parse(input);
   const book = await getBook(ctx, id);
@@ -276,17 +309,26 @@ export async function updateBook(ctx: AuthorContext, id: string, input: BookInpu
     );
   }
 
-  await db.book.update({
-    where: { id },
-    data: {
-      title: data.title,
-      subtitle: data.subtitle ?? null,
-      description: data.description ?? null,
-      status: data.status,
-      targetWordCount: data.targetWordCount,
-      ...(data.tropes !== undefined && { tropes: data.tropes }),
-      ...(data.heatLevel !== undefined && { heatLevel: data.heatLevel }),
-    },
+  await db.$transaction(async (tx) => {
+    const row = await tx.book.findUniqueOrThrow({
+      where: { id },
+      select: { description: true, updatedAt: true },
+    });
+    assertNotStale(row.updatedAt, guard.expectedUpdatedAt, "book");
+    await recordFieldHistory(tx, ctx, id, row, { description: data.description ?? null });
+    const { count } = await tx.book.updateMany({
+      where: { id, updatedAt: row.updatedAt },
+      data: {
+        title: data.title,
+        subtitle: data.subtitle ?? null,
+        description: data.description ?? null,
+        writingStatus: data.writingStatus,
+        targetWordCount: data.targetWordCount,
+        ...(data.tropes !== undefined && { tropes: data.tropes }),
+        ...(data.heatLevel !== undefined && { heatLevel: data.heatLevel }),
+      },
+    });
+    if (count === 0) throw staleError("book");
   });
 }
 
@@ -411,10 +453,10 @@ export async function setBookSeries(
   id: string,
   seriesId: string | null,
   token?: string,
-) {
+): Promise<boolean> {
   assertCan(ctx, "edit", "manuscript");
   const { book, report, plannedBeats, placements } = await seriesChangePlan(ctx, id, seriesId);
-  if (book.seriesId === seriesId) return;
+  if (book.seriesId === seriesId) return false;
   assertReviewed(report, token);
   await db.$transaction(async (tx) => {
     if (plannedBeats.length)
@@ -433,6 +475,7 @@ export async function setBookSeries(
         : { seriesId: null, seriesPosition: null },
     });
   });
+  return true;
 }
 
 /** Reorders a book within its series: place it after `afterBookId` (null = first). */

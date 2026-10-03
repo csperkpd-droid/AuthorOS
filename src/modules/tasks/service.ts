@@ -3,10 +3,12 @@ import "server-only";
 import type { Prisma, TaskStatus } from "@/generated/prisma/client";
 import { fromDbDate, toDbDate, type DateString } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { assertNotStale, staleError, type EditGuard } from "@/lib/concurrency";
 import { NotFoundError } from "@/lib/errors";
 import { createPlannedConnection, planConnection } from "@/modules/connections";
 import { createStoryNode, liveTask, resolveNodes, type NodeSummary } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { recordFieldHistory } from "@/modules/history";
 import { assertCan } from "@/server/policy";
 
 import { taskInput, taskStatus, type TaskInput } from "./schemas";
@@ -132,18 +134,32 @@ export async function createTask(
   });
 }
 
-export async function updateTask(ctx: AuthorContext, id: string, input: TaskInput) {
+export async function updateTask(
+  ctx: AuthorContext,
+  id: string,
+  input: TaskInput,
+  guard: EditGuard = {},
+) {
   assertCan(ctx, "edit", "planning");
   const data = taskInput.parse(input);
   await getTask(ctx, id);
-  await db.task.update({
-    where: { id },
-    data: {
-      title: data.title,
-      notes: data.notes ?? null,
-      ...(data.priority && { priority: data.priority }),
-      dueOn: data.dueOn ? toDbDate(data.dueOn) : null,
-    },
+  await db.$transaction(async (tx) => {
+    const row = await tx.task.findUniqueOrThrow({
+      where: { id },
+      select: { notes: true, updatedAt: true },
+    });
+    assertNotStale(row.updatedAt, guard.expectedUpdatedAt, "task");
+    await recordFieldHistory(tx, ctx, id, row, { notes: data.notes ?? null });
+    const { count } = await tx.task.updateMany({
+      where: { id, updatedAt: row.updatedAt },
+      data: {
+        title: data.title,
+        notes: data.notes ?? null,
+        ...(data.priority && { priority: data.priority }),
+        dueOn: data.dueOn ? toDbDate(data.dueOn) : null,
+      },
+    });
+    if (count === 0) throw staleError("task");
   });
 }
 

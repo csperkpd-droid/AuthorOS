@@ -27,10 +27,12 @@ export async function createRelationshipAction(formData: FormData) {
 
 export async function updateRelationshipAction(id: string, formData: FormData) {
   return runAction(async () =>
-    updateRelationship(await requireAuthorContext(), id, {
-      type: field(formData, "type"),
-      description: field(formData, "description"),
-    }),
+    updateRelationship(
+      await requireAuthorContext(),
+      id,
+      { type: field(formData, "type"), description: field(formData, "description") },
+      { expectedUpdatedAt: field(formData, "updatedAt") || undefined },
+    ),
   );
 }
 

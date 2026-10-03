@@ -776,3 +776,130 @@ connection, to keep one linking mechanism). Notes and ideas stay shared by
 default; optional scopes (All Identities, Pen Name, Series, Book) remain
 designed, not built. Repeating tasks and events stay on the Planner / Life
 Planner roadmap.
+
+## Milestone 8 (Safety & Readiness)
+
+### 87. Comments are metadata with external anchors — Accepted (M8, not built)
+
+Comments never go into manuscript text. A comment is anchored outside the
+document: the node, the document version it was made on, the position, the
+quoted text and its surrounding context. When the text changes, the anchor
+is re-found from the quote and context; if that's not certain, the comment
+is flagged for the author to review rather than attached to the wrong text.
+Manuscript text stays clean. **Rejected:** comment marks in the ProseMirror
+document (they leak into exports, versions and word counts, and break with
+imports).
+
+### 88. The Life Planner is a separate privacy boundary — Accepted (M8, not built)
+
+The Life Planner gets its own data and permissions. Integration is through
+explicit shared task/event references that the author grants. The Life
+Planner never gains automatic access to manuscript text, characters,
+private story notes, research, publishing contracts, business records or
+other AuthorOS data; household, family and personal information never
+becomes visible inside AuthorOS. Enforced at the data/permission level
+(services and schema), not by hiding UI.
+
+### 89. Workspace membership is not access to every project — Accepted (M8, not built)
+
+Keep the workspace model. Co-authoring will add per-book/series/pen-name
+grants: membership alone does not open every book, pen name, business
+record or private project. `can(ctx, action, area, resource)` already takes
+a resource for this. Co-authoring is not implemented.
+
+### 90. Beats and beat assignments are separate — Accepted (M8, not built)
+
+A Beat becomes a Story Graph object (name, description, purpose, target
+position, optional/required, structure, template source). A **Beat
+Assignment** records where and how it happens (e.g. Romancing the Beat →
+Romance arc → Book 1 → Scene 27). One scene can satisfy several structures
+without duplication (already true for placements, `beat_scenes`). Today's
+`outline_beats` + `beat_scenes` map onto this; the migration adds the node
+kind and turns placements into assignments.
+
+### 91. Writing status is not publication status — Accepted (M8)
+
+`books.writing_status`: Idea, Planning, Drafting, Drafted, Revising,
+Editing, Proofreading, Complete. "Published" is never a writing status;
+publication will be per edition (Book → Edition → status such as "Ebook:
+Published", "Paperback: Published", "Hardcover: In production",
+"Audiobook: Not started"). Migration: `PUBLISHED` → `COMPLETE`, with a
+book field "Publication status" = "Published" so the fact is kept until
+editions exist.
+
+### 92. Tropes will be a reusable object — Accepted (M8, not built)
+
+Tropes are not permanently plain text. A future `TROPE` kind (a controlled
+common list plus custom tropes) connects to books, series, romance arcs and
+relationships and feeds search, marketing and analytics. `books.tropes
+text[]` stays as a transitional field: new code must not build on it beyond
+display and search; the trope system migrates it.
+
+### 93. Core character fields are fixed; custom fields add to them — Accepted (M8)
+
+A character's core fields (name, role, summary, the profile fields) are
+defined once (`CORE_CHARACTER_FIELD_LABELS`). Custom fields can't take a
+core field's name, so there's never a second competing system for the
+same attribute. **Rejected:** turning core fields into custom fields (loses
+validation and portability across workspaces).
+
+### 94. Text is saved on the device first, and the status says where it is — Accepted (M8)
+
+Pipeline: typing → local draft (IndexedDB) immediately → background cloud
+autosave → version snapshots. The draft is removed only when the cloud has
+exactly that text. The status distinguishes "Saved to the cloud" from
+"Saved on this device · offline, will sync" (or retrying); it never claims
+the cloud has text it doesn't. Drafts based on an older version become a
+separate version, never merged silently. **Rejected:** `localStorage`
+(synchronous, small, strings only); a service worker sync queue now (more
+machinery than needed; the draft store is the step towards it).
+
+### 95. Checkpoints before large edits — Accepted (M8)
+
+Besides 10-minute checkpoints, a save that removes ≥ 200 words, or ≥ 20 %
+of a document of at least 50 words, first snapshots the previous text
+(`BEFORE_LARGE_EDIT`). Removed words are counted as a multiset, so moving
+text isn't a removal.
+
+### 96. History for long-form fields — Accepted (M8)
+
+`field_revisions` keeps earlier values of long-form text that isn't a
+document (synopses, summaries, profile fields, descriptions, idea bodies,
+task notes, bios, beat descriptions), recorded in the same transaction as
+the edit, restore or import that replaces them. Restoring keeps the current
+value first. Short fields (titles, names) are not versioned. **Rejected:**
+a JSON snapshot of the whole row per edit (noisy, hard to restore one
+field); making every field a rich-text document.
+
+### 97. Stale-edit protection for metadata — Accepted (M8)
+
+Metadata forms carry the `updatedAt` they were opened with; services refuse
+a changed row (and write with `updatedAt` in the WHERE clause). Fields
+edited in place are guarded by the value the author started from (a
+scene's row changes on every autosave, so its `updatedAt` can't be the
+guard). The refusal says what happened and leaves the author's input in
+the form. Multi-step actions check the guard once, before their first step.
+
+### 98. Documents carry a format version — Accepted (M8)
+
+Scenes, notes and revisions store `content_format`/`body_format`.
+`upgradeDoc()` upgrades on read; imports refuse a newer format. Changing
+the document schema means adding an upgrade step, never rewriting stored
+documents in place without a version.
+
+### 99. Change Impact has three levels — Accepted (M8)
+
+Green (automatic factual propagation), Yellow (suggested consequences the
+author accepts or ignores, each one, default ignored) and Red (approval
+required before the change, or blocked). Suggestions are part of the
+reviewed report; accepted keys are validated against it. First
+suggestions: keeping a removed beat's description as a note; moving notes,
+ideas, tasks and events that are only about items being deleted forever to
+the Trash.
+
+### 100. Export format version 3 — Accepted (M8)
+
+Version 3 adds `writingStatus` (books), document formats and
+`fieldRevisions`. Version 1 and 2 files are upgraded on import
+(`PUBLISHED` → `COMPLETE` plus the "Publication status" field value);
+imported replacements of non-empty text are kept in field history.

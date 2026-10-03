@@ -62,6 +62,7 @@ type Task = {
   notes: string | null;
   priority: TaskPriority;
   dueOn: string | null;
+  updatedAt?: Date | string;
 };
 
 /** Create a task (optionally about a story object) or edit one. */
@@ -95,7 +96,11 @@ export function TaskDialog({
               dueOn: String(formData.get("dueOn") ?? ""),
             };
             const result = task
-              ? await update.run(task.id, input)
+              ? await update.run(
+                  task.id,
+                  input,
+                  task.updatedAt ? new Date(task.updatedAt).toISOString() : undefined,
+                )
               : await create.run({ ...input, concernsId: concerns?.id ?? null });
             if (result.ok) setOpen(false);
           }}

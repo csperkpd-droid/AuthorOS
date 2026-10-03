@@ -29,7 +29,13 @@ export function RelationshipDialog({
 }: {
   characters: Character[];
   fromCharacter?: Character;
-  relationship?: { id: string; type: string; description: string | null; title: string };
+  relationship?: {
+    id: string;
+    type: string;
+    description: string | null;
+    title: string;
+    updatedAt?: Date | string;
+  };
   trigger: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -144,6 +150,13 @@ export function RelationshipDialog({
               defaultValue={relationship?.description ?? ""}
             />
           </Field>
+          {relationship?.updatedAt && (
+            <input
+              type="hidden"
+              name="updatedAt"
+              value={new Date(relationship.updatedAt).toISOString()}
+            />
+          )}
           <FormError message={create.error ?? update.error} />
           <div className="flex justify-end">
             <Button type="submit" disabled={create.pending || update.pending}>

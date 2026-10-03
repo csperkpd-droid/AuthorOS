@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FieldHistoryDialog } from "@/modules/history/ui";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
 import { NewNoteDialog } from "@/modules/notes/ui";
@@ -55,9 +56,16 @@ export default async function RelationshipPage({ params }: Props) {
         title={title}
         actions={
           <div className="flex flex-wrap gap-2">
+            <FieldHistoryDialog nodeId={r.id} />
             <RelationshipDialog
               characters={[]}
-              relationship={{ id: r.id, type: r.type, description: r.description, title }}
+              relationship={{
+                id: r.id,
+                type: r.type,
+                description: r.description,
+                title,
+                updatedAt: r.updatedAt,
+              }}
               trigger={
                 <Button variant="outline">
                   <Settings2 />

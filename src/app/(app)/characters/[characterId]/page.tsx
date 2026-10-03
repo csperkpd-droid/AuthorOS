@@ -6,6 +6,8 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FieldHistoryDialog } from "@/modules/history/ui";
+import { PROFILE_FIELDS } from "@/modules/characters";
 import { CHARACTER_ROLE_LABELS, getCharacter, listCharacters } from "@/modules/characters";
 import { CharacterDialog, ProfileForm, trashCharacterAction } from "@/modules/characters/ui";
 import { listConnections } from "@/modules/connections";
@@ -34,6 +36,8 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   const character = await orNotFound(getCharacter(ctx, (await params).characterId));
   return { title: character.name };
 }
+
+const PROFILE_LABELS = Object.fromEntries(PROFILE_FIELDS.map((f) => [`profile.${f.id}`, f.label]));
 
 export default async function CharacterPage({ params }: Props) {
   const { characterId } = await params;
@@ -85,6 +89,7 @@ export default async function CharacterPage({ params }: Props) {
         }
         actions={
           <div className="flex flex-wrap gap-2">
+            <FieldHistoryDialog nodeId={character.id} labels={PROFILE_LABELS} />
             <CharacterDialog
               character={character}
               seriesOptions={series}

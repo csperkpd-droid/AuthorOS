@@ -9,13 +9,13 @@ import { Field, FormError } from "@/components/ui/field";
 import { Input } from "@/components/ui/input";
 import { Select } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
-import { BookStatus, HeatLevel } from "@/generated/prisma/enums";
+import { WritingStatus, HeatLevel } from "@/generated/prisma/enums";
 import { useAction } from "@/hooks/use-action";
 
 import { ImpactReview, type ImpactReport } from "@/modules/impact/ui";
 
 import { createBookAction, previewBookSeriesAction, updateBookAction } from "../actions";
-import { BOOK_STATUS_LABELS, HEAT_LEVEL_LABELS, TROPE_SUGGESTIONS } from "../labels";
+import { WRITING_STATUS_LABELS, HEAT_LEVEL_LABELS, TROPE_SUGGESTIONS } from "../labels";
 
 type Option = { id: string; name: string };
 type SeriesOption = { id: string; title: string; penName: { id: string; name: string } };
@@ -25,7 +25,7 @@ export type EditableBook = {
   title: string;
   subtitle: string | null;
   description: string | null;
-  status: BookStatus;
+  writingStatus: WritingStatus;
   targetWordCount: number | null;
   tropes: string[];
   heatLevel: HeatLevel | null;
@@ -33,6 +33,8 @@ export type EditableBook = {
   dueOn: string | null;
   seriesId: string | null;
   penName: { id: string; name: string };
+  /** When the form was opened: an edit is refused if the book changed since. */
+  updatedAt?: Date | string;
 };
 
 /**
@@ -179,11 +181,15 @@ export function BookDialog({
           {book && (
             <>
               <div className="grid gap-4 sm:grid-cols-2">
-                <Field label="Status" htmlFor={`${id}-status`}>
-                  <Select id={`${id}-status`} name="status" defaultValue={book.status}>
-                    {Object.values(BookStatus).map((s) => (
+                <Field label="Writing status" htmlFor={`${id}-status`}>
+                  <Select
+                    id={`${id}-status`}
+                    name="writingStatus"
+                    defaultValue={book.writingStatus}
+                  >
+                    {Object.values(WritingStatus).map((s) => (
                       <option key={s} value={s}>
-                        {BOOK_STATUS_LABELS[s]}
+                        {WRITING_STATUS_LABELS[s]}
                       </option>
                     ))}
                   </Select>
@@ -249,6 +255,9 @@ export function BookDialog({
               {pending ? "Saving…" : book ? "Save" : "Create book"}
             </Button>
           </div>
+          {book?.updatedAt && (
+            <input type="hidden" name="updatedAt" value={new Date(book.updatedAt).toISOString()} />
+          )}
         </form>
       </DialogContent>
     </Dialog>

@@ -1,6 +1,6 @@
 import { z } from "zod";
 
-import { BookStatus, HeatLevel } from "@/generated/prisma/enums";
+import { WritingStatus, HeatLevel } from "@/generated/prisma/enums";
 
 /** Empty form fields become null. */
 const optionalText = (max: number, label: string) =>
@@ -24,13 +24,13 @@ export const seriesInput = z.object({
 });
 export type SeriesInput = z.input<typeof seriesInput>;
 
-export const bookStatusValues = Object.values(BookStatus);
+export const writingStatusValues = Object.values(WritingStatus);
 
 export const bookInput = z.object({
   title,
   subtitle: optionalText(200, "Subtitle"),
   description: optionalText(5000, "Description"),
-  status: z.enum(BookStatus).optional(),
+  writingStatus: z.enum(WritingStatus).optional(),
   targetWordCount: z.preprocess(
     (v) => (v === "" || v === null || v === undefined ? null : Number(v)),
     z

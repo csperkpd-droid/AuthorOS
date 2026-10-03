@@ -11,7 +11,13 @@ import { countWords } from "@/lib/text";
 export const VERSIONED_KINDS = ["SCENE", "NOTE"] as const;
 export type VersionedKind = (typeof VERSIONED_KINDS)[number];
 
-export type Content = { content: Prisma.JsonValue | null; text: string; wordCount: number };
+export type Content = {
+  content: Prisma.JsonValue | null;
+  text: string;
+  wordCount: number;
+  /** Document format version (lib/doc-format.ts). */
+  format: number;
+};
 type Written = { version: number; savedAt: Date };
 type Tx = Prisma.TransactionClient;
 
@@ -39,9 +45,14 @@ export const versioned: Record<
     read: async (tx, id) => {
       const s = await tx.scene.findUniqueOrThrow({
         where: { id },
-        select: { content: true, contentText: true, wordCount: true },
+        select: { content: true, contentText: true, wordCount: true, contentFormat: true },
       });
-      return { content: s.content, text: s.contentText, wordCount: s.wordCount };
+      return {
+        content: s.content,
+        text: s.contentText,
+        wordCount: s.wordCount,
+        format: s.contentFormat,
+      };
     },
     write: async (tx, id, c) => {
       const s = await tx.scene.update({
@@ -50,6 +61,7 @@ export const versioned: Record<
           content: json(c.content),
           contentText: c.text,
           wordCount: c.wordCount,
+          contentFormat: c.format,
           version: { increment: 1 },
         },
         select: { version: true, updatedAt: true },
@@ -67,15 +79,25 @@ export const versioned: Record<
     read: async (tx, id) => {
       const n = await tx.note.findUniqueOrThrow({
         where: { id },
-        select: { body: true, bodyText: true },
+        select: { body: true, bodyText: true, bodyFormat: true },
       });
       // Notes don't store a word count; revisions compute one for display.
-      return { content: n.body, text: n.bodyText, wordCount: countWords(n.bodyText) };
+      return {
+        content: n.body,
+        text: n.bodyText,
+        wordCount: countWords(n.bodyText),
+        format: n.bodyFormat,
+      };
     },
     write: async (tx, id, c) => {
       const n = await tx.note.update({
         where: { id },
-        data: { body: json(c.content), bodyText: c.text, version: { increment: 1 } },
+        data: {
+          body: json(c.content),
+          bodyText: c.text,
+          bodyFormat: c.format,
+          version: { increment: 1 },
+        },
         select: { version: true, updatedAt: true },
       });
       return { version: n.version, savedAt: n.updatedAt };

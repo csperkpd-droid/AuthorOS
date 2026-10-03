@@ -1,6 +1,7 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { upgradeDoc } from "@/lib/doc-format";
 import { NotFoundError } from "@/lib/errors";
 import type { Doc } from "@/lib/text";
 import { createPlannedConnection, planConnection } from "@/modules/connections";
@@ -27,10 +28,10 @@ export async function listNotes(ctx: AuthorContext, { aboutId }: { aboutId?: str
 export async function getNote(ctx: AuthorContext, id: string) {
   const note = await db.note.findFirst({
     where: { id, workspaceId: ctx.workspaceId, ...liveNote },
-    select: { id: true, title: true, body: true, version: true, updatedAt: true },
+    select: { id: true, title: true, body: true, bodyFormat: true, version: true, updatedAt: true },
   });
   if (!note) throw new NotFoundError("Note");
-  return { ...note, body: (note.body as Doc | null) ?? null };
+  return { ...note, body: note.body ? upgradeDoc(note.body as Doc, note.bodyFormat) : null };
 }
 
 /**

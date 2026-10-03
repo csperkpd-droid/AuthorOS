@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatDay } from "@/lib/dates";
+import { FieldHistoryDialog } from "@/modules/history/ui";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
 import { today } from "@/modules/progress";
@@ -43,6 +44,7 @@ export default async function TaskPage({ params }: Props) {
         title={task.title}
         actions={
           <div className="flex flex-wrap gap-2">
+            <FieldHistoryDialog nodeId={task.id} />
             <TaskDialog
               task={task}
               trigger={

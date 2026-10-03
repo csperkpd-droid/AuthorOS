@@ -2,10 +2,12 @@ import "server-only";
 
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { assertNotStale, staleError, type EditGuard } from "@/lib/concurrency";
 import { ConflictError, NotFoundError, RuleError } from "@/lib/errors";
 import { assertReviewed, buildReport } from "@/modules/impact";
 import { createStoryNode, liveCharacter, liveRelationship } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { recordFieldHistory } from "@/modules/history";
 import { assertCan } from "@/server/policy";
 
 import { relationshipTitle } from "./labels";
@@ -30,6 +32,7 @@ const relationshipSelect = {
   id: true,
   type: true,
   description: true,
+  updatedAt: true,
   members: {
     orderBy: { position: "asc" },
     select: {
@@ -348,13 +351,23 @@ export async function updateRelationship(
   ctx: AuthorContext,
   id: string,
   input: RelationshipDetails,
+  guard: EditGuard = {},
 ) {
   assertCan(ctx, "edit", "storyBible");
   const data = relationshipDetails.parse(input);
   await getRelationship(ctx, id);
-  await db.relationship.update({
-    where: { id },
-    data: { type: data.type, description: data.description ?? null },
+  await db.$transaction(async (tx) => {
+    const row = await tx.relationship.findUniqueOrThrow({
+      where: { id },
+      select: { description: true, updatedAt: true },
+    });
+    assertNotStale(row.updatedAt, guard.expectedUpdatedAt, "relationship");
+    await recordFieldHistory(tx, ctx, id, row, { description: data.description ?? null });
+    const { count } = await tx.relationship.updateMany({
+      where: { id, updatedAt: row.updatedAt },
+      data: { type: data.type, description: data.description ?? null },
+    });
+    if (count === 0) throw staleError("relationship");
   });
 }
 

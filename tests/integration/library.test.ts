@@ -30,12 +30,16 @@ beforeEach(async () => {
 
 describe("series and books", () => {
   it("creates standalone books under the default pen name", async () => {
-    const { id } = await createBook(ctx, { title: "Emma", subtitle: "", status: "DRAFTING" });
+    const { id } = await createBook(ctx, {
+      title: "Emma",
+      subtitle: "",
+      writingStatus: "DRAFTING",
+    });
     const book = await getBook(ctx, id);
     expect(book).toMatchObject({
       title: "Emma",
       subtitle: null,
-      status: "DRAFTING",
+      writingStatus: "DRAFTING",
       seriesId: null,
     });
     expect(book.penName.name).toBe("Jane Austen");

@@ -142,7 +142,7 @@ test.describe("Milestone 5", () => {
     const json = page.waitForEvent("download");
     await page.getByRole("button", { name: "Download" }).click();
     const backup = JSON.parse(await readFile((await (await json).path())!, "utf8"));
-    expect(backup).toMatchObject({ format: "authoros.workspace", version: 2 });
+    expect(backup).toMatchObject({ format: "authoros.workspace", version: 3 });
     expect(backup.scenes[0].contentText).toBe("Waves broke on the rocks.");
   });
 });

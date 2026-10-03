@@ -86,6 +86,7 @@ export type ImportOps = {
   fieldValues: TableOps;
   writingSessions: TableOps;
   revisions: Row[];
+  fieldRevisions: Row[];
   /** Scenes and notes whose current text is saved as a version before replacing. */
   snapshots: { kind: "SCENE" | "NOTE"; id: string }[];
   dailyWordGoal: number | null;
@@ -401,7 +402,7 @@ export async function planImport(
       title: r.title,
       subtitle: r.subtitle,
       description: r.description,
-      status: r.status,
+      writingStatus: r.writingStatus,
       targetWordCount: r.targetWordCount,
       tropes: r.tropes,
       heatLevel: r.heatLevel,
@@ -459,6 +460,7 @@ export async function planImport(
         synopsis: r.synopsis,
         content: v.content,
         contentText: v.text,
+        contentFormat: r.contentFormat,
         wordCount: v.wordCount,
         ...soft(r),
       };
@@ -576,7 +578,13 @@ export async function planImport(
     exNotes,
     (r) => {
       const v = versioned(r.body);
-      return { title: r.title, body: v.content, bodyText: v.text, ...soft(r) };
+      return {
+        title: r.title,
+        body: v.content,
+        bodyText: v.text,
+        bodyFormat: r.bodyFormat,
+        ...soft(r),
+      };
     },
     {
       onCreate: (r, row) => (row.version = r.version),
@@ -1105,6 +1113,7 @@ export async function planImport(
       content: r.content,
       contentText: text,
       wordCount: countWords(text),
+      contentFormat: r.contentFormat,
       source: r.source,
       label: r.label,
       createdById: ctx.userId,
@@ -1112,6 +1121,31 @@ export async function planImport(
     });
     count("revisions", "Saved versions", "create");
     decisions.push(["revision", r.id, "create"]);
+  }
+
+  // Earlier values of text fields (Complete archive).
+  const fieldRevisions = b.fieldRevisions.filter((r) => ok(r.nodeId));
+  const usedFieldRevisions = await taken(
+    "field_revisions",
+    fieldRevisions.map((r) => r.id),
+  );
+  for (const r of fieldRevisions) {
+    if (usedFieldRevisions.get(r.id) === ws) {
+      count("fieldRevisions", "Earlier field values", "skip");
+      continue;
+    }
+    ops.fieldRevisions.push({
+      id: freshId(r.id, usedFieldRevisions),
+      workspaceId: ws,
+      nodeId: to(r.nodeId),
+      field: remapField(r.field, to),
+      value: r.value,
+      source: r.source,
+      createdById: ctx.userId,
+      createdAt: r.createdAt,
+    });
+    count("fieldRevisions", "Earlier field values", "create");
+    decisions.push(["fieldRevision", r.id, "create"]);
   }
 
   // ── Settings ─────────────────────────────────────────────────────────────
@@ -1175,6 +1209,7 @@ const COUNT_ORDER = [
   "fieldValues",
   "writingSessions",
   "revisions",
+  "fieldRevisions",
 ];
 
 /** Taken ids, globally, with the workspace each belongs to. */
@@ -1188,6 +1223,7 @@ const TAKEN_SQL: Record<string, string> = {
   template_kits: `SELECT "id", "workspace_id" AS ws FROM "template_kits" WHERE "id" = ANY($1::uuid[])`,
   field_definitions: `SELECT "id", "workspace_id" AS ws FROM "field_definitions" WHERE "id" = ANY($1::uuid[])`,
   writing_sessions: `SELECT "id", "workspace_id" AS ws FROM "writing_sessions" WHERE "id" = ANY($1::uuid[])`,
+  field_revisions: `SELECT "id", "workspace_id" AS ws FROM "field_revisions" WHERE "id" = ANY($1::uuid[])`,
   content_revisions: `SELECT "id", "workspace_id" AS ws FROM "content_revisions" WHERE "id" = ANY($1::uuid[])`,
 };
 
@@ -1222,6 +1258,7 @@ function emptyOps(): ImportOps {
     fieldValues: t(),
     writingSessions: t(),
     revisions: [],
+    fieldRevisions: [],
     snapshots: [],
     dailyWordGoal: null,
   };
@@ -1306,4 +1343,11 @@ function nodeTitles(b: WorkspaceBundle) {
   for (const r of b.relationships)
     titles.set(r.id, `${r.type}: ${r.members.map((m) => names.get(m.characterId)).join(", ")}`);
   return (id: string) => titles.get(id) ?? id;
+}
+
+/** Field names that embed an id ("beat:<id>.description") follow the id map. */
+function remapField(field: string, to: (id: string) => string) {
+  return field.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, (id) =>
+    to(id.toLowerCase()),
+  );
 }

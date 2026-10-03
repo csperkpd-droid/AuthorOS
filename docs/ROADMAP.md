@@ -14,7 +14,8 @@ Scope details: [MVP.md](MVP.md). Schema: [DATABASE.md](DATABASE.md).
 | 4   | Getting work done: tasks, calendar, writing sessions, goals, dashboard; series arcs, Change Impact                                                         | ✅ Complete                     |
 | 5   | Ownership: search, manuscript export, workspace export; group relationships, template kits, Change Impact for deletions                                    | ✅ Complete                     |
 | 6   | Import Engine: JSON restore and move between accounts; search languages per pen name; relationship roles; complete archive export                          | ✅ Complete                     |
-| 7   | Foundations: Story Object Registry, authorization in services, one model for dates, connectable pen names, Change Impact gaps, Story Graph integrity audit | ✅ Complete (awaiting approval) |
+| 7   | Foundations: Story Object Registry, authorization in services, one model for dates, connectable pen names, Change Impact gaps, Story Graph integrity audit | ✅ Complete                     |
+| 8   | Safety & Readiness: local drafts, large-edit checkpoints, field history, stale-edit protection, document formats, Change Impact levels, writing status     | ✅ Complete (awaiting approval) |
 
 **Why this order:** the editor and binder are used every day, so they come
 first. The story bible needs scenes to link to. Structure maps onto scenes
@@ -64,5 +65,5 @@ readiness; Timeline stays in v1.1.
 - More import sources on the M6 Import Engine: Scrivener, Plottr, DOCX, EPUB, Markdown.
 - Book covers and media (Vercel Blob).
 - Public author pages per pen name.
-- Offline-tolerant editor; mobile-optimized writing mode.
+- Offline-first editor (builds on the M8 local draft store); mobile-optimized writing mode.
 - Public API built on the module services.

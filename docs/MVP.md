@@ -31,6 +31,19 @@ the suggestion boundary).
 | Pen-name branding, links, publishing accounts | v1.1  | Pen names, archive, assignment and identity switching shipped in M1. |
 | More import sources (Scrivener, Plottr, DOCX) | Later | Import Engine (M6): a source parser produces a Workspace Bundle.     |
 
+## Milestone 8 checklist (Safety & Readiness)
+
+- [x] Editor: local draft on this device first (IndexedDB), cloud autosave in the background, honest status (cloud / this device · offline / retrying); crash recovery; older-version drafts kept as a separate version
+- [x] Large-edit checkpoints before saves that remove much of a document
+- [x] Field history (and restore) for synopses, summaries, profile fields, descriptions, idea bodies, task notes, bios, beat descriptions; imports keep replaced text
+- [x] Stale-edit protection for metadata forms and in-place fields
+- [x] Document format versions for scenes, notes and revisions; upgrade on read; newer formats refused on import
+- [x] Change Impact levels Green / Yellow / Red; Yellow suggestions accepted or ignored one by one (beat description as a note; notes/ideas/tasks/events only about deleted items)
+- [x] Book writing status separate from publication (no "Published"); migration keeps the fact as a field
+- [x] Core character fields protected from duplicate custom fields
+- [x] Export format version 3 with upgrades of version 1–2 files
+- [x] Decided, not built: comment anchors, Life Planner privacy boundary, project-level access, Beat vs Beat Assignment, Tropes as objects, editions
+
 ## Milestone 7 checklist (Foundations)
 
 - [x] Story Object Registry: one definition per kind (display, area, identity, hierarchy, structure roles, connections, custom fields, search, lifecycle, Change Impact, dates, table, export/import key) with one server adapter per kind; resolver, Trash, search, connections, fields, Change Impact, authorization, export and import read it

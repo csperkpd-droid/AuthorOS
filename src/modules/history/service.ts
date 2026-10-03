@@ -2,6 +2,7 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { CURRENT_DOC_FORMAT } from "@/lib/doc-format";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { countWords, docSchema, docToText } from "@/lib/text";
 import { resolveNode, storyObjectType } from "@/modules/story-graph";
@@ -13,6 +14,44 @@ import { isVersionedKind, versioned, type VersionedKind } from "./versioned";
 
 /** Autosaves keep at most one checkpoint per window, so history stays readable. */
 export const CHECKPOINT_INTERVAL_MS = 10 * 60 * 1000;
+
+/**
+ * A save that removes this many words, or this share of a text of at least
+ * LARGE_EDIT_MIN_WORDS, saves the previous text first, whatever the time
+ * since the last checkpoint: a bad paste or an accidental select-all is
+ * always recoverable.
+ */
+export const LARGE_EDIT_WORDS = 200;
+export const LARGE_EDIT_SHARE = 0.2;
+const LARGE_EDIT_MIN_WORDS = 50;
+
+const WORD = /[\p{L}\p{N}]+(?:['’\-][\p{L}\p{N}]+)*/gu;
+
+/**
+ * How many words of `before` are gone from `after` (as a multiset, so text
+ * replaced by other text of the same length counts as removed).
+ */
+export function wordsRemoved(before: string, after: string): number {
+  const remaining = new Map<string, number>();
+  for (const w of after.toLowerCase().match(WORD) ?? [])
+    remaining.set(w, (remaining.get(w) ?? 0) + 1);
+  let removed = 0;
+  for (const w of before.toLowerCase().match(WORD) ?? []) {
+    const left = remaining.get(w) ?? 0;
+    if (left > 0) remaining.set(w, left - 1);
+    else removed++;
+  }
+  return removed;
+}
+
+export function isLargeEdit(before: string, after: string): boolean {
+  const total = (before.match(WORD) ?? []).length;
+  const removed = wordsRemoved(before, after);
+  return (
+    removed >= LARGE_EDIT_WORDS ||
+    (total >= LARGE_EDIT_MIN_WORDS && removed / total >= LARGE_EDIT_SHARE)
+  );
+}
 
 export const revisionLabel = z
   .string()
@@ -76,14 +115,21 @@ export async function saveContent(
         `This ${access.noun} was changed somewhere else. Reload to see the latest version.`,
       );
     }
-    await checkpointIfDue(tx, ctx, kind, nodeId);
-    const before = afterWrite ? (await access.read(tx, nodeId)).wordCount : 0;
+    const previous = await access.read(tx, nodeId);
+    if (isLargeEdit(previous.text, text))
+      await snapshot(tx, ctx, kind, nodeId, {
+        source: "BEFORE_LARGE_EDIT",
+        label: "Before a large edit",
+        skipEmpty: true,
+      });
+    else await checkpointIfDue(tx, ctx, kind, nodeId);
     const written = await access.write(tx, nodeId, {
       content: doc as Prisma.JsonValue,
       text,
       wordCount,
+      format: CURRENT_DOC_FORMAT,
     });
-    if (afterWrite) await afterWrite(tx, { before, after: wordCount });
+    if (afterWrite) await afterWrite(tx, { before: previous.wordCount, after: wordCount });
     return { ...written, wordCount };
   });
 }
@@ -113,7 +159,7 @@ async function snapshot(
     label = null,
     skipEmpty = false,
   }: {
-    source: "AUTOSAVE" | "MANUAL" | "BEFORE_RESTORE";
+    source: "AUTOSAVE" | "MANUAL" | "BEFORE_RESTORE" | "BEFORE_LARGE_EDIT" | "IMPORT";
     label?: string | null;
     skipEmpty?: boolean;
   },
@@ -128,6 +174,7 @@ async function snapshot(
       content: current.content ?? undefined,
       contentText: current.text,
       wordCount: current.wordCount,
+      contentFormat: current.format,
       source,
       label,
       createdById: ctx.userId,
@@ -192,7 +239,7 @@ export async function restoreRevision(ctx: AuthorContext, revisionId: string): P
   const kind = await requireEditable(ctx, revision.nodeId);
   const full = await db.contentRevision.findUniqueOrThrow({
     where: { id: revisionId },
-    select: { content: true, contentText: true, wordCount: true },
+    select: { content: true, contentText: true, wordCount: true, contentFormat: true },
   });
 
   return db.$transaction(async (tx) => {
@@ -203,7 +250,40 @@ export async function restoreRevision(ctx: AuthorContext, revisionId: string): P
       content: full.content,
       text: full.contentText,
       wordCount: full.wordCount,
+      format: full.contentFormat,
     });
     return { ...written, wordCount: full.wordCount };
+  });
+}
+
+/**
+ * Keeps text written on a device that never reached the cloud, when the
+ * object changed elsewhere in the meantime: saved as a version (the current
+ * text is untouched), so the author can compare and restore. Nothing written
+ * offline is ever dropped.
+ */
+export async function keepDeviceDraft(
+  ctx: AuthorContext,
+  { nodeId, content, writtenAt }: { nodeId: string; content: unknown; writtenAt: string },
+) {
+  assertCan(ctx, "edit", "any");
+  await requireEditable(ctx, nodeId);
+  const doc = docSchema.parse(content);
+  const text = docToText(doc);
+  const when = new Date(writtenAt);
+  const label = `From this device, not synced (${Number.isNaN(when.getTime()) ? "unknown time" : when.toISOString().slice(0, 16).replace("T", " ")} UTC)`;
+  return db.contentRevision.create({
+    data: {
+      workspaceId: ctx.workspaceId,
+      nodeId,
+      content: doc as Prisma.InputJsonValue,
+      contentText: text,
+      wordCount: countWords(text),
+      contentFormat: CURRENT_DOC_FORMAT,
+      source: "MANUAL",
+      label,
+      createdById: ctx.userId,
+    },
+    select: { id: true },
   });
 }

@@ -10,8 +10,10 @@ export async function createEventAction(input: EventInput & { concernsId?: strin
   return runAction(async () => createEvent(await requireAuthorContext(), input));
 }
 
-export async function updateEventAction(id: string, input: EventInput) {
-  return runAction(async () => updateEvent(await requireAuthorContext(), id, input));
+export async function updateEventAction(id: string, input: EventInput, expectedUpdatedAt?: string) {
+  return runAction(async () =>
+    updateEvent(await requireAuthorContext(), id, input, { expectedUpdatedAt }),
+  );
 }
 
 export async function trashEventAction(id: string) {

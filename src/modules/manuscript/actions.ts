@@ -92,6 +92,13 @@ export async function saveSceneContentAction(
   });
 }
 
-export async function updateSceneDetailsAction(sceneId: string, input: SceneDetailsInput) {
-  return runAction(async () => updateSceneDetails(await ctx(), sceneId, input));
+export async function updateSceneDetailsAction(
+  sceneId: string,
+  input: SceneDetailsInput,
+  /** The synopsis the author started editing from (stale-edit protection). */
+  expectedSynopsis?: string | null,
+) {
+  return runAction(async () =>
+    updateSceneDetails(await ctx(), sceneId, input, { expectedSynopsis }),
+  );
 }

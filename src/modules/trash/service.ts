@@ -1,9 +1,9 @@
 import "server-only";
 
-import type { StoryNodeKind } from "@/generated/prisma/client";
+import { Prisma, type StoryNodeKind } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
-import { ConflictError, NotFoundError } from "@/lib/errors";
-import { buildReport } from "@/modules/impact";
+import { ConflictError, NotFoundError, RuleError } from "@/lib/errors";
+import { assertReviewed, buildReport, type ImpactReport } from "@/modules/impact";
 import { relationshipTitle } from "@/modules/relationships";
 import {
   adapterFor,
@@ -277,6 +277,7 @@ async function deletionReport(
     ]);
   // Links to things that stay: the link goes, the other item stays.
   const doomedSet = new Set(all);
+  const onlyAbout = await onlyAboutDoomed(ctx, doomedSet, links);
   const others = await resolveNodes(
     ctx,
     links.flatMap((l) => [l.sourceId, l.targetId]).filter((id) => !doomedSet.has(id)),
@@ -340,6 +341,17 @@ async function deletionReport(
         items: [...others.values()].map((n) => ({ id: n.id, title: n.title, href: n.href })),
       },
       {
+        // Yellow: shared items whose every link is to what's deleted. Moving
+        // them to the Trash too is only a suggestion (and reversible).
+        key: "ONLY_ABOUT",
+        level: "suggested" as const,
+        label: "Notes, ideas, tasks and events only about this",
+        noun: { one: "item", many: "items" },
+        effect: "Stay, without their link",
+        suggestion: "Move them to the Trash too",
+        items: onlyAbout.map((n) => ({ id: n.id, title: n.title, href: n.href })),
+      },
+      {
         key: "KEPT_CHARACTERS",
         label: "Characters of the series",
         noun: { one: "character", many: "characters" },
@@ -353,6 +365,57 @@ async function deletionReport(
       },
     ],
   });
+}
+
+/**
+ * Shared objects (notes, ideas, tasks, events) linked only to what is being
+ * deleted: after the deletion they'd be about nothing.
+ */
+async function onlyAboutDoomed(
+  ctx: AuthorContext,
+  doomed: Set<string>,
+  links: { sourceId: string; targetId: string }[],
+) {
+  const shared = new Set(kindsWhere((t) => t.identity === "shared"));
+  const candidates = [
+    ...new Set(links.flatMap((l) => [l.sourceId, l.targetId]).filter((id) => !doomed.has(id))),
+  ];
+  if (!candidates.length) return [];
+  const nodes = [...(await resolveNodes(ctx, candidates)).values()].filter((n) =>
+    shared.has(n.kind),
+  );
+  if (!nodes.length) return [];
+  const all = await db.connection.findMany({
+    where: {
+      workspaceId: ctx.workspaceId,
+      OR: [
+        { sourceId: { in: nodes.map((n) => n.id) } },
+        { targetId: { in: nodes.map((n) => n.id) } },
+      ],
+    },
+    select: { sourceId: true, targetId: true },
+  });
+  return nodes.filter((n) =>
+    all
+      .filter((l) => l.sourceId === n.id || l.targetId === n.id)
+      .every((l) => doomed.has(l.sourceId === n.id ? l.targetId : l.sourceId)),
+  );
+}
+
+/** Moves accepted "only about" items to the Trash, in the deletion's transaction. */
+async function trashOnlyAbout(
+  tx: Prisma.TransactionClient,
+  report: { groups: { key: string; items: { id: string }[] }[] },
+  accepted: Set<string>,
+) {
+  if (!accepted.has("ONLY_ABOUT")) return;
+  const ids = report.groups.find((g) => g.key === "ONLY_ABOUT")?.items.map((i) => i.id) ?? [];
+  if (!ids.length) return;
+  for (const kind of kindsWhere((t) => t.identity === "shared")) {
+    const table = Prisma.raw(`"${storyObjectType(kind).table}"`);
+    await tx.$executeRaw`UPDATE ${table} SET "deleted_at" = now()
+      WHERE "id" = ANY(${ids}::uuid[]) AND "deleted_at" IS NULL`;
+  }
 }
 
 async function trashedTitle(ctx: AuthorContext, kind: StoryNodeKind, id: string) {
@@ -386,24 +449,45 @@ export async function deleteForever(
   id: string,
   /** The reviewed report's token: refused if what would be deleted changed. */
   token?: string,
+  /** Suggested consequences the author accepted (e.g. "ONLY_ABOUT"). */
+  accepted: string[] = [],
 ) {
   assertCan(ctx, "manage", "workspace");
   await requireTrashed(ctx, kind, id);
-  if (token !== undefined) assertToken(await previewDeleteForever(ctx, kind, id), token);
-  await db.$transaction((tx) => purgeStoryNodes(tx, ctx.workspaceId, [id]));
+  const report =
+    token !== undefined || accepted.length ? await previewDeleteForever(ctx, kind, id) : null;
+  const chosen = report ? reviewed(report, token, accepted) : new Set<string>();
+  await db.$transaction(async (tx) => {
+    if (report) await trashOnlyAbout(tx, report, chosen);
+    await purgeStoryNodes(tx, ctx.workspaceId, [id]);
+  });
 }
 
-export async function emptyTrash(ctx: AuthorContext, token?: string): Promise<number> {
+/** Token and accepted suggestions checked against the report the author reviewed. */
+function reviewed(report: ImpactReport, token: string | undefined, accepted: string[]) {
+  assertToken(report, token);
+  if (accepted.length && token === undefined)
+    throw new RuleError("Review what this change affects first.");
+  return assertReviewed({ ...report, blockers: [] }, token ?? report.token, accepted);
+}
+
+export async function emptyTrash(
+  ctx: AuthorContext,
+  token?: string,
+  accepted: string[] = [],
+): Promise<number> {
   assertCan(ctx, "manage", "workspace");
-  if (token !== undefined) assertToken(await previewEmptyTrash(ctx), token);
+  const report = token !== undefined || accepted.length ? await previewEmptyTrash(ctx) : null;
+  const chosen = report ? reviewed(report, token, accepted) : new Set<string>();
   const items = await listTrash(ctx);
   if (items.length === 0) return 0;
-  await db.$transaction((tx) =>
-    purgeStoryNodes(
+  await db.$transaction(async (tx) => {
+    if (report) await trashOnlyAbout(tx, report, chosen);
+    await purgeStoryNodes(
       tx,
       ctx.workspaceId,
       items.map((i) => i.id),
-    ),
-  );
+    );
+  });
   return items.length;
 }

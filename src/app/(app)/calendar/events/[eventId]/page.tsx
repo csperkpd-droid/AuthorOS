@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatDay } from "@/lib/dates";
+import { FieldHistoryDialog } from "@/modules/history/ui";
 import { getEvent } from "@/modules/calendar";
 import { EventDialog, trashEventAction } from "@/modules/calendar/ui";
 import { listConnections } from "@/modules/connections";
@@ -53,6 +54,7 @@ export default async function EventPage({ params }: Props) {
         description={when}
         actions={
           <div className="flex flex-wrap gap-2">
+            <FieldHistoryDialog nodeId={event.id} />
             <EventDialog
               event={event}
               trigger={

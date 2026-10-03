@@ -30,11 +30,16 @@ export function ImpactReview({
   pendingLabel?: string;
   pending: boolean;
   error: string | null;
-  onConfirm: () => void;
+  /** Called with the keys of the suggested consequences the author accepted. */
+  onConfirm: (accepted: string[]) => void;
   onCancel: () => void;
 }) {
   const [reviewing, setReviewing] = useState(false);
+  // Suggestions (Yellow) are ignored unless the author accepts each one.
+  const [accepted, setAccepted] = useState<string[]>([]);
   const blocked = report.blockers.length > 0;
+  const groups = report.groups.filter((g) => g.level !== "suggested");
+  const suggestions = report.groups.filter((g) => g.level === "suggested" && g.count > 0);
   const listed = report.groups.some((g) => g.items.length > 0);
 
   return (
@@ -44,12 +49,12 @@ export function ImpactReview({
         {report.summary}
       </p>
 
-      {report.groups.length > 0 && (
+      {groups.length > 0 && (
         <ul
           aria-label="What will this affect?"
           className="divide-y divide-border rounded-lg border border-border"
         >
-          {report.groups.map((g) => (
+          {groups.map((g) => (
             <li key={g.key} className="space-y-1 p-3">
               <div className="flex flex-wrap items-baseline justify-between gap-x-3">
                 <p className="font-medium">
@@ -77,6 +82,56 @@ export function ImpactReview({
             </li>
           ))}
         </ul>
+      )}
+
+      {suggestions.length > 0 && (
+        <section aria-labelledby="impact-suggested" className="space-y-2">
+          <h3 id="impact-suggested" className="text-sm font-medium">
+            Suggested (your choice)
+          </h3>
+          <ul className="divide-y divide-border rounded-lg border border-amber-500/40">
+            {suggestions.map((g) => (
+              <li key={g.key} className="space-y-1 p-3">
+                <label className="flex items-start gap-2 text-sm">
+                  <input
+                    type="checkbox"
+                    className="mt-1"
+                    checked={accepted.includes(g.key)}
+                    onChange={(e) =>
+                      setAccepted((list) =>
+                        e.target.checked ? [...list, g.key] : list.filter((k) => k !== g.key),
+                      )
+                    }
+                  />
+                  <span>
+                    <span className="font-medium">{g.suggestion ?? g.effect}</span>{" "}
+                    <span className="text-muted-foreground">
+                      ({formatCount(g.count, g.noun.one, g.noun.many)}: {g.label.toLowerCase()})
+                    </span>
+                    <span className="block text-xs text-muted-foreground">
+                      {accepted.includes(g.key) ? "Accepted" : "Ignored unless you accept it"}
+                    </span>
+                  </span>
+                </label>
+                {g.items.length > 0 && (
+                  <ul aria-label={g.label} className="ml-6 space-y-0.5 text-sm">
+                    {g.items.map((i) => (
+                      <li key={i.id}>
+                        {i.href ? (
+                          <Link href={i.href} className="text-primary hover:underline">
+                            {i.title}
+                          </Link>
+                        ) : (
+                          i.title
+                        )}
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
       )}
 
       {blocked && (
@@ -123,7 +178,7 @@ export function ImpactReview({
             Review changes
           </Button>
         )}
-        <Button onClick={onConfirm} disabled={pending || blocked}>
+        <Button onClick={() => onConfirm(accepted)} disabled={pending || blocked}>
           {pending ? pendingLabel : confirmLabel}
         </Button>
       </div>

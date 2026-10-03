@@ -54,7 +54,7 @@ const MODULES = {
 
 /** Names of services that change data. */
 const WRITES =
-  /^(create|update|trash|restore|delete|set|move|rename|save|apply|assign|unassign|add|dissolve|connect|disconnect|log|promote|archive|empty|run|review|export)(?=[A-Z]|$)/;
+  /^(create|update|trash|restore|delete|set|move|rename|save|apply|assign|unassign|add|dissolve|connect|disconnect|log|promote|archive|empty|run|review|export|keep)(?=[A-Z]|$)/;
 
 /**
  * Writes that need no role: personal preferences of the member, and

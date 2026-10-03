@@ -2,7 +2,7 @@ import { z } from "zod";
 
 import {
   ArcRole,
-  BookStatus,
+  WritingStatus,
   CalendarPurpose,
   CharacterRole,
   FieldType,
@@ -112,7 +112,9 @@ const book = z.object({
   title: title(),
   subtitle: optStr(500),
   description: optStr(20_000),
-  status: z.enum(BookStatus).optional().default("PLANNING"),
+  writingStatus: z.enum(WritingStatus).optional().default("PLANNING"),
+  /** Version 1–2 files only: the old status, publication included (see upgrade.ts). */
+  status: z.string().max(40).optional(),
   targetWordCount: optInt(0, 10_000_000),
   tropes: z.array(str(200)).max(100).optional().default([]),
   heatLevel: z
@@ -145,6 +147,7 @@ const scene = z.object({
   status: z.enum(SceneStatus).optional().default("DRAFT"),
   synopsis: optStr(20_000),
   content: doc,
+  contentFormat: int(1, 1000).optional().default(1),
   version: int().optional().default(0),
   ...softDeleted,
 });
@@ -187,6 +190,7 @@ const note = z.object({
   id,
   title: title(),
   body: doc,
+  bodyFormat: int(1, 1000).optional().default(1),
   version: int().optional().default(0),
   ...softDeleted,
 });
@@ -353,14 +357,25 @@ const contentRevision = z.object({
   id,
   nodeId: id,
   content: doc,
+  contentFormat: int(1, 1000).optional().default(1),
   source: z.enum(RevisionSource),
   label: optStr(500),
   createdAt: stamp,
 });
 
+/** Earlier values of long-form text fields (Complete archive, version 3). */
+const fieldRevision = z.object({
+  id,
+  nodeId: id,
+  field: z.string().min(1).max(200),
+  value: str(100_000),
+  source: z.enum(RevisionSource),
+  createdAt: stamp,
+});
+
 export const workspaceBundle = z.object({
   /** Format version of the file (upgraded to the current one after parsing). */
-  version: z.number().int().min(1).max(2),
+  version: z.number().int().min(1).max(3),
   /** "standard" backups have no version history; "archive" ones do. */
   kind: z.enum(["standard", "archive"]).optional().default("standard"),
   exportedAt: optDate,
@@ -400,6 +415,7 @@ export const workspaceBundle = z.object({
   fieldValues: list(fieldValue, 1_000_000),
   writingSessions: list(writingSession, 1_000_000),
   contentRevisions: list(contentRevision, 1_000_000),
+  fieldRevisions: list(fieldRevision, 1_000_000),
 });
 
 export type WorkspaceBundle = z.output<typeof workspaceBundle>;

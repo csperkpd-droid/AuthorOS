@@ -271,7 +271,7 @@ describe("workspace JSON export", () => {
     expect(filename).toMatch(/^authoros-workspace-archive-\d{4}-\d{2}-\d{2}\.json$/);
     expect(data).toMatchObject({
       format: "authoros.workspace",
-      version: 2,
+      version: 3,
       scope: { kind: "workspace" },
     });
     expect(checkExportIntegrity(data)).toEqual([]);

@@ -25,13 +25,22 @@ export async function createCharacterAction(formData: FormData) {
 
 export async function updateCharacterAction(id: string, formData: FormData) {
   return runAction(async () =>
-    updateCharacter(await requireAuthorContext(), id, fromForm(formData)),
+    updateCharacter(await requireAuthorContext(), id, fromForm(formData), {
+      expectedUpdatedAt: field(formData, "updatedAt") || undefined,
+    }),
   );
 }
 
-export async function updateProfileFieldAction(id: string, fieldId: string, value: string) {
+export async function updateProfileFieldAction(
+  id: string,
+  fieldId: string,
+  value: string,
+  /** The value the author started editing from (stale-edit protection). */
+  expectedValue?: string,
+) {
   return runAction(
-    async () => updateProfileField(await requireAuthorContext(), id, fieldId, value),
+    async () =>
+      updateProfileField(await requireAuthorContext(), id, fieldId, value, { expectedValue }),
     {
       refresh: false,
     },

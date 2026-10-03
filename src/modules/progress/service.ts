@@ -246,10 +246,7 @@ export async function bookPace(
 ): Promise<BookPace[]> {
   const library = await listLibrary(ctx, { penNameId });
   const books = [...library.series.flatMap((s) => s.books), ...library.standalone].filter(
-    (b) =>
-      b.status !== "COMPLETE" &&
-      b.status !== "PUBLISHED" &&
-      (b.targetWordCount || deadlines.has(b.id)),
+    (b) => b.writingStatus !== "COMPLETE" && (b.targetWordCount || deadlines.has(b.id)),
   );
   if (books.length === 0) return [];
   const todayDate = await today(ctx);

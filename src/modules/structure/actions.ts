@@ -86,8 +86,12 @@ export async function addBeatAction(outlineId: string, input: BeatInput) {
   return runAction(async () => addBeat(await ctx(), outlineId, input));
 }
 
-export async function updateBeatAction(beatId: string, input: BeatInput) {
-  return runAction(async () => updateBeat(await ctx(), beatId, input));
+export async function updateBeatAction(
+  beatId: string,
+  input: BeatInput,
+  expectedUpdatedAt?: string,
+) {
+  return runAction(async () => updateBeat(await ctx(), beatId, input, { expectedUpdatedAt }));
 }
 
 export async function moveBeatAction(beatId: string, afterBeatId: string | null) {
@@ -98,8 +102,8 @@ export async function previewDeleteBeatAction(beatId: string) {
   return runAction(async () => previewDeleteBeat(await ctx(), beatId), { refresh: false });
 }
 
-export async function deleteBeatAction(beatId: string, token: string) {
-  return runAction(async () => deleteBeat(await ctx(), beatId, token));
+export async function deleteBeatAction(beatId: string, token: string, accepted: string[] = []) {
+  return runAction(async () => deleteBeat(await ctx(), beatId, token, accepted));
 }
 
 export async function assignSceneAction(beatId: string, sceneId: string) {

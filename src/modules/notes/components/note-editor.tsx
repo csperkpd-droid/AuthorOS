@@ -6,6 +6,7 @@ import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { FormError } from "@/components/ui/field";
 import { useAction } from "@/hooks/use-action";
 import type { Doc } from "@/lib/text";
+import { keepDeviceDraftAction } from "@/modules/history/ui";
 
 import { renameNoteAction, saveNoteBodyAction } from "../actions";
 
@@ -25,6 +26,10 @@ export function NoteEditor({
   const rename = useAction(renameNoteAction);
   const save = useCallback(
     (doc: Doc, baseVersion: number) => saveNoteBodyAction(noteId, doc, baseVersion),
+    [noteId],
+  );
+  const keep = useCallback(
+    (doc: Doc, writtenAt: string) => keepDeviceDraftAction(noteId, doc, writtenAt),
     [noteId],
   );
 
@@ -47,6 +52,8 @@ export function NoteEditor({
         content={body}
         version={version}
         onSave={save}
+        onKeepDraft={keep}
+        draftKey={`note:${noteId}`}
         label="Note text"
         placeholder="Write your note…"
         thing="note"

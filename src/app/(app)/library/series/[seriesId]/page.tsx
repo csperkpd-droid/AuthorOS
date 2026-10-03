@@ -6,6 +6,7 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { formatCount, formatWords } from "@/lib/format";
+import { FieldHistoryDialog } from "@/modules/history/ui";
 import { getSeries, listSeriesOptions } from "@/modules/library";
 import { BookDialog, SeriesBookOrder, SeriesDialog, trashSeriesAction } from "@/modules/library/ui";
 import { ChangePenNameDialog } from "@/modules/impact/ui";
@@ -55,6 +56,7 @@ export default async function SeriesPage({ params }: PageProps<"/library/series/
         description={`${series.penName.name} · ${formatCount(series.books.length, "book")} · ${formatWords(totalWords)}`}
         actions={
           <div className="flex flex-wrap gap-2">
+            <FieldHistoryDialog nodeId={series.id} />
             <SeriesDialog
               series={series}
               penNames={penOptions}

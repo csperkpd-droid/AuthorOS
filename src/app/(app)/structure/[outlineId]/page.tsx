@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FieldHistoryDialog } from "@/modules/history/ui";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
 import { NewNoteDialog } from "@/modules/notes/ui";
@@ -127,15 +128,18 @@ export default async function OutlinePage({ params }: Props) {
         heading="Notes & links"
         emptyText="Notes about this structure, and links to anything related."
         actions={
-          <NewNoteDialog
-            about={{ id: outline.id, title: outline.title }}
-            trigger={
-              <Button variant="outline" size="sm">
-                <NotebookPen />
-                New note
-              </Button>
-            }
-          />
+          <div className="flex flex-wrap gap-2">
+            <FieldHistoryDialog nodeId={outline.id} />
+            <NewNoteDialog
+              about={{ id: outline.id, title: outline.title }}
+              trigger={
+                <Button variant="outline" size="sm">
+                  <NotebookPen />
+                  New note
+                </Button>
+              }
+            />
+          </div>
         }
       />
     </div>

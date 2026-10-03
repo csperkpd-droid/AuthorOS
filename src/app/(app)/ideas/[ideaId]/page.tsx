@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { FieldHistoryDialog } from "@/modules/history/ui";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
 import { getIdea } from "@/modules/ideas";
@@ -48,6 +49,7 @@ export default async function IdeaPage({ params }: Props) {
           onConfirm={trashIdeaAction.bind(null, idea.id)}
           navigateTo="/ideas"
         />
+        <FieldHistoryDialog nodeId={idea.id} />
       </div>
       <IdeaForm key={idea.id} idea={idea} />
       <ConnectionsPanel

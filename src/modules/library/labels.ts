@@ -1,11 +1,15 @@
-import type { BookStatus, HeatLevel } from "@/generated/prisma/enums";
+import type { WritingStatus, HeatLevel } from "@/generated/prisma/enums";
 
-export const BOOK_STATUS_LABELS: Record<BookStatus, string> = {
+/** Where the writing stands. Publication is per edition (Publishing), never a writing status. */
+export const WRITING_STATUS_LABELS: Record<WritingStatus, string> = {
+  IDEA: "Idea",
   PLANNING: "Planning",
   DRAFTING: "Drafting",
+  DRAFTED: "Drafted",
   REVISING: "Revising",
+  EDITING: "Editing",
+  PROOFREADING: "Proofreading",
   COMPLETE: "Complete",
-  PUBLISHED: "Published",
 };
 
 export const HEAT_LEVEL_LABELS: Record<HeatLevel, string> = {

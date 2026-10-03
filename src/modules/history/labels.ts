@@ -4,4 +4,6 @@ export const REVISION_SOURCE_LABELS: Record<string, string> = {
   BEFORE_RESTORE: "Before restore",
   AI_ACCEPTED: "Accepted suggestion",
   IMPORT: "Imported",
+  BEFORE_LARGE_EDIT: "Before a large edit",
+  BEFORE_EDIT: "Before an edit",
 };

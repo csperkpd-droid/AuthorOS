@@ -28,6 +28,15 @@ export type ImpactGroup = {
   items: ImpactItem[];
   /** Extra detail when items are too many to list (e.g. "12 chapters · 48 scenes"). */
   detail?: string;
+  /**
+   * Green / Yellow / Red (M8): `automatic` consequences happen with the
+   * change (factual propagation, listed so nothing is hidden); `suggested`
+   * consequences (Yellow) happen only if the author accepts them, one by
+   * one. Missing = automatic.
+   */
+  level?: "automatic" | "suggested";
+  /** For suggestions: what accepting does, e.g. "Move them to the Trash too". */
+  suggestion?: string;
 };
 
 /** Something to resolve before the change can be made. */
@@ -37,9 +46,17 @@ export type ImpactBlocker = {
   reason: string;
 };
 
+/**
+ * Green: affects nothing else, applies directly. Yellow: only suggested
+ * consequences, for the author to accept or ignore. Red: affects other data
+ * (or is blocked): the author approves before anything changes.
+ */
+export type ImpactLevel = "green" | "yellow" | "red";
+
 export type ImpactReport = {
   title: string;
   description: string;
+  level: ImpactLevel;
   /** "This will affect 7 objects: 3 characters, 2 relationships, 1 romance arc, 1 note." */
   summary: string;
   groups: ImpactGroup[];

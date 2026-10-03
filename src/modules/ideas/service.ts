@@ -1,11 +1,13 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { assertNotStale, staleError, type EditGuard } from "@/lib/concurrency";
 import { NotFoundError } from "@/lib/errors";
 import { connect } from "@/modules/connections";
 import { createBook } from "@/modules/library";
 import { createStoryNode, liveIdea } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { recordFieldHistory } from "@/modules/history";
 import { assertCan } from "@/server/policy";
 
 import { ideaInput, type IdeaInput } from "./schemas";
@@ -50,17 +52,31 @@ export async function createIdea(ctx: AuthorContext, input: IdeaInput) {
   });
 }
 
-export async function updateIdea(ctx: AuthorContext, id: string, input: IdeaInput) {
+export async function updateIdea(
+  ctx: AuthorContext,
+  id: string,
+  input: IdeaInput,
+  guard: EditGuard = {},
+) {
   assertCan(ctx, "edit", "storyBible");
   const data = ideaInput.parse(input);
   await getIdea(ctx, id);
-  await db.idea.update({
-    where: { id },
-    data: {
-      title: data.title,
-      body: data.body ?? null,
-      ...(data.status && { status: data.status }),
-    },
+  await db.$transaction(async (tx) => {
+    const row = await tx.idea.findUniqueOrThrow({
+      where: { id },
+      select: { body: true, updatedAt: true },
+    });
+    assertNotStale(row.updatedAt, guard.expectedUpdatedAt, "idea");
+    await recordFieldHistory(tx, ctx, id, row, { body: data.body ?? null });
+    const { count } = await tx.idea.updateMany({
+      where: { id, updatedAt: row.updatedAt },
+      data: {
+        title: data.title,
+        body: data.body ?? null,
+        ...(data.status && { status: data.status }),
+      },
+    });
+    if (count === 0) throw staleError("idea");
   });
 }
 

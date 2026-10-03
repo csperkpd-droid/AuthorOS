@@ -23,6 +23,7 @@ type Character = {
   summary: string | null;
   penNameId: string;
   series: { id: string } | null;
+  updatedAt?: Date | string;
 };
 
 /**
@@ -154,6 +155,13 @@ export function CharacterDialog({
                   : "Create character"}
             </Button>
           </div>
+          {character?.updatedAt && (
+            <input
+              type="hidden"
+              name="updatedAt"
+              value={new Date(character.updatedAt).toISOString()}
+            />
+          )}
         </form>
       </DialogContent>
     </Dialog>

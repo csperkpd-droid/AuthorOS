@@ -18,7 +18,13 @@ import { IDEA_STATUS_LABELS } from "../labels";
 export function IdeaForm({
   idea,
 }: {
-  idea: { id: string; title: string; body: string | null; status: IdeaStatus };
+  idea: {
+    id: string;
+    title: string;
+    body: string | null;
+    status: IdeaStatus;
+    updatedAt?: Date | string;
+  };
 }) {
   const router = useRouter();
   const update = useAction(updateIdeaAction);
@@ -70,6 +76,9 @@ export function IdeaForm({
             {update.pending ? "Saving…" : "Save"}
           </Button>
         </div>
+        {idea.updatedAt && (
+          <input type="hidden" name="updatedAt" value={new Date(idea.updatedAt).toISOString()} />
+        )}
       </form>
     </div>
   );

@@ -1,10 +1,13 @@
 import "server-only";
 
 import { db } from "@/lib/db";
+import { upgradeDoc } from "@/lib/doc-format";
+import { staleError } from "@/lib/concurrency";
 import type { Doc } from "@/lib/text";
 import { saveContent, type SaveResult } from "@/modules/history";
 import { recordEditorWords, today } from "@/modules/progress";
 import type { AuthorContext } from "@/server/context";
+import { recordFieldHistory } from "@/modules/history";
 import { assertCan } from "@/server/policy";
 
 import { sceneDetailsInput, type SceneDetailsInput } from "./schemas";
@@ -22,6 +25,7 @@ export async function getSceneForEditor(ctx: AuthorContext, id: string) {
         status: true,
         synopsis: true,
         content: true,
+        contentFormat: true,
         wordCount: true,
         version: true,
         updatedAt: true,
@@ -32,7 +36,11 @@ export async function getSceneForEditor(ctx: AuthorContext, id: string) {
   ]);
   const index = tree.sceneOrder.findIndex((s) => s.id === id);
   return {
-    scene: { ...scene, content: (scene.content as Doc | null) ?? null },
+    scene: {
+      ...scene,
+      // Documents are brought to the current format when read (lib/doc-format.ts).
+      content: scene.content ? upgradeDoc(scene.content as Doc, scene.contentFormat) : null,
+    },
     tree,
     previous: index > 0 ? tree.sceneOrder[index - 1] : null,
     next: index >= 0 && index + 1 < tree.sceneOrder.length ? tree.sceneOrder[index + 1] : null,
@@ -61,17 +69,35 @@ export async function saveSceneContent(
   );
 }
 
-export async function updateSceneDetails(ctx: AuthorContext, id: string, input: SceneDetailsInput) {
+export async function updateSceneDetails(
+  ctx: AuthorContext,
+  id: string,
+  input: SceneDetailsInput,
+  /** The synopsis the author started from: refused if it changed since (another tab). */
+  guard: { expectedSynopsis?: string | null } = {},
+) {
   assertCan(ctx, "edit", "manuscript");
   const data = sceneDetailsInput.parse(input);
   await requireScene(ctx, id);
-  await db.scene.update({
-    where: { id },
-    data: {
-      ...(data.title !== undefined && { title: data.title }),
-      ...(data.status !== undefined && { status: data.status }),
-      ...(data.synopsis !== undefined && { synopsis: data.synopsis }),
-    },
+  await db.$transaction(async (tx) => {
+    // Scene rows change on every autosave, so the synopsis itself is the guard.
+    await tx.$queryRaw`SELECT 1 FROM "scenes" WHERE "id" = ${id}::uuid FOR UPDATE`;
+    const row = await tx.scene.findUniqueOrThrow({ where: { id }, select: { synopsis: true } });
+    if (
+      data.synopsis !== undefined &&
+      guard.expectedSynopsis !== undefined &&
+      (guard.expectedSynopsis ?? "") !== (row.synopsis ?? "")
+    )
+      throw staleError("synopsis");
+    await recordFieldHistory(tx, ctx, id, row, { synopsis: data.synopsis });
+    await tx.scene.update({
+      where: { id },
+      data: {
+        ...(data.title !== undefined && { title: data.title }),
+        ...(data.status !== undefined && { status: data.status }),
+        ...(data.synopsis !== undefined && { synopsis: data.synopsis }),
+      },
+    });
   });
 }
 

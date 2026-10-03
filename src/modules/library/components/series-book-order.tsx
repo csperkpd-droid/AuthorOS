@@ -2,7 +2,7 @@
 
 import { SortableList } from "@/components/ui/sortable-list";
 import { useAction } from "@/hooks/use-action";
-import type { BookStatus } from "@/generated/prisma/enums";
+import type { WritingStatus } from "@/generated/prisma/enums";
 import { FormError } from "@/components/ui/field";
 
 import { moveBookInSeriesAction } from "../actions";
@@ -12,7 +12,7 @@ type Book = {
   id: string;
   title: string;
   subtitle: string | null;
-  status: BookStatus;
+  writingStatus: WritingStatus;
   wordCount: number;
   targetWordCount: number | null;
   penName: { name: string; archivedAt: Date | null };

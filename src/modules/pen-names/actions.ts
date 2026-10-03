@@ -20,7 +20,10 @@ export async function savePenNameAction(id: string | null, formData: FormData) {
       bio: field(formData, "bio"),
       ...(formData.has("language") && { language: field(formData, "language") }),
     };
-    if (id) await updatePenName(ctx, id, input);
+    if (id)
+      await updatePenName(ctx, id, input, {
+        expectedUpdatedAt: field(formData, "updatedAt") || undefined,
+      });
     else await createPenName(ctx, input);
     return null;
   });

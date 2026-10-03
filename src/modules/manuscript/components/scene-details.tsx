@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { FormError } from "@/components/ui/field";
 import { Select } from "@/components/ui/select";
@@ -25,6 +25,8 @@ export function SceneDetails({
 }) {
   const { run, error } = useAction(updateSceneDetailsAction);
   const [titleValue, setTitleValue] = useState(title);
+  // The synopsis this panel last knew: a save is refused if it changed elsewhere since.
+  const knownSynopsis = useRef(synopsis ?? "");
 
   return (
     <div className="space-y-3">
@@ -64,9 +66,11 @@ export function SceneDetails({
           placeholder="What happens in this scene?"
           rows={3}
           className="mt-2"
-          onBlur={(e) => {
-            if (e.target.value.trim() !== (synopsis ?? ""))
-              void run(sceneId, { synopsis: e.target.value });
+          onBlur={async (e) => {
+            const value = e.target.value;
+            if (value.trim() === knownSynopsis.current.trim()) return;
+            const result = await run(sceneId, { synopsis: value }, knownSynopsis.current);
+            if (result.ok) knownSynopsis.current = value;
           }}
         />
       </details>

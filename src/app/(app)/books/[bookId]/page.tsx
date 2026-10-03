@@ -10,11 +10,12 @@ import { Progress } from "@/components/ui/progress";
 import { formatDay } from "@/lib/dates";
 import { formatCount, formatWords } from "@/lib/format";
 import {
-  BOOK_STATUS_LABELS,
+  WRITING_STATUS_LABELS,
   getBook,
   HEAT_LEVEL_LABELS,
   listSeriesOptions,
 } from "@/modules/library";
+import { FieldHistoryDialog } from "@/modules/history/ui";
 import { BookDialog, trashBookAction } from "@/modules/library/ui";
 import { getBookTree } from "@/modules/manuscript";
 import { BinderManager } from "@/modules/manuscript/ui";
@@ -82,6 +83,7 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
         description={book.subtitle ?? undefined}
         actions={
           <div className="flex flex-wrap gap-2">
+            <FieldHistoryDialog nodeId={book.id} />
             <BookDialog
               book={book}
               penNames={penNames.map((p) => ({ id: p.id, name: p.name }))}
@@ -138,7 +140,7 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
           {book.penName.name}
           {book.penName.archivedAt && <Badge className="ml-2">Archived</Badge>}
         </Stat>
-        <Stat label="Status">{BOOK_STATUS_LABELS[book.status]}</Stat>
+        <Stat label="Writing status">{WRITING_STATUS_LABELS[book.writingStatus]}</Stat>
         <Stat label="Words">
           <span>
             {formatWords(tree.wordCount)}

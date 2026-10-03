@@ -34,12 +34,13 @@ model User {
   createdAt     DateTime  @default(now()) @map("created_at")
   updatedAt     DateTime  @updatedAt @map("updated_at")
 
-  accounts    Account[]
-  sessions    Session[]
-  memberships WorkspaceMember[]
-  revisions   ContentRevision[]
-  connections Connection[]
-  writing     WritingSession[]
+  accounts       Account[]
+  sessions       Session[]
+  memberships    WorkspaceMember[]
+  revisions      ContentRevision[]
+  fieldRevisions FieldRevision[]
+  connections    Connection[]
+  writing        WritingSession[]
 
   @@map("users")
 }
@@ -198,26 +199,27 @@ model StoryNode {
   kind        StoryNodeKind
   createdAt   DateTime      @default(now()) @map("created_at")
 
-  workspace    Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  series       Series?
-  book         Book?
-  part         Part?
-  chapter      Chapter?
-  scene        Scene?
-  character    Character?
-  relationship Relationship?
-  note         Note?
-  idea         Idea?
-  outline      Outline?
-  task         Task?
-  event        CalendarEvent?    @relation("EventNode")
-  penName      PenName?
+  workspace      Workspace         @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  series         Series?
+  book           Book?
+  part           Part?
+  chapter        Chapter?
+  scene          Scene?
+  character      Character?
+  relationship   Relationship?
+  note           Note?
+  idea           Idea?
+  outline        Outline?
+  task           Task?
+  event          CalendarEvent?    @relation("EventNode")
+  penName        PenName?
   /// Calendar entries about this object (e.g. a book's deadline).
-  dates        CalendarEvent[]   @relation("EventSubject")
-  outgoing     Connection[]      @relation("ConnectionSource")
-  incoming     Connection[]      @relation("ConnectionTarget")
-  revisions    ContentRevision[]
-  fieldValues  NodeFieldValue[]
+  dates          CalendarEvent[]   @relation("EventSubject")
+  outgoing       Connection[]      @relation("ConnectionSource")
+  incoming       Connection[]      @relation("ConnectionTarget")
+  revisions      ContentRevision[]
+  fieldRevisions FieldRevision[]
+  fieldValues    NodeFieldValue[]
 
   @@unique([id, workspaceId])
   @@index([workspaceId, kind])
@@ -249,35 +251,40 @@ model Series {
   @@map("series")
 }
 
-enum BookStatus {
+/// Where the writing stands (M8). Publication is not a writing status: it
+/// belongs to editions and the publishing workflow (one status per edition).
+enum WritingStatus {
+  IDEA
   PLANNING
   DRAFTING
+  DRAFTED
   REVISING
+  EDITING
+  PROOFREADING
   COMPLETE
-  PUBLISHED
 
-  @@map("book_status")
+  @@map("writing_status")
 }
 
 model Book {
-  id              String     @id @db.Uuid
-  workspaceId     String     @map("workspace_id") @db.Uuid
-  penNameId       String     @map("pen_name_id") @db.Uuid
-  seriesId        String?    @map("series_id") @db.Uuid
+  id              String        @id @db.Uuid
+  workspaceId     String        @map("workspace_id") @db.Uuid
+  penNameId       String        @map("pen_name_id") @db.Uuid
+  seriesId        String?       @map("series_id") @db.Uuid
   /// Fractional-index key for the book's place in its series (C collation).
-  seriesPosition  String?    @map("series_position")
+  seriesPosition  String?       @map("series_position")
   title           String
   subtitle        String?
   description     String?
-  status          BookStatus @default(PLANNING)
-  targetWordCount Int?       @map("target_word_count")
+  writingStatus   WritingStatus @default(PLANNING) @map("writing_status")
+  targetWordCount Int?          @map("target_word_count")
   /// Romance metadata (any genre may use tropes).
-  tropes          String[]   @default([])
-  heatLevel       HeatLevel? @map("heat_level")
+  tropes          String[]      @default([])
+  heatLevel       HeatLevel?    @map("heat_level")
   /// Deadline for the current draft (shown on the calendar and dashboard).
-  createdAt       DateTime   @default(now()) @map("created_at")
-  updatedAt       DateTime   @updatedAt @map("updated_at")
-  deletedAt       DateTime?  @map("deleted_at")
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  deletedAt       DateTime?     @map("deleted_at")
 
   node         StoryNode         @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   penName      PenName           @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
@@ -366,24 +373,26 @@ enum SceneStatus {
 }
 
 model Scene {
-  id          String      @id @db.Uuid
-  workspaceId String      @map("workspace_id") @db.Uuid
-  bookId      String      @map("book_id") @db.Uuid
-  chapterId   String      @map("chapter_id") @db.Uuid
-  title       String
-  position    String
-  status      SceneStatus @default(DRAFT)
-  synopsis    String?
+  id            String      @id @db.Uuid
+  workspaceId   String      @map("workspace_id") @db.Uuid
+  bookId        String      @map("book_id") @db.Uuid
+  chapterId     String      @map("chapter_id") @db.Uuid
+  title         String
+  position      String
+  status        SceneStatus @default(DRAFT)
+  synopsis      String?
   /// ProseMirror (Tiptap) document JSON. Null = empty scene.
-  content     Json?
+  content       Json?
   /// Plain text derived from `content`, for search and word counts.
-  contentText String      @default("") @map("content_text")
-  wordCount   Int         @default(0) @map("word_count")
+  contentText   String      @default("") @map("content_text")
+  wordCount     Int         @default(0) @map("word_count")
+  /// Document format version of `content` (M8), for future editor migrations.
+  contentFormat Int         @default(1) @map("content_format")
   /// Incremented on every content save; used to detect conflicting edits.
-  version     Int         @default(0)
-  createdAt   DateTime    @default(now()) @map("created_at")
-  updatedAt   DateTime    @updatedAt @map("updated_at")
-  deletedAt   DateTime?   @map("deleted_at")
+  version       Int         @default(0)
+  createdAt     DateTime    @default(now()) @map("created_at")
+  updatedAt     DateTime    @updatedAt @map("updated_at")
+  deletedAt     DateTime?   @map("deleted_at")
 
   node    StoryNode   @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   book    Book        @relation(fields: [bookId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
@@ -402,6 +411,10 @@ enum RevisionSource {
   BEFORE_RESTORE
   AI_ACCEPTED
   IMPORT
+  /// Saved automatically before a save that removes a large share of the text (M8).
+  BEFORE_LARGE_EDIT
+  /// A field's value before an edit replaced it (field history, M8).
+  BEFORE_EDIT
 
   @@map("revision_source")
 }
@@ -409,16 +422,18 @@ enum RevisionSource {
 /// Append-only snapshots of earlier rich-text content of any versioned story
 /// node (scenes and notes today). Never pruned automatically.
 model ContentRevision {
-  id          String         @id @default(uuid(7)) @db.Uuid
-  workspaceId String         @map("workspace_id") @db.Uuid
-  nodeId      String         @map("node_id") @db.Uuid
-  content     Json?
-  contentText String         @map("content_text")
-  wordCount   Int            @map("word_count")
-  source      RevisionSource
-  label       String?
-  createdById String?        @map("created_by_id") @db.Uuid
-  createdAt   DateTime       @default(now()) @map("created_at")
+  id            String         @id @default(uuid(7)) @db.Uuid
+  workspaceId   String         @map("workspace_id") @db.Uuid
+  nodeId        String         @map("node_id") @db.Uuid
+  content       Json?
+  contentText   String         @map("content_text")
+  wordCount     Int            @map("word_count")
+  /// Document format version of `content` (M8).
+  contentFormat Int            @default(1) @map("content_format")
+  source        RevisionSource
+  label         String?
+  createdById   String?        @map("created_by_id") @db.Uuid
+  createdAt     DateTime       @default(now()) @map("created_at")
 
   node      StoryNode @relation(fields: [nodeId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
@@ -428,6 +443,26 @@ model ContentRevision {
 }
 
 // ─── Story bible ────────────────────────────────────────────────────────────
+
+/// Earlier values of a story object's long-form text fields (M8): synopses,
+/// summaries, profile fields, descriptions, idea bodies, beat descriptions.
+/// `field` names the field ("synopsis", "profile.goal", "beat:<id>.description").
+model FieldRevision {
+  id          String         @id @default(uuid(7)) @db.Uuid
+  workspaceId String         @map("workspace_id") @db.Uuid
+  nodeId      String         @map("node_id") @db.Uuid
+  field       String
+  value       String
+  source      RevisionSource
+  createdById String?        @map("created_by_id") @db.Uuid
+  createdAt   DateTime       @default(now()) @map("created_at")
+
+  node      StoryNode @relation(fields: [nodeId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([nodeId, field, createdAt(sort: Desc)])
+  @@map("field_revisions")
+}
 
 enum CharacterRole {
   PROTAGONIST
@@ -524,6 +559,8 @@ model Note {
   /// ProseMirror document JSON. Null = empty note.
   body        Json?
   bodyText    String    @default("") @map("body_text")
+  /// Document format version of `body` (M8).
+  bodyFormat  Int       @default(1) @map("body_format")
   /// Incremented on every body save (conflict detection, like scenes).
   version     Int       @default(0)
   createdAt   DateTime  @default(now()) @map("created_at")

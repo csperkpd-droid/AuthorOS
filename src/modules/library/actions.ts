@@ -5,6 +5,7 @@ import { field, runAction } from "@/server/action";
 import { requireAuthorContext } from "@/server/context";
 
 import {
+  assertBookUnchanged,
   createBook,
   createSeries,
   moveBookInSeries,
@@ -38,11 +39,16 @@ export async function createSeriesAction(formData: FormData) {
 export async function updateSeriesAction(id: string, formData: FormData) {
   return runAction(async () => {
     const ctx = await requireAuthorContext();
-    await updateSeries(ctx, id, {
-      title: field(formData, "title"),
-      description: field(formData, "description"),
-      penNameId: optional(field(formData, "penNameId")),
-    });
+    await updateSeries(
+      ctx,
+      id,
+      {
+        title: field(formData, "title"),
+        description: field(formData, "description"),
+        penNameId: optional(field(formData, "penNameId")),
+      },
+      { expectedUpdatedAt: field(formData, "updatedAt") || undefined },
+    );
     return null;
   });
 }
@@ -77,7 +83,7 @@ export async function updateBookAction(id: string, formData: FormData) {
       title: field(formData, "title"),
       subtitle: field(formData, "subtitle"),
       description: field(formData, "description"),
-      status: field(formData, "status") as BookInput["status"],
+      writingStatus: field(formData, "writingStatus") as BookInput["writingStatus"],
       targetWordCount: field(formData, "targetWordCount"),
       ...(formData.has("tropes") && { tropes: field(formData, "tropes") }),
       ...(formData.has("heatLevel") && {
@@ -85,18 +91,22 @@ export async function updateBookAction(id: string, formData: FormData) {
       }),
     };
     bookInput.parse(input); // validate everything before changing anything
+    const guard = { expectedUpdatedAt: field(formData, "updatedAt") || undefined };
+    await assertBookUnchanged(ctx, id, guard);
+    let seriesChanged = false;
     // Series membership first: it decides whether the book may pick its own pen name.
     if (formData.has("seriesId")) {
       const seriesId = field(formData, "seriesId");
       // Leaving a series is reviewed first (Change Impact); the token is the review's.
-      await setBookSeries(
+      seriesChanged = await setBookSeries(
         ctx,
         id,
         seriesId === "" ? null : seriesId,
         optional(field(formData, "seriesToken")) ?? undefined,
       );
     }
-    await updateBook(ctx, id, input);
+    // Moving series already changed the book; the guard was checked above.
+    await updateBook(ctx, id, input, seriesChanged ? {} : guard);
     // The deadline is a calendar entry about the book (one source of truth for dates).
     if (formData.has("dueOn")) await setDeadline(ctx, id, field(formData, "dueOn"));
     return null;

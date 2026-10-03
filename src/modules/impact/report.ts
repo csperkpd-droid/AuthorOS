@@ -33,7 +33,8 @@ export function buildReport({
   const full: ImpactGroup[] = groups
     .map((g) => ({ ...g, count: g.count ?? g.items.length, affected: g.affected ?? true }))
     .filter((g) => g.count > 0 || g.detail);
-  const affected = full.filter((g) => g.affected && g.count > 0);
+  const suggested = full.filter((g) => g.level === "suggested" && g.count > 0);
+  const affected = full.filter((g) => g.affected && g.count > 0 && g.level !== "suggested");
   const total = affected.reduce((n, g) => n + g.count, 0);
   const summary =
     total === 0
@@ -51,7 +52,8 @@ export function buildReport({
     )
     .digest("hex")
     .slice(0, 32);
-  return { title, description, summary, groups: full, blockers, token };
+  const level = blockers.length || affected.length ? "red" : suggested.length ? "yellow" : "green";
+  return { title, description, level, summary, groups: full, blockers, token };
 }
 
 /** Whether anything besides the object itself would be affected. */
@@ -65,13 +67,23 @@ export function affectsOthers(report: ImpactReport, selfKey?: string) {
  * orphaning, whichever path calls the service); refused when what it would
  * affect changed since the review (stale token).
  */
-export function assertReviewed(report: ImpactReport, token: string | undefined) {
+export function assertReviewed(
+  report: ImpactReport,
+  token: string | undefined,
+  /** Keys of the suggested consequences the author accepted (Yellow). */
+  accepted: string[] = [],
+): Set<string> {
   if (report.blockers.length) throw new RuleError(report.blockers[0].reason);
+  const suggestions = new Set(
+    report.groups.filter((g) => g.level === "suggested" && g.count > 0).map((g) => g.key),
+  );
+  for (const key of accepted)
+    if (!suggestions.has(key)) throw new RuleError("That suggestion isn’t part of this change.");
   if (token === undefined) {
-    if (report.groups.some((g) => g.affected && g.count > 0))
-      throw new RuleError("Review what this change affects first.");
-    return;
+    if (report.level !== "green") throw new RuleError("Review what this change affects first.");
+    return new Set();
   }
   if (token !== report.token)
     throw new ConflictError("This changed since you reviewed it. Review it again.");
+  return new Set(accepted);
 }

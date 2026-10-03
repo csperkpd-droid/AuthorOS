@@ -32,10 +32,13 @@ export const EXPORT_FORMAT = "authoros.workspace";
 /**
  * Version 2 (M7): pen names are story nodes (listed in `storyNodes`), and
  * dates that belong to an object are calendar events (`purpose`,
- * `subjectId`) instead of columns (books no longer have `dueOn`). The
- * import upgrades version 1 files.
+ * `subjectId`) instead of columns (books no longer have `dueOn`).
+ * Version 3 (M8): books have a `writingStatus` (publication is not a
+ * writing status); documents carry their format version; the Complete
+ * archive includes earlier values of text fields (`fieldRevisions`).
+ * The importer upgrades older files.
  */
-export const EXPORT_VERSION = 2;
+export const EXPORT_VERSION = 3;
 
 /**
  * "standard": the backup (all story data, no version history).
@@ -164,12 +167,15 @@ export async function exportWorkspaceJson(
             : true),
   );
   const fieldIds = fieldsInScope.map((f) => f.id);
-  const [fieldValues, revisions] = await Promise.all([
+  const [fieldValues, revisions, fieldRevisions] = await Promise.all([
     db.nodeFieldValue.findMany({
       where: { fieldId: { in: fieldIds }, nodeId: { in: [...included] } },
     }),
     kind === "archive"
       ? db.contentRevision.findMany({ where: { workspaceId: ws, nodeId: { in: [...included] } } })
+      : Promise.resolve(null),
+    kind === "archive"
+      ? db.fieldRevision.findMany({ where: { workspaceId: ws, nodeId: { in: [...included] } } })
       : Promise.resolve(null),
   ]);
 
@@ -217,6 +223,7 @@ export async function exportWorkspaceJson(
     fieldValues,
     writingSessions,
     ...(revisions ? { contentRevisions: revisions } : {}),
+    ...(fieldRevisions ? { fieldRevisions } : {}),
   };
   const date = data.exportedAt.slice(0, 10);
   return {
@@ -262,6 +269,7 @@ export type IntegrityInput = {
   fieldValues: { fieldId: string; nodeId: string }[];
   writingSessions?: { bookId: Ref }[];
   contentRevisions?: { nodeId: string }[];
+  fieldRevisions?: { nodeId: string }[];
 };
 
 /**
@@ -353,5 +361,6 @@ export function checkExportIntegrity(data: IntegrityInput): string[] {
   }
   for (const w of data.writingSessions ?? []) need("writing.book", w.bookId, books);
   for (const r of data.contentRevisions ?? []) need("revision.node", r.nodeId, nodes);
+  for (const r of data.fieldRevisions ?? []) need("fieldRevision.node", r.nodeId, nodes);
   return problems;
 }

@@ -26,7 +26,8 @@ export function ProfileForm({
 
   async function save(fieldId: string, value: string) {
     if ((lastSaved.current[fieldId] ?? "") === value) return;
-    const result = await run(characterId, fieldId, value);
+    // The value this form last knew: refused if it changed elsewhere since.
+    const result = await run(characterId, fieldId, value, lastSaved.current[fieldId] ?? "");
     if (result.ok) {
       lastSaved.current[fieldId] = value;
       setSaved(fieldId);

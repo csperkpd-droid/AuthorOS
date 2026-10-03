@@ -2,10 +2,12 @@ import "server-only";
 
 import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
+import { assertNotStale, staleError, type EditGuard } from "@/lib/concurrency";
 import { NotFoundError, RuleError } from "@/lib/errors";
 import { getPenNameForNewWork, requireAssignablePenName } from "@/modules/pen-names";
 import { createStoryNode, liveCharacter, liveScene, liveSeries } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { recordFieldHistory } from "@/modules/history";
 import { assertCan } from "@/server/policy";
 
 import { characterInput, profileFieldInput, type CharacterInput } from "./schemas";
@@ -135,7 +137,12 @@ export async function createCharacter(ctx: AuthorContext, input: CharacterInput)
  * identity may only change while nothing links it to other work (scenes,
  * relationships, arcs), so no information crosses identities.
  */
-export async function updateCharacter(ctx: AuthorContext, id: string, input: CharacterInput) {
+export async function updateCharacter(
+  ctx: AuthorContext,
+  id: string,
+  input: CharacterInput,
+  guard: EditGuard = {},
+) {
   assertCan(ctx, "edit", "storyBible");
   const data = characterInput.parse(input);
   const current = await getCharacter(ctx, id);
@@ -166,15 +173,24 @@ export async function updateCharacter(ctx: AuthorContext, id: string, input: Cha
         `${current.name} appears in ${outside === 1 ? "1 scene" : `${outside} scenes`} outside that series. Remove those appearances first, or keep the character’s series.`,
       );
   }
-  await db.character.update({
-    where: { id },
-    data: {
-      ...home,
-      name: data.name,
-      aliases: data.aliases,
-      role: data.role,
-      summary: data.summary ?? null,
-    },
+  await db.$transaction(async (tx) => {
+    const row = await tx.character.findUniqueOrThrow({
+      where: { id },
+      select: { summary: true, updatedAt: true },
+    });
+    assertNotStale(row.updatedAt, guard.expectedUpdatedAt, "character");
+    await recordFieldHistory(tx, ctx, id, row, { summary: data.summary ?? null });
+    const { count } = await tx.character.updateMany({
+      where: { id, updatedAt: row.updatedAt },
+      data: {
+        ...home,
+        name: data.name,
+        aliases: data.aliases,
+        role: data.role,
+        summary: data.summary ?? null,
+      },
+    });
+    if (count === 0) throw staleError("character");
   });
 }
 
@@ -193,14 +209,31 @@ export async function updateProfileField(
   id: string,
   field: string,
   value: string,
+  /** The value the author started from: refused if it changed since (another tab). */
+  guard: { expectedValue?: string | null } = {},
 ) {
   assertCan(ctx, "edit", "storyBible");
   const data = profileFieldInput.parse({ field, value });
-  const character = await getCharacter(ctx, id);
-  const profile = { ...character.profile };
-  if (data.value.trim() === "") delete profile[data.field];
-  else profile[data.field] = data.value;
-  await db.character.update({ where: { id }, data: { profile } });
+  await getCharacter(ctx, id);
+  await db.$transaction(async (tx) => {
+    // Lock the row: profile fields are edited one at a time, often quickly.
+    await tx.$queryRaw`SELECT 1 FROM "characters" WHERE "id" = ${id}::uuid FOR UPDATE`;
+    const row = await tx.character.findUniqueOrThrow({ where: { id }, select: { profile: true } });
+    const profile = asProfile(row.profile);
+    const previous = profile[data.field] ?? "";
+    if (guard.expectedValue !== undefined && (guard.expectedValue ?? "") !== previous)
+      throw staleError("profile field");
+    await recordFieldHistory(
+      tx,
+      ctx,
+      id,
+      { [`profile.${data.field}`]: previous },
+      { [`profile.${data.field}`]: data.value },
+    );
+    if (data.value.trim() === "") delete profile[data.field];
+    else profile[data.field] = data.value;
+    await tx.character.update({ where: { id }, data: { profile } });
+  });
 }
 
 export async function trashCharacter(ctx: AuthorContext, id: string) {

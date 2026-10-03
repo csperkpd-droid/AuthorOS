@@ -11,8 +11,10 @@ export async function createTaskAction(input: TaskInput & { concernsId?: string 
   return runAction(async () => createTask(await requireAuthorContext(), input));
 }
 
-export async function updateTaskAction(id: string, input: TaskInput) {
-  return runAction(async () => updateTask(await requireAuthorContext(), id, input));
+export async function updateTaskAction(id: string, input: TaskInput, expectedUpdatedAt?: string) {
+  return runAction(async () =>
+    updateTask(await requireAuthorContext(), id, input, { expectedUpdatedAt }),
+  );
 }
 
 export async function setTaskStatusAction(id: string, status: TaskStatus) {

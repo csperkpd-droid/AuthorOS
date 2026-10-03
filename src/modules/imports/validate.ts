@@ -1,5 +1,7 @@
 import "server-only";
 
+import { CURRENT_DOC_FORMAT } from "@/lib/doc-format";
+
 import { canConnect, getKind, isConnectionKind } from "@/modules/connections";
 import { checkExportIntegrity } from "@/modules/exports";
 import { STORY_KINDS, storyObjectType } from "@/modules/story-graph";
@@ -157,6 +159,17 @@ export function validateBundle(b: WorkspaceBundle): string[] {
     if (valueKeys.has(key)) problems.push(`a field value is listed twice`);
     valueKeys.add(key);
   }
+
+  // ── Documents: never from a newer format than this version reads ──
+  const newer = [
+    ...b.scenes.map((x) => x.contentFormat),
+    ...b.notes.map((x) => x.bodyFormat),
+    ...b.contentRevisions.map((x) => x.contentFormat),
+  ].filter((f) => f > CURRENT_DOC_FORMAT);
+  if (newer.length)
+    problems.push(
+      `${newer.length} documents were written by a newer version of AuthorOS (format ${Math.max(...newer)}).`,
+    );
 
   // ── Calendar: dates of their own, or dates that belong to an object ──
   const deadlines = new Set<string>();

@@ -16,11 +16,16 @@ export async function createIdeaAction(formData: FormData) {
 
 export async function updateIdeaAction(id: string, formData: FormData) {
   return runAction(async () =>
-    updateIdea(await requireAuthorContext(), id, {
-      title: field(formData, "title"),
-      body: field(formData, "body"),
-      status: (field(formData, "status") || undefined) as never,
-    }),
+    updateIdea(
+      await requireAuthorContext(),
+      id,
+      {
+        title: field(formData, "title"),
+        body: field(formData, "body"),
+        status: (field(formData, "status") || undefined) as never,
+      },
+      { expectedUpdatedAt: field(formData, "updatedAt") || undefined },
+    ),
   );
 }
 

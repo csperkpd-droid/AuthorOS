@@ -2,6 +2,7 @@ import "server-only";
 
 import { addDays, fromDbDate, startOfMonthGrid, toDbDate, type DateString } from "@/lib/dates";
 import { db } from "@/lib/db";
+import { assertNotStale, staleError, type EditGuard } from "@/lib/concurrency";
 import { NotFoundError, RuleError } from "@/lib/errors";
 import { createPlannedConnection, planConnection } from "@/modules/connections";
 import { writingDays } from "@/modules/progress";
@@ -15,6 +16,7 @@ import {
 } from "@/modules/story-graph";
 import { listTasks } from "@/modules/tasks";
 import type { AuthorContext } from "@/server/context";
+import { recordFieldHistory } from "@/modules/history";
 import { assertCan } from "@/server/policy";
 
 import { deadlineDate, eventInput, monthInput, type EventInput } from "./schemas";
@@ -40,6 +42,7 @@ const eventSelect = {
   startTime: true,
   purpose: true,
   subjectId: true,
+  updatedAt: true,
 } as const;
 
 function toView(e: {
@@ -51,6 +54,7 @@ function toView(e: {
   startTime: string | null;
   purpose: "EVENT" | "DEADLINE";
   subjectId: string | null;
+  updatedAt: Date;
 }) {
   return {
     ...e,
@@ -106,19 +110,33 @@ function assertOwnEvent(event: EventView) {
     throw new RuleError("This date belongs to another item. Change it from there.");
 }
 
-export async function updateEvent(ctx: AuthorContext, id: string, input: EventInput) {
+export async function updateEvent(
+  ctx: AuthorContext,
+  id: string,
+  input: EventInput,
+  guard: EditGuard = {},
+) {
   assertCan(ctx, "edit", "planning");
   const data = eventInput.parse(input);
   assertOwnEvent(await getEvent(ctx, id));
-  await db.calendarEvent.update({
-    where: { id },
-    data: {
-      title: data.title,
-      description: data.description ?? null,
-      startsOn: toDbDate(data.startsOn),
-      endsOn: data.endsOn ? toDbDate(data.endsOn) : null,
-      startTime: data.startTime,
-    },
+  await db.$transaction(async (tx) => {
+    const row = await tx.calendarEvent.findUniqueOrThrow({
+      where: { id },
+      select: { description: true, updatedAt: true },
+    });
+    assertNotStale(row.updatedAt, guard.expectedUpdatedAt, "event");
+    await recordFieldHistory(tx, ctx, id, row, { description: data.description ?? null });
+    const { count } = await tx.calendarEvent.updateMany({
+      where: { id, updatedAt: row.updatedAt },
+      data: {
+        title: data.title,
+        description: data.description ?? null,
+        startsOn: toDbDate(data.startsOn),
+        endsOn: data.endsOn ? toDbDate(data.endsOn) : null,
+        startTime: data.startTime,
+      },
+    });
+    if (count === 0) throw staleError("event");
   });
 }
 

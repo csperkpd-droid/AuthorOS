@@ -11,6 +11,20 @@ export const PROFILE_FIELDS = [
   { id: "voice", label: "Voice & speech", multiline: true },
 ] as const;
 
+/**
+ * Every core character field: the columns and the profile. Core fields and
+ * custom fields stay separate systems that never duplicate each other: a
+ * custom field can't take a core field's name.
+ */
+export const CORE_CHARACTER_FIELD_LABELS = [
+  "Name",
+  "Aliases",
+  "Role",
+  "Summary",
+  "Series",
+  ...PROFILE_FIELDS.map((f) => f.label),
+];
+
 export type ProfileFieldId = (typeof PROFILE_FIELDS)[number]["id"];
 
 export const PROFILE_FIELD_IDS = PROFILE_FIELDS.map((f) => f.id) as ProfileFieldId[];

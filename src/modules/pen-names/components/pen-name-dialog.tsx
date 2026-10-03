@@ -18,7 +18,13 @@ export function PenNameDialog({
   penName,
   trigger,
 }: {
-  penName?: { id: string; name: string; bio: string | null; language?: string | null };
+  penName?: {
+    id: string;
+    name: string;
+    bio: string | null;
+    language?: string | null;
+    updatedAt?: Date | string;
+  };
   trigger: ReactNode;
 }) {
   const [open, setOpen] = useState(false);
@@ -70,6 +76,13 @@ export function PenNameDialog({
               {pending ? "Saving…" : penName ? "Save" : "Create pen name"}
             </Button>
           </div>
+          {penName?.updatedAt && (
+            <input
+              type="hidden"
+              name="updatedAt"
+              value={new Date(penName.updatedAt).toISOString()}
+            />
+          )}
         </form>
       </DialogContent>
     </Dialog>

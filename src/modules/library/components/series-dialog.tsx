@@ -21,7 +21,13 @@ export function SeriesDialog({
   defaultPenNameId,
   trigger,
 }: {
-  series?: { id: string; title: string; description: string | null; penName: Option };
+  series?: {
+    id: string;
+    title: string;
+    description: string | null;
+    penName: Option;
+    updatedAt?: Date | string;
+  };
   penNames: Option[];
   defaultPenNameId?: string;
   trigger: ReactNode;
@@ -93,6 +99,13 @@ export function SeriesDialog({
               {pending ? "Saving…" : series ? "Save" : "Create series"}
             </Button>
           </div>
+          {series?.updatedAt && (
+            <input
+              type="hidden"
+              name="updatedAt"
+              value={new Date(series.updatedAt).toISOString()}
+            />
+          )}
         </form>
       </DialogContent>
     </Dialog>

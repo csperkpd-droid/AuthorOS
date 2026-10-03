@@ -18,6 +18,7 @@ type Event = {
   startsOn: string;
   endsOn: string | null;
   startTime: string | null;
+  updatedAt?: Date | string;
 };
 
 /** Create a calendar event (optionally about a story object) or edit one. */
@@ -54,7 +55,11 @@ export function EventDialog({
               startTime: String(formData.get("startTime") ?? ""),
             };
             const result = event
-              ? await update.run(event.id, input)
+              ? await update.run(
+                  event.id,
+                  input,
+                  event.updatedAt ? new Date(event.updatedAt).toISOString() : undefined,
+                )
               : await create.run({ ...input, concernsId: concerns?.id ?? null });
             if (result.ok) setOpen(false);
           }}

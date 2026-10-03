@@ -13,6 +13,7 @@ import type { WorkspaceBundle } from "./bundle";
 export function upgradeBundle(bundle: WorkspaceBundle): WorkspaceBundle {
   let b = bundle;
   if (b.version < 2) b = toVersion2(b);
+  if (b.version < 3) b = toVersion3(b);
   return b;
 }
 
@@ -49,6 +50,67 @@ function toVersion2(b: WorkspaceBundle): WorkspaceBundle {
     storyNodes: [...storyNodes, ...deadlines.map((d) => ({ id: d.id, kind: "EVENT" as const }))],
     books: b.books.map((book) => ({ ...book, dueOn: null })),
     calendarEvents: [...b.calendarEvents, ...deadlines],
+  };
+}
+
+/**
+ * Version 3: a book's writing status is separate from publication.
+ * "Published" becomes writing status Complete, and the fact that the book
+ * was published is kept as a "Publication status" field value (as the
+ * database migration did), until editions carry it.
+ */
+function toVersion3(b: WorkspaceBundle): WorkspaceBundle {
+  const WRITING = ["PLANNING", "DRAFTING", "REVISING", "COMPLETE"] as const;
+  const published = b.books.filter((book) => book.status === "PUBLISHED");
+  const existing = b.fieldDefinitions.find(
+    (f) =>
+      f.nodeKind === "BOOK" &&
+      !f.penNameId &&
+      !f.seriesId &&
+      !f.bookId &&
+      f.label.toLowerCase() === "publication status",
+  );
+  const field =
+    existing ??
+    (published.length
+      ? {
+          id: derivedId(`${published[0].id}:publication-status`),
+          penNameId: null,
+          seriesId: null,
+          bookId: null,
+          nodeKind: "BOOK" as const,
+          label: "Publication status",
+          type: "TEXT" as const,
+          position: "a0",
+          createdAt: published[0].updatedAt,
+        }
+      : null);
+  const valued = new Set(b.fieldValues.map((v) => `${v.nodeId}|${v.fieldId}`));
+  return {
+    ...b,
+    version: 3,
+    books: b.books.map(({ status, ...book }) => ({
+      ...book,
+      writingStatus: (WRITING as readonly string[]).includes(status ?? "")
+        ? (status as (typeof WRITING)[number])
+        : status === "PUBLISHED"
+          ? "COMPLETE"
+          : book.writingStatus,
+    })),
+    fieldDefinitions: field && !existing ? [...b.fieldDefinitions, field] : b.fieldDefinitions,
+    fieldValues: [
+      ...b.fieldValues,
+      ...(field
+        ? published
+            .filter((book) => !valued.has(`${book.id}|${field.id}`))
+            .map((book) => ({
+              nodeId: book.id,
+              fieldId: field.id,
+              value: "Published",
+              updatedAt: book.updatedAt,
+            }))
+        : []),
+    ],
   };
 }
 
