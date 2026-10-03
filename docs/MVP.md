@@ -42,6 +42,7 @@ the suggestion boundary).
 - [x] Book writing status separate from publication (no "Published"); migration keeps the fact as a field
 - [x] Core character fields protected from duplicate custom fields
 - [x] Export format version 3 with upgrades of version 1–2 files
+- [x] Review: device buffer documented as a permanent safety layer (decision 101); remaining risks recorded as known and deferred (decision 102)
 - [x] Decided, not built: comment anchors, Life Planner privacy boundary, project-level access, Beat vs Beat Assignment, Tropes as objects, editions
 
 ## Milestone 7 checklist (Foundations)

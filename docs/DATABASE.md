@@ -264,7 +264,10 @@ marks text saved before an import replaced it.
   replaced `books.status` / `book_status`. Writing status never says
   "Published": books that were `PUBLISHED` became `COMPLETE`, and the fact
   was kept as a book field "Publication status" = "Published", so no
-  information was lost. Publication belongs to editions (v1.1).
+  information was lost. **Temporary compatibility architecture:** this
+  field and `books.tropes text[]` are stopgaps until Edition/Publishing and
+  the Trope object replace them (migrated, then removed); nothing new builds
+  on them. Publication belongs to editions (v1.1).
 - **`field_revisions`**: `workspace_id`, `node_id` (composite FK →
   `story_nodes`, cascade), `field` (a column such as `synopsis`, a profile
   field `profile.<key>`, or `beat:<id>.description` on an outline; CHECK

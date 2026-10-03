@@ -350,6 +350,31 @@ the shared one; versions are explicit (`baseVersion`). A later
 offline-first editor can extend the same draft store into a queue of
 changes without changing the server contract.
 
+**The device buffer is a safety layer, not a leftover (decision 101).** The
+current IndexedDB buffer is not the final offline/sync architecture. It is
+the safety net and the foundation that architecture will grow from. Working
+cloud autosave is **not** a reason to remove, skip or bypass it. Every
+editor of long-form text writes to the device first, and deletes the local
+copy only once the cloud has exactly that text. Recovery and conflict
+preservation stay in place. A future sync engine replaces the buffer only
+with something that gives at least the same guarantees.
+
+## Known deferred risks (M8)
+
+These are known, accepted and intentionally deferred, not open blockers
+(decision 102). Each has a reason it is safe for now and the change that
+would close it. Revisit them when the related feature is built.
+
+| Risk                                     | Why it is acceptable now                                                                                                            | Closed by                                                                                       |
+| ---------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------- |
+| Field-history restore has no stale check | Restoring keeps the current value first, so nothing is lost; at worst a restore overrides a newer edit, which is itself restorable. | Passing the value the author saw to `restoreFieldValue()` and refusing if it changed.           |
+| Direct title edits and drag/reorder      | No stale check; titles are short and visible, reorders are reversible and rewrite one position key.                                 | Guards on inline renames and moves when collaboration (several editors) arrives.                |
+| Browser storage unavailable or cleared   | Only unsynced text is at risk; the status says when this device can't keep a copy ("unavailable"), and cloud autosave still runs.   | The offline-first sync architecture (persistent storage request, sync queue).                   |
+| Gradual deletion across many saves       | Each small save is below the large-edit threshold; 10-minute checkpoints and named versions still capture earlier text.             | A cumulative-removal check against the last snapshot.                                           |
+| Unlimited history retention              | Text history is small next to its value; nothing is pruned, so nothing is lost.                                                     | A retention rule (thinning old autosave checkpoints, never named versions) with storage limits. |
+| Temporary trope and publication fields   | Compatibility stopgaps, marked temporary (decisions 91–92); nothing new may build on them.                                          | The Trope object and the Edition/Publishing systems, which migrate and remove them.             |
+| Few Yellow Change Impact suggestions     | The mechanism is general (report groups with `level: "suggested"`); two suggestions exist.                                          | Adding suggestions to other reports as features need them.                                      |
+
 ## Story Graph and Universal Connections
 
 **Identity.** Every story object (pen name, series, book, part, chapter,
@@ -793,7 +818,12 @@ contradict them:
 - **Writing status ≠ publication.** Books have a writing status (Idea …
   Complete); publication will be per edition (Book → Edition → status).
 - **Tropes become a reusable object** (common list plus custom), not
-  permanent plain text; `books.tropes` is transitional.
+  permanent plain text.
+- **Temporary compatibility architecture:** `books.tropes` (plain text) and
+  the "Publication status" book field (created by the M8 migration) are
+  stopgaps until the Trope object and the Edition/Publishing systems
+  replace them. They are kept for display, search, export and import only;
+  new features must not build on them.
 
 ## AI boundary (_planned, v1.2_)
 

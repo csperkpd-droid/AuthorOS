@@ -279,6 +279,7 @@ model Book {
   writingStatus   WritingStatus @default(PLANNING) @map("writing_status")
   targetWordCount Int?          @map("target_word_count")
   /// Romance metadata (any genre may use tropes).
+  /// TEMPORARY compatibility field: replaced by the Trope object (DECISIONS 92).
   tropes          String[]      @default([])
   heatLevel       HeatLevel?    @map("heat_level")
   /// Deadline for the current draft (shown on the calendar and dashboard).

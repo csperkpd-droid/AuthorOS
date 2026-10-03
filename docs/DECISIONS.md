@@ -903,3 +903,34 @@ Version 3 adds `writingStatus` (books), document formats and
 `fieldRevisions`. Version 1 and 2 files are upgraded on import
 (`PUBLISHED` → `COMPLETE` plus the "Publication status" field value);
 imported replacements of non-empty text are kept in field history.
+
+### 101. The device buffer is a permanent safety layer — Accepted (M8 review)
+
+The browser/device draft buffer (decision 94) is a safety layer and the
+local-first foundation. It is **not** the final offline/sync architecture,
+and it is not redundant with cloud autosave. Future cleanup must not
+remove or bypass it because cloud saves work. It may only be replaced by a
+sync architecture that keeps the same guarantees: text on the device
+immediately, removed only once the cloud has exactly that text, recovery
+after a crash, conflicting text kept as a separate version, and a status
+that never claims the cloud has text it doesn't.
+
+### 102. Known risks deferred after M8 — Accepted (M8 review)
+
+These are known and intentionally deferred, not unresolved blockers. They
+are listed with their reasons and closing changes in
+[ARCHITECTURE.md](ARCHITECTURE.md#known-deferred-risks-m8):
+
+- field-history restore has no stale-form check;
+- direct title edits and drag/reorder have no stale checks;
+- browser storage can be unavailable or cleared;
+- text deleted gradually across many saves gets no large-edit snapshot;
+- history retention is unlimited;
+- `books.tropes` and the "Publication status" field are temporary
+  plain-text compatibility stopgaps until the Trope object and the
+  Edition/Publishing systems replace them;
+- Yellow Change Impact suggestions exist in two reports so far, to be
+  expanded as features need them.
+
+They are fixed now only if one becomes required to preserve the
+architecture.
