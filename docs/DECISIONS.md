@@ -990,3 +990,11 @@ connection kind (with a role attribute) is the temporary representation;
 it is migrated to Scene Participation in the core authoring milestone after
 M9, with export and import upgrades. Universal Connections stay for loose
 links.
+
+**Addendum (M9 user test).** "Sign out anyway" did nothing while offline:
+signing out was a server request, and the session cookie can't be removed
+by the page. Signing out now marks the browser as signed out at once (a
+cookie the page can set), stops all saving, and tells the author the
+writing is only on this device; the server ends the session on the next
+request (`/sign-out`). Nothing is uploaded on the way out and nothing is
+deleted.

@@ -524,6 +524,18 @@ come back after signing in again). Drafts saved before M9 (no owner) are
 adopted by the member who opens that document, which the server only
 allows for an account that can open it.
 
+**Signing out works offline.** The Auth.js session cookie is httpOnly, so
+a page can't remove it and the normal sign-out needs the server. Sign out
+anyway (and any sign-out while offline) therefore sets a
+`authoros-signed-out` cookie in the browser at once
+(`lib/auth/signed-out-here.ts`): the editor stops sending anything, a
+full-screen notice says the writing is kept only on this device, and
+nothing for the account is usable. On the very next request the proxy
+sends the browser to `/sign-out`, which ends the session on the server,
+clears the mark and shows sign-in; until then the session lookup treats
+the mark as signed out. The mark can only remove access, and `/sign-out`
+does nothing without it.
+
 **Stale-edit protection for metadata.** Documents use versions; metadata
 forms send the `updatedAt` they opened with (`lib/concurrency.ts`). The
 service reads the row, refuses a changed one, and writes with `updatedAt`

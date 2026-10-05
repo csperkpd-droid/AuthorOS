@@ -81,6 +81,72 @@ test.describe("Milestone 9: unsynced writing belongs to one account", () => {
     await expect(page).toHaveURL(/\/sign-in/);
   });
 
+  test("offline: Sign out anyway signs out, keeps the writing on this device, uploads nothing", async ({
+    page,
+    context,
+  }) => {
+    const author = uniqueEmail();
+    await signUp(page, author);
+    const sceneUrl = await createBookWithScene(page, "Harbour Lights");
+    await editorText(page).click();
+    await page.keyboard.type("Saved line.");
+    await expectSaved(page);
+
+    await context.setOffline(true);
+    await page.keyboard.type(" Offline line.");
+    await expect(page.getByTestId("save-status")).toHaveText(
+      "Saved on this device · offline, will sync",
+    );
+    await page.getByRole("button", { name: "Sign out" }).click();
+    await warning(page).getByRole("button", { name: "Sign out anyway" }).click();
+
+    // Signed out here and now, and told where the writing is.
+    const signedOut = page.getByRole("alertdialog", { name: "You’re signed out on this device" });
+    await expect(signedOut).toBeVisible();
+    await expect(signedOut).toContainText("only on this device");
+    // Everything behind it is out of reach (can't be focused or typed into).
+    const appInert = await page.evaluate(() =>
+      [...document.body.children]
+        .filter((el) => !el.querySelector('[role="alertdialog"]'))
+        .every((el) => (el as HTMLElement).inert),
+    );
+    expect(appInert).toBe(true);
+
+    // Watch for any save reaching the server once the connection returns.
+    const saves: string[] = [];
+    page.on("request", (r) => {
+      if (r.method() === "POST" && r.headers()["next-action"]) saves.push(r.url());
+    });
+    await context.setOffline(false);
+    await expect(page).toHaveURL(/\/sign-in/);
+    expect(saves).toEqual([]);
+
+    // The session is really gone, and the writing is still on this device, owned.
+    await page.goto("/dashboard");
+    await expect(page).toHaveURL(/\/sign-in/);
+    const kept = await storedDrafts(page);
+    expect(kept).toHaveLength(1);
+    expect(kept[0].owner).toBeTruthy();
+
+    // The author signs in again and gets it back.
+    await signUp(page, author);
+    await page.goto(sceneUrl);
+    await expect(page.getByTestId("draft-recovery")).toContainText(
+      "Restored text from this device",
+    );
+    await expect(editorText(page)).toHaveText("Saved line. Offline line.");
+    await expectSaved(page);
+  });
+
+  test("a link to the sign-out address alone signs nobody out", async ({ page }) => {
+    await signUp(page);
+    await page.goto("/sign-out");
+    // Still signed in: the sign-in page sends a signed-in author on to the dashboard.
+    await expect(page).toHaveURL(/\/dashboard$/);
+    await page.goto("/dashboard");
+    await expect(page).toHaveURL(/\/dashboard$/);
+  });
+
   test("signing out straight after typing still warns", async ({ page, context }) => {
     await signUp(page);
     await createBookWithScene(page, "Harbour Lights");

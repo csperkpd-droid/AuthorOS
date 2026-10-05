@@ -1,10 +1,12 @@
 import "server-only";
 
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { cache } from "react";
 
 import type { WorkspaceRole } from "@/generated/prisma/client";
 import { auth } from "@/lib/auth";
+import { SIGNED_OUT_COOKIE } from "@/lib/auth/session-cookie";
 import { ensurePersonalWorkspace } from "@/modules/workspaces";
 
 /**
@@ -28,6 +30,8 @@ export type SessionUser = {
 
 /** The signed-in user, validated against the session table. Memoized per request. */
 export const getSessionUser = cache(async (): Promise<SessionUser | null> => {
+  // Signed out on this device and not yet finished on the server (M9): no access.
+  if ((await cookies()).has(SIGNED_OUT_COOKIE)) return null;
   const session = await auth();
   const user = session?.user;
   if (!user?.id || !user.email) return null;

@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { formatWords } from "@/lib/format";
+import { isSignedOutHere } from "@/lib/auth/signed-out-here";
 import {
   deleteLocalDraft,
   readLocalDraft,
@@ -132,6 +133,8 @@ export function RichTextEditor({
   const save = useCallback(async () => {
     const editor = editorRef.current;
     if (!editor || stateRef.current === "conflict") return;
+    // Signed out on this device: the text stays here, nothing is sent (M9).
+    if (isSignedOutHere()) return;
     if (timer.current) clearTimeout(timer.current);
     if (inFlight.current) {
       queued.current = true;
@@ -306,7 +309,8 @@ export function RichTextEditor({
       }
     }
     function onBeforeUnload(e: BeforeUnloadEvent) {
-      if (stateRef.current !== "saved") e.preventDefault();
+      // After signing out the text is on this device already: let the page go.
+      if (stateRef.current !== "saved" && !isSignedOutHere()) e.preventDefault();
     }
     window.addEventListener("keydown", onKey);
     window.addEventListener("beforeunload", onBeforeUnload);
