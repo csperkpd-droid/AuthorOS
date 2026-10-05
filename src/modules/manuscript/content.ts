@@ -8,12 +8,13 @@ import { saveContent, type SaveResult } from "@/modules/history";
 import { recordEditorWords, today } from "@/modules/progress";
 import type { AuthorContext } from "@/server/context";
 import { recordFieldHistory } from "@/modules/history";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 import { sceneDetailsInput, type SceneDetailsInput } from "./schemas";
 import { getBookTree, requireScene } from "./structure";
 
 export async function getSceneForEditor(ctx: AuthorContext, id: string) {
+  assertCanView(ctx, "manuscript", { kind: "SCENE", id: id });
   const ref = await requireScene(ctx, id);
   const [scene, tree] = await Promise.all([
     db.scene.findUniqueOrThrow({
@@ -106,6 +107,7 @@ export async function listRecentScenes(
   ctx: AuthorContext,
   { penNameId, limit = 5 }: { penNameId: string | null; limit?: number },
 ) {
+  assertCanView(ctx, "manuscript");
   return db.scene.findMany({
     where: {
       workspaceId: ctx.workspaceId,

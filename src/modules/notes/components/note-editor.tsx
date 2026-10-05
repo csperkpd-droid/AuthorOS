@@ -16,11 +16,14 @@ export function NoteEditor({
   title,
   body,
   version,
+  draftOwner,
 }: {
   noteId: string;
   title: string;
   body: Doc | null;
   version: number;
+  /** The signed-in member unsynced text on this device belongs to (`draftOwner(ctx)`). */
+  draftOwner: string;
 }) {
   const [value, setValue] = useState(title);
   const rename = useAction(renameNoteAction);
@@ -53,7 +56,12 @@ export function NoteEditor({
         version={version}
         onSave={save}
         onKeepDraft={keep}
-        draftKey={`note:${noteId}`}
+        draft={{
+          owner: draftOwner,
+          item: `note:${noteId}`,
+          label: value || title,
+          href: `/notes/${noteId}`,
+        }}
         label="Note text"
         placeholder="Write your note…"
         thing="note"

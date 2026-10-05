@@ -11,7 +11,7 @@ import {
   type NodeSummary,
 } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 import { canConnect, getKind, isConnectionKind, labelFrom, type ConnectionKind } from "./registry";
 import {
@@ -92,6 +92,7 @@ export async function planConnection(
   input: NewConnectionInput,
   pending?: { id: string; kind: NodeSummary["kind"] },
 ): Promise<ConnectionPlan> {
+  assertCanView(ctx, "any");
   const data = newConnectionInput.parse(input);
   if (!isConnectionKind(data.kind)) throw new RuleError("Unknown kind of connection.");
   const kind = data.kind;
@@ -217,6 +218,7 @@ export async function listConnections(
   nodeId: string,
   { kinds }: { kinds?: ConnectionKind[] } = {},
 ): Promise<ConnectionView[]> {
+  assertCanView(ctx, "any", { kind: "NODE", id: nodeId });
   if (!(await nodeKind(ctx, nodeId))) throw new NotFoundError("Story item");
   const rows = await db.connection.findMany({
     where: {

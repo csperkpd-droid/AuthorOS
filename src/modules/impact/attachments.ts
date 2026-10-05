@@ -4,6 +4,7 @@ import type { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { resolveNodes } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { assertCanView } from "@/server/policy";
 
 import type { ImpactGroup } from "./types";
 
@@ -19,6 +20,7 @@ export async function attachmentsOf(
   ids: string[],
   client: Client = db,
 ): Promise<(Omit<ImpactGroup, "affected"> & { count: number })[]> {
+  assertCanView(ctx, "any");
   const ws = ctx.workspaceId;
   const doomed = new Set(ids);
   const [links, values, dates] = await Promise.all([

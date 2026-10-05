@@ -9,7 +9,7 @@ import { createPlannedConnection, planConnection } from "@/modules/connections";
 import { createStoryNode, liveTask, resolveNodes, type NodeSummary } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 import { recordFieldHistory } from "@/modules/history";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 import { taskInput, taskStatus, type TaskInput } from "./schemas";
 
@@ -66,6 +66,7 @@ export type TaskFilter = {
 
 /** Open tasks first by due date (undated last), then by priority. */
 export async function listTasks(ctx: AuthorContext, filter: TaskFilter = {}) {
+  assertCanView(ctx, "planning");
   const { status = "open" } = filter;
   const rows = await db.task.findMany({
     where: {
@@ -95,6 +96,7 @@ export async function listTasks(ctx: AuthorContext, filter: TaskFilter = {}) {
 }
 
 export async function getTask(ctx: AuthorContext, id: string): Promise<TaskView> {
+  assertCanView(ctx, "planning", { kind: "TASK", id: id });
   const row = await db.task.findFirst({
     where: { id, workspaceId: ctx.workspaceId, ...liveTask },
     select: taskSelect,

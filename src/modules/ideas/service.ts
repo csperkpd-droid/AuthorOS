@@ -8,7 +8,7 @@ import { createBook } from "@/modules/library";
 import { createStoryNode, liveIdea } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 import { recordFieldHistory } from "@/modules/history";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 import { ideaInput, type IdeaInput } from "./schemas";
 
@@ -16,6 +16,7 @@ const ideaSelect = { id: true, title: true, body: true, status: true, updatedAt:
 
 /** Ideas, open ones first, newest first. */
 export async function listIdeas(ctx: AuthorContext) {
+  assertCanView(ctx, "storyBible");
   const ideas = await db.idea.findMany({
     where: { workspaceId: ctx.workspaceId, ...liveIdea },
     orderBy: { createdAt: "desc" },
@@ -26,6 +27,7 @@ export async function listIdeas(ctx: AuthorContext) {
 }
 
 export async function getIdea(ctx: AuthorContext, id: string) {
+  assertCanView(ctx, "storyBible", { kind: "IDEA", id: id });
   const idea = await db.idea.findFirst({
     where: { id, workspaceId: ctx.workspaceId, ...liveIdea },
     select: ideaSelect,

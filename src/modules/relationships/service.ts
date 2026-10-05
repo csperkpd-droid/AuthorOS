@@ -8,7 +8,7 @@ import { assertReviewed, buildReport } from "@/modules/impact";
 import { createStoryNode, liveCharacter, liveRelationship } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 import { recordFieldHistory } from "@/modules/history";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 import { relationshipTitle } from "./labels";
 import {
@@ -69,6 +69,7 @@ export async function listRelationships(
   ctx: AuthorContext,
   { characterId, penNameId = null }: { characterId?: string; penNameId?: string | null } = {},
 ): Promise<RelationshipView[]> {
+  assertCanView(ctx, "storyBible");
   const rows = await db.relationship.findMany({
     where: {
       workspaceId: ctx.workspaceId,
@@ -86,6 +87,7 @@ export async function listRelationships(
 }
 
 export async function getRelationship(ctx: AuthorContext, id: string): Promise<RelationshipView> {
+  assertCanView(ctx, "storyBible", { kind: "RELATIONSHIP", id: id });
   const row = await db.relationship.findFirst({
     where: { id, workspaceId: ctx.workspaceId, ...liveRelationship },
     select: relationshipSelect,
@@ -168,6 +170,7 @@ export async function previewRelationshipMembers(
   id: string,
   members: MemberInput[],
 ) {
+  assertCanView(ctx, "storyBible", { kind: "RELATIONSHIP", id: id });
   const current = await getRelationship(ctx, id);
   const ids = new Set(members.map((m) => (typeof m === "string" ? m : m.characterId)));
   const removed = current.members.filter((m) => !ids.has(m.id));
@@ -281,6 +284,7 @@ async function penOf(characterId: string) {
  * relationship of its own.
  */
 export async function groupDynamics(ctx: AuthorContext, id: string) {
+  assertCanView(ctx, "storyBible", { kind: "RELATIONSHIP", id: id });
   const group = await getRelationship(ctx, id);
   if (group.members.length < 3) return [];
   const memberIds = group.members.map((m) => m.id);
@@ -318,6 +322,7 @@ export async function groupDynamics(ctx: AuthorContext, id: string) {
 
 /** Groups (three or more members) that include every member of this relationship. */
 export async function groupsIncluding(ctx: AuthorContext, id: string) {
+  assertCanView(ctx, "storyBible", { kind: "RELATIONSHIP", id: id });
   const rel = await getRelationship(ctx, id);
   const rows = await db.relationship.findMany({
     where: {

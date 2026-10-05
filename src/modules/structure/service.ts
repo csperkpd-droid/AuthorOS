@@ -16,7 +16,7 @@ import { assertReviewed, buildReport } from "@/modules/impact";
 import { createStoryNode, liveOutline, liveScene } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 import { recordFieldHistory } from "@/modules/history";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 import { STRUCTURE_KIND_LABELS } from "./labels";
 import {
@@ -42,6 +42,7 @@ import {
 
 /** Built-in templates plus this workspace's own, optionally of one kind. */
 export async function listTemplates(ctx: AuthorContext, { kind }: { kind?: StructureKind } = {}) {
+  assertCanView(ctx, "structure");
   const rows = await db.structureTemplate.findMany({
     where: {
       OR: [{ workspaceId: null }, { workspaceId: ctx.workspaceId }],
@@ -153,6 +154,7 @@ export async function renameTemplate(ctx: AuthorContext, id: string, input: Temp
  * keep all their beats (they were copies), and kits that include it lose it.
  */
 export async function previewDeleteTemplate(ctx: AuthorContext, id: string) {
+  assertCanView(ctx, "structure", { kind: "TEMPLATE", id: id });
   await requireOwnTemplate(ctx, id);
   const template = await db.structureTemplate.findUniqueOrThrow({
     where: { id },
@@ -409,6 +411,7 @@ export async function listOutlines(
     penNameId?: string | null;
   } = {},
 ) {
+  assertCanView(ctx, "structure");
   const scoped: Prisma.OutlineWhereInput[] = [];
   if (filter.bookId) {
     const book = await getBook(ctx, filter.bookId);
@@ -468,6 +471,7 @@ type SceneRef = {
  * can be assigned: the book's, or every book's in a series structure.
  */
 export async function getOutline(ctx: AuthorContext, id: string) {
+  assertCanView(ctx, "structure", { kind: "OUTLINE", id: id });
   const outline = await requireOutline(ctx, id);
   const bookIds = outline.bookId ? [outline.bookId] : await seriesBookIds(ctx, outline.seriesId!);
   const [beats, trees, books] = await Promise.all([
@@ -651,6 +655,7 @@ export async function moveBeat(ctx: AuthorContext, beatId: string, afterBeatId: 
 /** Removes a beat from the outline (its scene placements go with it; scenes are untouched). */
 /** "What will this affect?" for removing a beat: its scene placements go; the scenes stay. */
 export async function previewDeleteBeat(ctx: AuthorContext, beatId: string) {
+  assertCanView(ctx, "structure", { kind: "BEAT", id: beatId });
   const beat = await requireBeat(ctx, beatId);
   const [row, placements] = await Promise.all([
     db.outlineBeat.findUniqueOrThrow({
@@ -765,6 +770,7 @@ export async function unassignScene(ctx: AuthorContext, beatId: string, sceneId:
 
 /** Every beat, across all structures, that happens in a scene. */
 export async function beatsForScene(ctx: AuthorContext, sceneId: string) {
+  assertCanView(ctx, "structure", { kind: "SCENE", id: sceneId });
   const rows = await db.beatScene.findMany({
     where: { sceneId, workspaceId: ctx.workspaceId, beat: { outline: liveOutline } },
     select: {
@@ -805,6 +811,7 @@ export type RomanceCell = {
  * relationships (main and secondary couples, triangles…) is supported.
  */
 export async function seriesRomance(ctx: AuthorContext, seriesId: string) {
+  assertCanView(ctx, "structure", { kind: "SERIES", id: seriesId });
   const series = await getSeries(ctx, seriesId);
   const bookIds = series.books.map((b) => b.id);
   const arcs = await db.outline.findMany({
@@ -918,6 +925,7 @@ export async function newStructureOptions(
   ctx: AuthorContext,
   { penNameId }: { penNameId: string | null },
 ) {
+  assertCanView(ctx, "structure");
   const [library, relationships, characters, templates] = await Promise.all([
     listLibrary(ctx, { penNameId }),
     listRelationships(ctx, { penNameId }),

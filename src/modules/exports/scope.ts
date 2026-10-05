@@ -4,6 +4,7 @@ import { NotFoundError, RuleError } from "@/lib/errors";
 import { listLibrary } from "@/modules/library";
 import { listPenNames } from "@/modules/pen-names";
 import type { AuthorContext } from "@/server/context";
+import { assertCanView } from "@/server/policy";
 
 import { exportScopeInput, type ExportScopeInput } from "./schemas";
 
@@ -19,6 +20,7 @@ export async function resolveScope(
   ctx: AuthorContext,
   input: ExportScopeInput,
 ): Promise<ResolvedScope> {
+  assertCanView(ctx, "identity");
   const scope = exportScopeInput.parse(input);
   const penNames = await listPenNames(ctx, { includeArchived: true });
   const byId = new Map(penNames.map((p) => [p.id, p]));
@@ -53,6 +55,7 @@ export async function resolveScope(
 
 /** Visible books in scope, in library order (series in reading order, then standalone). */
 export async function booksInScope(ctx: AuthorContext, scope: ResolvedScope) {
+  assertCanView(ctx, "manuscript");
   const ids = scope.penNameIds;
   const library = await listLibrary(ctx, { penNameId: null });
   const inScope = (b: { penName: { id: string } }) => !ids || ids.includes(b.penName.id);

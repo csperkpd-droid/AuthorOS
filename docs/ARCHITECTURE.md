@@ -3,7 +3,7 @@
 AuthorOS is a **modular monolith**: one Next.js application, one PostgreSQL
 database, with the code split into domain modules that have strict boundaries.
 
-> Status: Milestone 7 (Foundations: Story Object Registry, authorization, one model for dates, connectable pen names, Change Impact gaps, Story Graph integrity audit). Sections marked
+> Status: Milestone 9 (Access Boundary: permission-aware reads, account-owned device drafts, the architecture baseline below). Sections marked
 > _planned_ describe the agreed design for later milestones so that early code
 > doesn't block it.
 
@@ -15,6 +15,174 @@ database, with the code split into domain modules that have strict boundaries.
 | AI suggests, never changes | The AI module can write to exactly one table, `Suggestion`. Applying a suggestion is an ordinary user action that saves a revision first. (_planned, v1.2_) |
 | Strongly connected data    | Relational schema with real foreign keys and constraints; see [DATABASE.md](DATABASE.md).                                                                   |
 | Modular and expandable     | Domain modules with public `index.ts` APIs, lint-enforced; a single feature registry drives navigation.                                                     |
+
+## Architecture baseline
+
+The finalized AuthorOS architecture: 29 invariants every change must
+preserve. **This section is the authoritative definition.** `AGENTS.md`
+turns it into implementation rules and `DECISIONS.md` records why
+(decisions 103 to 106 adopted it); the sections after this one describe
+the mechanisms. "Not built" marks designed parts with no code yet.
+
+1. **Story Object Registry.** Every reusable kind of story object is
+   defined once (`story-graph/kinds.ts` plus its adapter), with its
+   capabilities and how it takes part in each system. Built (M7).
+2. **One source of truth.** One home per concept: no second store, list
+   or copy that must be kept in sync. Dates live in calendar entries,
+   tasks in one table, history in one layer. Temporary exceptions are
+   marked (see Temporary compatibility below).
+3. **Story / Plan / Manuscript / Publish are separate domains.** Story =
+   what exists (characters, relationships, notes, ideas, later places);
+   Plan = what the author intends (structures, beats, arcs); Manuscript =
+   the written words (series, books, parts, chapters, scenes and their
+   text); Publish = intentional published representations (editions, not
+   built). The registry's areas map onto them: `storyBible` = Story,
+   `structure` = Plan, `manuscript` = Manuscript. `planning` is the
+   author's real-world planner (tasks, events, writing progress), **not**
+   the story's Plan; `identity` holds pen names.
+4. **Book ≠ Edition.** A Book is the living creative work; an Edition is
+   one published manifestation with its own format, identifiers and
+   publishing status. A book's writing status never says "Published".
+   Editions not built.
+5. **Scene is the atomic bridge.** Scenes connect planning (beat
+   placements), story data (participation), manuscript text, story time,
+   character state, review and revision, through relationships owned by
+   those systems. The scene row itself stays lean (title, status,
+   synopsis, text): it is not a dumping ground.
+6. **Dedicated relationships, then Universal Connections.** A
+   relationship whose meaning the product relies on is a first-class table
+   (the hierarchy, relationship members, beat placements, Scene
+   Participation). Universal Connections (`connections` module) supplement
+   them for flexible links.
+7. **Domain Actions.** Meaningful changes go through named, authorized
+   service functions (`assertCan` first, product rules, Change Impact
+   where needed), never generic CRUD over tables. Routes and components
+   can't reach the database (ESLint).
+8. **AI suggests, the author approves, Domain Actions apply.** AI writes
+   only suggestions. Accepting one is an ordinary authorized Domain Action
+   that records where the change came from. AI has no database-write
+   authority of its own. Not built.
+9. **Manuscript safety.** Device-first persistence (a permanent layer,
+   decision 101), crash recovery, truthful save status, conflicts kept as
+   versions, version history and document format versions. Unsynced text
+   on a device belongs to one account (M9). See Author content safety.
+10. **History ≠ Provenance ≠ Validity ≠ Change Impact.** Four separate
+    capabilities, none implemented through another. History = earlier
+    states of the same object (built). Provenance = where something came
+    from and what it was derived from (only a revision's `source` today).
+    Validity = whether something still holds against what it depends on
+    (not built). Change Impact = what a proposed change would affect,
+    before it happens (built).
+11. **Validity states**, one vocabulary everywhere: **Current, Potentially
+    Stale, Conflicted, Invalid, Superseded, Unknown, Intentionally
+    Excepted.** A state is an observation shown to the author, never an
+    automatic fix. Not built; first use: beat assignments.
+12. **Change Impact is universal.** Every system that can move, delete,
+    detach or affect connected data produces a report through the shared
+    builder (Green automatic, Yellow suggested, Red approval required),
+    explains effects factually, and never makes creative decisions. Built
+    per operation (M5 to M8).
+13. **Provenance and representation lineage.** A derived representation
+    (an edition, export, generated file or accepted suggestion) records the
+    source and version it came from. Provenance never grants access:
+    following lineage still passes the read check. Not built.
+14. **Permissions below the UI, for reads and writes.** Every service
+    checks the role's grants first (`assertCan` for changes,
+    `assertCanView` for reads, M9). Workspace membership alone grants
+    nothing. Refusing a specific object looks exactly like it doesn't
+    exist. The Story Graph resolver and search are the funnel that
+    per-object grants will plug into. See Authorization.
+15. **Governance ≠ Permission.** Permission says who may act; governance
+    says what must happen whoever acts (reviews, required approvals, safety
+    rules). No configuration, role or automation can bypass safety or
+    governance (for example the Change Impact review, or keeping a version
+    before overwriting). Today's safety rules live in services; no
+    separate governance system is built.
+16. **Data classification.** Sensitivity, authority, permission,
+    validity, provenance and truth are separate properties. A sensitive
+    note is not thereby authoritative; **authority is not truth** (an
+    authoritative source can be wrong); a record you may read is not
+    thereby current. Not built.
+17. **One Task system.** Planner, Kanban, Home, Publishing, Marketing and
+    Review are views and workflows over the one `tasks` table; there is no
+    second task store.
+18. **Story Time ≠ real-world time.** Fictional story time is separate
+    from the author's planner time, publication dates and version
+    timestamps. The calendar and writing progress are real-world time.
+    Story Time not built.
+19. **Asset ≠ File.** An Asset is a meaningful reusable object (a cover, a
+    map, a reference image); a File is stored bytes representing it, in
+    formats and versions. Not built.
+20. **Search, Query and Reasoning are distinct and share the data.**
+    Search finds; query filters and aggregates; reasoning draws
+    conclusions. All read the same Story Graph through the read funnel and
+    never become separate copies of the data. Search built (Postgres full
+    text).
+21. **Findings are evidence-based observations**, carrying their evidence
+    and subjects. A finding is never automatically an error and never a
+    change. Not built (`auditGraph()` is a developer check, not a
+    finding).
+22. **Work Context.** Temporary detours never lose the author's place.
+    **Back** (browser history), **Return to Work** (the exact place being
+    worked on) and **Continue Writing** (the latest writing place, on any
+    device) are three distinct behaviours. Partly built (dashboard
+    Continue writing).
+23. **Adaptive devices.** Desktop, tablet and phone use the same
+    architecture, data and capabilities; only presentation adapts. No
+    device-specific data or feature forks.
+24. **Portability is foundational.** Workspace export, project export,
+    publication export, backup, restore, transfer, migration and cloning
+    are distinct operations over one export format and the Import Engine.
+    Built: workspace backup and archive, manuscript export, restore and
+    copy import.
+25. **Publication Boundary.** Changing the manuscript never silently
+    changes a published Edition. An edition is a fixed representation
+    with lineage, marked Potentially Stale when its source moves on. Not
+    built.
+26. **Life Planner privacy boundary.** Only explicitly shared task and
+    event information crosses into the Life Planner. Connecting the
+    systems grants no access to manuscripts, the Story Graph, private
+    notes, research, business or legal information, and personal or
+    household data never appears in AuthorOS. Enforced in the data and
+    permission layers, not by hiding UI. Not built.
+27. **Progressive complexity, not a Beginner Mode.** Complexity is revealed
+    by context and need (the Romance Center appears for romance arcs).
+28. **Genre flexibility.** Genre-specific systems are lenses and
+    capabilities over the common model (the Romance Center over generic
+    structures), never duplicate genre-specific data models.
+29. **Architecture freeze.** New features fit the existing categories:
+    object (a registry kind), relationship, assignment, view,
+    representation, task, workflow, asset, integration, configuration,
+    policy, automation, finding or event. A new architectural review is
+    needed only when a capability fits none of them or would break an
+    invariant above.
+
+### Decided designs, not built yet
+
+- **Scene Participation (decision 106).** A character's relationship to a
+  scene is a dedicated domain relationship with roles **POV**, **Present**
+  and **Mentioned**; a scene has at most one POV character. It replaces
+  the `appears_in` Universal Connection kind, which is today's
+  representation and is not permanent. Built after M9.
+- **Comments are metadata (decision 87)**, never in the manuscript text:
+  an anchor outside the document (node, version, position, quoted text and
+  context). When the text changes the anchor is re-found or the comment is
+  flagged for review, never silently attached to other text.
+- **Workspace membership is not access to everything (decision 89).**
+  Co-authoring adds per-book, series and pen-name grants through the read
+  and write funnel of invariant 14.
+- **Beats and Beat Assignments (decision 90).** The beat (definition) is
+  separate from where it happens, so one scene can satisfy several
+  structures without duplication.
+- **Tropes become a reusable object (decision 92)**: a common list plus
+  custom tropes.
+
+### Temporary compatibility architecture
+
+`books.tropes` (plain text) and the "Publication status" book field
+(created by the M8 migration) are stopgaps until the Trope object and the
+Edition/Publishing systems replace them. They are kept for display,
+search, export and import only; new features must not build on them.
 
 ## System overview
 
@@ -196,11 +364,24 @@ definitions (fields, templates).
 | EDITOR | view, comment, suggest, edit in every story area; view pen names and workspace settings |
 | VIEWER | view                                                                                    |
 
+5. **Reads (M9).** Every service that returns author data calls
+   `assertCanView(ctx, area, resource?)` first: the same grants, the
+   `view` action. Workspace membership alone grants nothing (a role
+   without `view` sees nothing, and an unknown role fails closed). A
+   refused read of a named object throws the same "not found" as a
+   missing id, so a refusal never reveals that the object exists; a
+   refused list or search is forbidden. The Story Graph funnel
+   (`viewableKinds`, used by `resolveNodes`, `searchNodes`, `nodeKind`,
+   search, connections, backlinks and the Trash) drops whatever the
+   context may not view. `tests/integration/read-authorization.test.ts`
+   calls every exported read service with a context that may not view and
+   requires a refusal, so a new read service can't skip the check.
+
 Members are owners today. Co-authors, editors, beta readers and ARC
 readers join by granting, not by changing services: `can()` already takes a
-resource (`{ kind, id }`) for per-book sharing. Personal preferences
-(Writing as, daily goal, time zone) need no role. Reads are scoped by
-membership; resource-level read grants arrive with sharing.
+resource (`{ kind, id }`), every read and write passes through it, and
+per-book grants plug into the policy and the Story Graph funnel. Personal
+preferences (Writing as, daily goal, time zone) need no role.
 
 **Collaboration direction.** Comments, suggestions, controlled edits with
 review, and granular permissions, on the current storage model (whole
@@ -307,7 +488,7 @@ Protecting the author's work comes before features. Four layers, each
 honest about where the text is:
 
 1. **This device, immediately.** The editor writes the document to
-   IndexedDB (`lib/local-drafts.ts`, keyed `scene:<id>` / `note:<id>`) about
+   IndexedDB (`lib/local-drafts.ts`, keyed by account and document) about
    150 ms after each change, with the version it was based on. The draft is
    deleted only when the cloud has exactly that text. On open, a newer draft
    on the same version is restored ("Recovered from this device"); a draft
@@ -330,6 +511,18 @@ honest about where the text is:
    and beat descriptions. Every edit, restore and import that replaces a
    non-empty value keeps the old one (`history/fields.ts`, same
    transaction). "Earlier versions" on each page lists and restores them.
+
+**Device drafts belong to one account (M9).** A draft is owned by the
+signed-in member (user and workspace, `draftOwner(ctx)`) and only read
+back for that member, so another account signing in on the same browser
+never sees or inherits it. Signing out never deletes unsynced writing: the
+sign-out button first checks this member's drafts and, if any exist,
+explains that the writing is only on this device, lists it with links, and
+offers **Stay signed in** (open each item while online and it syncs) or
+**Sign out anyway** (the drafts stay on this device for this account and
+come back after signing in again). Drafts saved before M9 (no owner) are
+adopted by the member who opens that document, which the server only
+allows for an account that can open it.
 
 **Stale-edit protection for metadata.** Documents use versions; metadata
 forms send the `updatedAt` they opened with (`lib/concurrency.ts`). The
@@ -794,36 +987,6 @@ proxy, which would buffer them). The browser gzips the file
 (`CompressionStream`); the server checks the origin (route handlers don't
 get Server Actions' CSRF protection), the session, and caps the upload (60
 MB compressed, 200 MB decompressed).
-
-## Decided boundaries for later systems (M8)
-
-Decided now, built later (decisions 87–92); nothing built today may
-contradict them:
-
-- **Comments are metadata**, never in the manuscript text: an anchor
-  outside the document (node, version, position, quoted text and context).
-  When the text changes the anchor is re-found or the comment is flagged
-  for review; it is never silently attached to other text.
-- **The Life Planner is a separate privacy boundary.** It shares only
-  explicit task/event references with explicit permission. It has no
-  access to manuscripts, characters, private notes, research, contracts or
-  business records, and its household and personal data never appears in
-  AuthorOS. Enforced in the data and permission layer, not by hiding UI.
-- **Workspace membership is not access to everything.** Co-authoring will
-  add per-book/series/pen-name grants (the `can()` resource parameter is
-  the hook); private projects, pen names and business data stay isolated.
-- **Beats become story objects** with **beat assignments**: the beat
-  (definition) is separate from where it happens, so one scene can satisfy
-  several structures without duplication.
-- **Writing status ≠ publication.** Books have a writing status (Idea …
-  Complete); publication will be per edition (Book → Edition → status).
-- **Tropes become a reusable object** (common list plus custom), not
-  permanent plain text.
-- **Temporary compatibility architecture:** `books.tropes` (plain text) and
-  the "Publication status" book field (created by the M8 migration) are
-  stopgaps until the Trope object and the Edition/Publishing systems
-  replace them. They are kept for display, search, export and import only;
-  new features must not build on them.
 
 ## AI boundary (_planned, v1.2_)
 

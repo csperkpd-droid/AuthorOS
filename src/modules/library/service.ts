@@ -10,7 +10,7 @@ import { getPenNameForNewWork, requireAssignablePenName } from "@/modules/pen-na
 import { createStoryNode, liveBook } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 import { recordFieldHistory } from "@/modules/history";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 import {
   bookInput,
@@ -49,6 +49,7 @@ export async function wordCountsByBook(
   ctx: AuthorContext,
   bookIds: string[],
 ): Promise<Map<string, number>> {
+  assertCanView(ctx, "manuscript");
   if (bookIds.length === 0) return new Map();
   const rows = await db.scene.groupBy({
     by: ["bookId"],
@@ -78,6 +79,7 @@ async function withWordCounts<T extends { id: string }>(ctx: AuthorContext, book
  * `penNameId: null` returns every identity's work.
  */
 export async function listLibrary(ctx: AuthorContext, { penNameId }: { penNameId: string | null }) {
+  assertCanView(ctx, "manuscript");
   const penFilter = penNameId ? { penNameId } : {};
   const [series, standalone] = await Promise.all([
     db.series.findMany({
@@ -117,6 +119,7 @@ function sortBySeriesPosition<T extends { id: string; seriesPosition: string | n
 // ─── Series ─────────────────────────────────────────────────────────────────
 
 export async function getSeries(ctx: AuthorContext, id: string) {
+  assertCanView(ctx, "manuscript", { kind: "SERIES", id: id });
   const series = await db.series.findFirst({
     where: { id, workspaceId: ctx.workspaceId, deletedAt: null },
     select: {
@@ -134,6 +137,7 @@ export async function getSeries(ctx: AuthorContext, id: string) {
 
 /** Series an author can put a book into, for pickers. */
 export async function listSeriesOptions(ctx: AuthorContext) {
+  assertCanView(ctx, "manuscript");
   return db.series.findMany({
     where: { workspaceId: ctx.workspaceId, deletedAt: null },
     orderBy: { title: "asc" },
@@ -208,6 +212,7 @@ export async function trashSeries(ctx: AuthorContext, id: string) {
 // ─── Books ──────────────────────────────────────────────────────────────────
 
 export async function getBook(ctx: AuthorContext, id: string) {
+  assertCanView(ctx, "manuscript", { kind: "BOOK", id: id });
   const book = await db.book.findFirst({
     where: { id, workspaceId: ctx.workspaceId, ...visibleBookWhere },
     select: {
@@ -282,6 +287,7 @@ export async function createBook(ctx: AuthorContext, input: NewBookInput) {
  * first, so their own earlier steps don't count as "changed elsewhere".
  */
 export async function assertBookUnchanged(ctx: AuthorContext, id: string, guard: EditGuard) {
+  assertCanView(ctx, "manuscript", { kind: "BOOK", id: id });
   await getBook(ctx, id);
   const row = await db.book.findUniqueOrThrow({ where: { id }, select: { updatedAt: true } });
   assertNotStale(row.updatedAt, guard.expectedUpdatedAt, "book");
@@ -437,6 +443,7 @@ async function seriesChangePlan(ctx: AuthorContext, id: string, seriesId: string
 
 /** "What will this affect?" for changing a book's series (null = standalone). */
 export async function previewBookSeries(ctx: AuthorContext, id: string, seriesId: string | null) {
+  assertCanView(ctx, "manuscript", { kind: "BOOK", id: id });
   return (await seriesChangePlan(ctx, id, seriesId)).report;
 }
 

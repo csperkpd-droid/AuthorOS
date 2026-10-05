@@ -8,12 +8,13 @@ import { createPlannedConnection, planConnection } from "@/modules/connections";
 import { saveContent } from "@/modules/history";
 import { createStoryNode, liveNote } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 import { noteTitle } from "./schemas";
 
 /** Notes, newest first, optionally only those about a given story object. */
 export async function listNotes(ctx: AuthorContext, { aboutId }: { aboutId?: string } = {}) {
+  assertCanView(ctx, "storyBible");
   return db.note.findMany({
     where: {
       workspaceId: ctx.workspaceId,
@@ -26,6 +27,7 @@ export async function listNotes(ctx: AuthorContext, { aboutId }: { aboutId?: str
 }
 
 export async function getNote(ctx: AuthorContext, id: string) {
+  assertCanView(ctx, "storyBible", { kind: "NOTE", id: id });
   const note = await db.note.findFirst({
     where: { id, workspaceId: ctx.workspaceId, ...liveNote },
     select: { id: true, title: true, body: true, bodyFormat: true, version: true, updatedAt: true },

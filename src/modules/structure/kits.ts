@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { NotFoundError, RuleError } from "@/lib/errors";
 import { liveOutline } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 import { applyKitInput, kitInput, type ApplyKitInput, type KitInput } from "./schemas";
 import { prepareOutline, prepareTemplate } from "./service";
@@ -41,6 +41,7 @@ const kitSelect = {
 } as const;
 
 export async function listKits(ctx: AuthorContext) {
+  assertCanView(ctx, "structure");
   return db.templateKit.findMany({
     where: { workspaceId: ctx.workspaceId },
     orderBy: { name: "asc" },
@@ -49,6 +50,7 @@ export async function listKits(ctx: AuthorContext) {
 }
 
 export async function getKit(ctx: AuthorContext, id: string) {
+  assertCanView(ctx, "structure", { kind: "KIT", id: id });
   const kit = await db.templateKit.findFirst({
     where: { id, workspaceId: ctx.workspaceId },
     select: kitSelect,

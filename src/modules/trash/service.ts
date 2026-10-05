@@ -12,9 +12,10 @@ import {
   purgeStoryNodes,
   resolveNodes,
   storyObjectType,
+  viewableKinds,
 } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 /**
  * The Trash works across every story-node type. An item is listed when it is
@@ -42,10 +43,12 @@ const trashable = () =>
   }));
 
 export async function listTrash(ctx: AuthorContext): Promise<TrashItem[]> {
+  assertCanView(ctx, "any");
   const perKind = await Promise.all(
-    trashable().map(async ({ kind, trash }) =>
-      (await trash.list(ctx)).map((row) => ({ ...row, kind })),
-    ),
+    // Only kinds the context may view (the M9 read funnel).
+    trashable()
+      .filter(({ kind }) => viewableKinds(ctx, [kind]).length > 0)
+      .map(async ({ kind, trash }) => (await trash.list(ctx)).map((row) => ({ ...row, kind }))),
   );
   return perKind.flat().sort((a, b) => b.deletedAt.getTime() - a.deletedAt.getTime());
 }
@@ -426,12 +429,14 @@ async function trashedTitle(ctx: AuthorContext, kind: StoryNodeKind, id: string)
 
 /** "What will this affect?" for deleting one trashed item forever. */
 export async function previewDeleteForever(ctx: AuthorContext, kind: StoryNodeKind, id: string) {
+  assertCanView(ctx, "any", { kind: "TRASH_ITEM", id: id });
   const item = await trashedTitle(ctx, kind, id);
   return deletionReport(ctx, [item], `Delete “${item.title}” forever?`);
 }
 
 /** "What will this affect?" for emptying the Trash. */
 export async function previewEmptyTrash(ctx: AuthorContext) {
+  assertCanView(ctx, "any");
   const items = await listTrash(ctx);
   return deletionReport(ctx, items, "Empty the Trash?");
 }

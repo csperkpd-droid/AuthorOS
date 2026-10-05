@@ -17,6 +17,7 @@ import { NewNoteDialog } from "@/modules/notes/ui";
 import { TaskDialog } from "@/modules/tasks/ui";
 import { beatsForScene } from "@/modules/structure";
 import { SceneBeats } from "@/modules/structure/ui";
+import { draftOwner } from "@/lib/local-drafts";
 import { requireAuthorContext } from "@/server/context";
 import { orNotFound } from "@/server/not-found";
 
@@ -98,6 +99,9 @@ export default async function ScenePage({ params }: Props) {
           content={scene.content}
           version={scene.version}
           wordCount={scene.wordCount}
+          draftOwner={draftOwner(ctx)}
+          draftLabel={`${scene.title} · ${book.title}`}
+          href={`/books/${bookId}/scenes/${scene.id}`}
         />
 
         <nav

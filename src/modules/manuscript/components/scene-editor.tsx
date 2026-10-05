@@ -14,11 +14,19 @@ export function SceneEditor({
   content,
   version,
   wordCount,
+  draftOwner,
+  draftLabel,
+  href,
 }: {
   sceneId: string;
   content: Doc | null;
   version: number;
   wordCount: number;
+  /** The signed-in member unsynced text on this device belongs to (`draftOwner(ctx)`). */
+  draftOwner: string;
+  /** How a sign-out warning names this scene. */
+  draftLabel: string;
+  href: string;
 }) {
   const save = useCallback(
     (doc: Doc, baseVersion: number) => saveSceneContentAction(sceneId, doc, baseVersion),
@@ -35,7 +43,7 @@ export function SceneEditor({
       wordCount={wordCount}
       onSave={save}
       onKeepDraft={keep}
-      draftKey={`scene:${sceneId}`}
+      draft={{ owner: draftOwner, item: `scene:${sceneId}`, label: draftLabel, href }}
       label="Scene text"
       thing="scene"
     />

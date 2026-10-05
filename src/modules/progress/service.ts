@@ -14,7 +14,7 @@ import { NotFoundError, RuleError } from "@/lib/errors";
 import { uuidv7 } from "@/lib/ids";
 import { getBook, listLibrary, wordCountsByBook } from "@/modules/library";
 import type { AuthorContext } from "@/server/context";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 import { dailyGoalInput, timeZoneInput, writingLogInput, type WritingLogInput } from "./schemas";
 
@@ -178,6 +178,7 @@ export async function writingStats(
   ctx: AuthorContext,
   { days = 30 }: { days?: number } = {},
 ): Promise<WritingStats> {
+  assertCanView(ctx, "planning");
   const [timeZone, goal] = await Promise.all([getTimeZone(ctx), getDailyGoal(ctx)]);
   const todayDate = localDate(timeZone);
   // A year back, so long streaks count.
@@ -200,11 +201,13 @@ export async function writingStats(
 
 /** Words per day in a date range (for the calendar). */
 export async function writingDays(ctx: AuthorContext, from: DateString, to: DateString) {
+  assertCanView(ctx, "planning");
   return wordsByDay(ctx, from, to);
 }
 
 /** The author's logged (manual) entries, newest first. */
 export async function listWritingLog(ctx: AuthorContext, { limit = 20 } = {}) {
+  assertCanView(ctx, "planning");
   const rows = await db.writingSession.findMany({
     where: { workspaceId: ctx.workspaceId, userId: ctx.userId, source: "MANUAL" },
     orderBy: [{ date: "desc" }, { createdAt: "desc" }],
@@ -244,6 +247,7 @@ export async function bookPace(
   ctx: AuthorContext,
   { penNameId, deadlines }: { penNameId: string | null; deadlines: Map<string, DateString> },
 ): Promise<BookPace[]> {
+  assertCanView(ctx, "planning");
   const library = await listLibrary(ctx, { penNameId });
   const books = [...library.series.flatMap((s) => s.books), ...library.standalone].filter(
     (b) => b.writingStatus !== "COMPLETE" && (b.targetWordCount || deadlines.has(b.id)),

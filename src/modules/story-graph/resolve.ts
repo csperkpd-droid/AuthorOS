@@ -3,19 +3,33 @@ import "server-only";
 import type { StoryNodeKind } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import type { AuthorContext } from "@/server/context";
+import { assertCanView, canView } from "@/server/policy";
 
 import { adapterFor, type NodeSummary } from "./adapters";
+import { storyObjectType } from "./kinds";
 
 export type { NodeSummary } from "./adapters";
 
 /**
- * Summaries of the given nodes that exist in this workspace and are visible.
- * Missing, foreign or trashed ids are simply absent from the result.
+ * The read funnel (M9): of these kinds, the ones the context may view. Every
+ * path from an id or a query to story objects (resolver, pickers, search,
+ * connections, backlinks) goes through it, so a future per-object grant is
+ * added here once.
+ */
+export function viewableKinds(ctx: Pick<AuthorContext, "role">, kinds: StoryNodeKind[]) {
+  return kinds.filter((kind) => canView(ctx, storyObjectType(kind).area));
+}
+
+/**
+ * Summaries of the given nodes that exist in this workspace, are visible and
+ * that the context may view. Missing, foreign, trashed or unviewable ids are
+ * simply absent from the result (never distinguished).
  */
 export async function resolveNodes(
   ctx: AuthorContext,
   ids: string[],
 ): Promise<Map<string, NodeSummary>> {
+  assertCanView(ctx, "any");
   const unique = [...new Set(ids)];
   if (unique.length === 0) return new Map();
   const nodes = await db.storyNode.findMany({
@@ -23,7 +37,10 @@ export async function resolveNodes(
     select: { id: true, kind: true },
   });
   const byKind = new Map<StoryNodeKind, string[]>();
-  for (const n of nodes) byKind.set(n.kind, [...(byKind.get(n.kind) ?? []), n.id]);
+  for (const n of nodes) {
+    if (viewableKinds(ctx, [n.kind]).length === 0) continue;
+    byKind.set(n.kind, [...(byKind.get(n.kind) ?? []), n.id]);
+  }
 
   const results = await Promise.all(
     [...byKind].map(([kind, kindIds]) => adapterFor(kind).load(ctx, { ids: kindIds })),
@@ -48,9 +65,10 @@ export async function searchNodes(
     penNameId,
   }: { query: string; kinds: StoryNodeKind[]; limit?: number; penNameId?: string | null },
 ): Promise<NodeSummary[]> {
+  assertCanView(ctx, "any");
   const q = query.trim();
   const perKind = await Promise.all(
-    kinds.map((kind) =>
+    viewableKinds(ctx, kinds).map((kind) =>
       adapterFor(kind).load(ctx, {
         query: q || undefined,
         take: limit,
@@ -71,13 +89,14 @@ export async function searchNodes(
     .slice(0, limit);
 }
 
-/** The kind of a node in this workspace, or null. */
+/** The kind of a node in this workspace that the context may view, or null. */
 export async function nodeKind(ctx: AuthorContext, id: string): Promise<StoryNodeKind | null> {
+  assertCanView(ctx, "any", { kind: "NODE", id });
   const node = await db.storyNode.findFirst({
     where: { id, workspaceId: ctx.workspaceId },
     select: { kind: true },
   });
-  return node?.kind ?? null;
+  return node && viewableKinds(ctx, [node.kind]).length ? node.kind : null;
 }
 
 /**

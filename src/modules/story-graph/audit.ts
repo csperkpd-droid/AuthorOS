@@ -3,6 +3,7 @@ import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import type { AuthorContext } from "@/server/context";
+import { assertCanView } from "@/server/policy";
 
 import { STORY_KINDS, STORY_OBJECT_TYPES } from "./kinds";
 
@@ -28,6 +29,7 @@ export type AuditIssue = { check: string; count: number; sample: string[] };
 type Row = { id: string };
 
 export async function auditGraph(ctx: AuthorContext): Promise<AuditIssue[]> {
+  assertCanView(ctx, "any");
   const ws = ctx.workspaceId;
   const checks: [string, Prisma.Sql][] = [];
 

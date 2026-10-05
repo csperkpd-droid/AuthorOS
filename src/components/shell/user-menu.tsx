@@ -1,10 +1,11 @@
-import { LogOut, Settings } from "lucide-react";
+import { Settings } from "lucide-react";
 import Link from "next/link";
 
-import { signOutAction } from "@/modules/auth/ui";
 import type { SessionUser } from "@/server/context";
 
-export function UserMenu({ user }: { user: SessionUser }) {
+import { SignOutButton } from "./sign-out-button";
+
+export function UserMenu({ user, draftOwner }: { user: SessionUser; draftOwner: string }) {
   return (
     <div className="space-y-1 border-t border-border pt-4">
       <div className="px-3 pb-2">
@@ -18,15 +19,7 @@ export function UserMenu({ user }: { user: SessionUser }) {
         <Settings className="size-4" aria-hidden />
         Settings
       </Link>
-      <form action={signOutAction}>
-        <button
-          type="submit"
-          className="flex w-full items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-muted"
-        >
-          <LogOut className="size-4" aria-hidden />
-          Sign out
-        </button>
-      </form>
+      <SignOutButton draftOwner={draftOwner} />
     </div>
   );
 }

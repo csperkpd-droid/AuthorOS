@@ -5,7 +5,7 @@ import { db } from "@/lib/db";
 import { NotFoundError, RuleError } from "@/lib/errors";
 import { nodeKind, resolveNode, storyObjectType } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 /**
  * Field history (M8): earlier values of the long-form text that isn't a
@@ -157,6 +157,7 @@ export async function listFieldHistory(
   nodeId: string,
   field?: string,
 ): Promise<FieldRevisionView[]> {
+  assertCanView(ctx, "any", { kind: "NODE", id: nodeId });
   if (!(await resolveNode(ctx, nodeId))) throw new NotFoundError("Item");
   return db.fieldRevision.findMany({
     where: { workspaceId: ctx.workspaceId, nodeId, ...(field ? { field } : {}) },

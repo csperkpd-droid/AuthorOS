@@ -934,3 +934,59 @@ are listed with their reasons and closing changes in
 
 They are fixed now only if one becomes required to preserve the
 architecture.
+
+## Milestone 9 (Access Boundary)
+
+### 103. The architecture baseline is finalized and recorded in one place — Accepted (M9)
+
+The 29 invariants of the finalized AuthorOS architecture are defined once,
+in `docs/ARCHITECTURE.md` → Architecture baseline. `AGENTS.md` derives the
+implementation rules from it and decisions record why; when they disagree,
+the baseline wins. The earlier "Decided boundaries" section was folded into
+it. **Freeze rule:** new features fit the existing categories (object,
+relationship, assignment, view, representation, task, workflow, asset,
+integration, configuration, policy, automation, finding, event); a new
+architectural review happens only when a capability fits none of them or
+would break an invariant. Cross-cutting capabilities (validity, provenance,
+findings, assets) are built with their first real use, not ahead of it.
+
+### 104. Reads are authorized below the UI by the same grants — Accepted (M9)
+
+Every service that returns author data calls `assertCanView(ctx, area,
+resource?)` first: the existing policy (`can`, roles × areas × actions)
+with the `view` action, not a second permission system. Workspace
+membership alone grants nothing, and an unknown role fails closed. A
+refused read of a named object throws the same "not found" as a missing
+id, so existence is never revealed; a refused list or search is forbidden.
+The Story Graph funnel (`viewableKinds`, applied in `resolveNodes`,
+`searchNodes`, `nodeKind`, search and the Trash) is the one place where
+per-object grants (co-authoring, beta readers) will narrow what a member
+sees. A test calls every exported read service with a context that may not
+view and requires a refusal. **Rejected:** checks in pages or layouts
+(any new caller would skip them); row-level security in Postgres for now
+(grants are application rules by action and area); filtering in the UI.
+
+### 105. Unsynced device writing belongs to one account — Accepted (M9)
+
+A device draft is owned by the signed-in member (user and workspace) and
+read back only for that member, so another account on the same browser
+never sees or inherits it. Signing out never deletes unsynced writing: the
+author is warned, shown what is unsynced with links, and offered to stay
+signed in (opening each item while online syncs it) or to sign out anyway
+(the drafts stay on this device for this account). Drafts from before M9
+have no owner and are adopted by whoever opens that document, which the
+server allows only for an account that can open it. **Rejected:**
+deleting drafts at sign-out (loses work); encrypting drafts per account
+(keys would have to live on the same device, so it adds machinery without
+real protection against someone with access to the browser profile).
+
+### 106. Scene Participation is a dedicated domain relationship — Accepted (M9, built later)
+
+A character's relationship to a scene is first-class domain data, not a
+Universal Connection. Initial roles: **POV**, **Present**, **Mentioned**.
+Invariant: a scene has at most one POV character. Character state, story
+time and point-of-view findings will build on it. Today's `appears_in`
+connection kind (with a role attribute) is the temporary representation;
+it is migrated to Scene Participation in the core authoring milestone after
+M9, with export and import upgrades. Universal Connections stay for loose
+links.

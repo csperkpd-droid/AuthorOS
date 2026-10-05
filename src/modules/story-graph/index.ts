@@ -1,6 +1,13 @@
 export { createStoryNode, purgeStoryNodes } from "./service";
 export type { NodeRef } from "./service";
-export { nodeKind, resolveNode, resolveNodes, sameIdentity, searchNodes } from "./resolve";
+export {
+  nodeKind,
+  resolveNode,
+  resolveNodes,
+  sameIdentity,
+  searchNodes,
+  viewableKinds,
+} from "./resolve";
 export type { NodeSummary } from "./resolve";
 export { adapterFor, KIND_ADAPTERS } from "./adapters";
 export { auditGraph } from "./audit";

@@ -4,11 +4,16 @@ import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/r
 import { Placeholder } from "@tiptap/extensions";
 import StarterKit from "@tiptap/starter-kit";
 import { Bold, Heading2, Italic, Minus, Quote, Redo2, Undo2, type LucideIcon } from "lucide-react";
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { formatWords } from "@/lib/format";
-import { deleteLocalDraft, readLocalDraft, saveLocalDraft } from "@/lib/local-drafts";
+import {
+  deleteLocalDraft,
+  readLocalDraft,
+  saveLocalDraft,
+  type DraftRef,
+} from "@/lib/local-drafts";
 import { countWords, type Doc } from "@/lib/text";
 import { cn } from "@/lib/utils";
 
@@ -58,7 +63,7 @@ export function RichTextEditor({
   wordCount: initialWordCount,
   onSave,
   onKeepDraft,
-  draftKey,
+  draft,
   label,
   placeholder = "Start writing…",
   thing = "text",
@@ -71,14 +76,20 @@ export function RichTextEditor({
   onSave: (doc: Doc, baseVersion: number) => Promise<SaveResult>;
   /** Keeps unsynced device text as a version when the cloud copy changed meanwhile. */
   onKeepDraft: (doc: Doc, writtenAt: string) => Promise<{ ok: boolean }>;
-  /** Identifies this document's local draft, e.g. "scene:<id>". */
-  draftKey: string;
+  /** This document's local draft: whose it is, which document, how to name it. */
+  draft: DraftRef;
   /** Accessible name of the text area, e.g. "Scene text". */
   label: string;
   placeholder?: string;
   /** What is being edited, for messages ("scene", "note"). */
   thing?: string;
 }) {
+  // Stable while the same document is open (the prop is a new object each render).
+  const { owner, item, label: draftLabel, href } = draft;
+  const draftRef = useMemo(
+    () => ({ owner, item, label: draftLabel, href }),
+    [owner, item, draftLabel, href],
+  );
   const versionRef = useRef(version);
   const [state, setState] = useState<SaveState>("saved");
   const stateRef = useRef<SaveState>("saved");
@@ -109,14 +120,13 @@ export function RichTextEditor({
   const writeLocal = useCallback(async () => {
     const editor = editorRef.current;
     if (!editor) return;
-    const ok = await saveLocalDraft({
-      key: draftKey,
+    const ok = await saveLocalDraft(draftRef, {
       content: editor.getJSON(),
       baseVersion: versionRef.current,
       writtenAt: Date.now(),
     });
     setDevice(ok ? "saved" : "unavailable");
-  }, [draftKey]);
+  }, [draftRef]);
 
   /** Layer 2: the cloud. */
   const save = useCallback(async () => {
@@ -146,7 +156,7 @@ export function RichTextEditor({
           update("saved");
           // The cloud has exactly this text: the device copy is no longer needed.
           if (localTimer.current) clearTimeout(localTimer.current);
-          await deleteLocalDraft(draftKey);
+          await deleteLocalDraft(draftRef);
           setDevice("idle");
         } else {
           update("dirty");
@@ -169,7 +179,7 @@ export function RichTextEditor({
       queued.current = false;
       void saveRef.current();
     }
-  }, [onSave, update, draftKey, writeLocal]);
+  }, [onSave, update, draftRef, writeLocal]);
 
   useEffect(() => {
     saveRef.current = save;
@@ -203,7 +213,15 @@ export function RichTextEditor({
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => void saveRef.current(), AUTOSAVE_DELAY_MS);
     },
-    onBlur: () => void saveRef.current(),
+    onBlur: () => {
+      // Leaving the text (e.g. to sign out): put unsaved text on this device
+      // now rather than after the short delay, then save to the cloud.
+      if (stateRef.current !== "saved") {
+        if (localTimer.current) clearTimeout(localTimer.current);
+        void writeLocal();
+      }
+      void saveRef.current();
+    },
   });
 
   // On open: text from this device that never reached the cloud?
@@ -211,11 +229,11 @@ export function RichTextEditor({
     if (!editor) return;
     let cancelled = false;
     void (async () => {
-      const draft = await readLocalDraft(draftKey);
+      const draft = await readLocalDraft(draftRef);
       if (cancelled || !draft) return;
       const local = JSON.stringify(draft.content);
       if (local === JSON.stringify(editor.getJSON())) {
-        await deleteLocalDraft(draftKey);
+        await deleteLocalDraft(draftRef);
         return;
       }
       if (draft.baseVersion === versionRef.current) {
@@ -233,7 +251,7 @@ export function RichTextEditor({
       const kept = await onKeepDraft(draft.content as Doc, new Date(draft.writtenAt).toISOString());
       if (cancelled) return;
       if (kept.ok) {
-        await deleteLocalDraft(draftKey);
+        await deleteLocalDraft(draftRef);
         setRecovered({ kind: "kept", writtenAt: draft.writtenAt });
       } else {
         setRecovered({ kind: "failed", writtenAt: draft.writtenAt, content: draft.content as Doc });
@@ -243,7 +261,7 @@ export function RichTextEditor({
       cancelled = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [editor, draftKey]);
+  }, [editor, draftRef]);
 
   // Back online: sync what is waiting on this device.
   useEffect(() => {

@@ -350,10 +350,11 @@ template_id, position)`: apply a main plot, romance and character arcs
 
 ### Decided shapes for later systems (M8)
 
-Recorded so nothing built now blocks them (decisions 87–92):
+Recorded so nothing built now blocks them (decisions 87–92, 106):
 
 | Future table(s)                                | Shape                                                                                                                                                                                                                                                          |
 | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `scene_participation`                          | Scene ← character with a role (`POV`, `PRESENT`, `MENTIONED`), at most one `POV` per scene (partial unique index), tenant-safe foreign keys. Replaces the `appears_in` connection kind (decision 106); migrated with export and import upgrades.               |
 | `editions`, `edition_status`                   | Book → Edition (ebook, paperback, hardcover, audiobook) → publishing status per edition ("Ebook: Published", "Audiobook: Not started"). `books.writing_status` stays about the writing.                                                                        |
 | `tropes` (node kind `TROPE`), `book_tropes`…   | A reusable object: a controlled common list plus custom tropes per workspace, linked to books, series, arcs and relationships (connections or a join table), used by search, marketing and analytics. `books.tropes text[]` is migrated into it, then dropped. |
 | `beats` (node kind `BEAT`), `beat_assignments` | The beat (name, description, purpose, target position, required, structure, template source) separate from where it happens (assignment: structure/arc → book → scene). One scene can satisfy beats of several structures without copies.                      |

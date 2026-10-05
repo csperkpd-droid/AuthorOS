@@ -7,7 +7,7 @@ import { ConflictError, NotFoundError } from "@/lib/errors";
 import { countWords, docSchema, docToText } from "@/lib/text";
 import { resolveNode, storyObjectType } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 import { z } from "zod";
 
 import { isVersionedKind, versioned, type VersionedKind } from "./versioned";
@@ -185,6 +185,7 @@ async function snapshot(
 
 /** Every revision of an object, newest first. Nothing is ever pruned. */
 export async function listRevisions(ctx: AuthorContext, nodeId: string) {
+  assertCanView(ctx, "any", { kind: "NODE", id: nodeId });
   await requireVersioned(ctx, nodeId);
   const revisions = await db.contentRevision.findMany({
     where: { nodeId, workspaceId: ctx.workspaceId },
@@ -202,6 +203,7 @@ export async function listRevisions(ctx: AuthorContext, nodeId: string) {
 }
 
 export async function getRevision(ctx: AuthorContext, revisionId: string) {
+  assertCanView(ctx, "any", { kind: "REVISION", id: revisionId });
   const revision = await db.contentRevision.findFirst({
     where: { id: revisionId, workspaceId: ctx.workspaceId },
     select: {

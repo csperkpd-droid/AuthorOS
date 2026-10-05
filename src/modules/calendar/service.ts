@@ -17,7 +17,7 @@ import {
 import { listTasks } from "@/modules/tasks";
 import type { AuthorContext } from "@/server/context";
 import { recordFieldHistory } from "@/modules/history";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 import { deadlineDate, eventInput, monthInput, type EventInput } from "./schemas";
 
@@ -65,6 +65,7 @@ function toView(e: {
 export type EventView = ReturnType<typeof toView>;
 
 export async function getEvent(ctx: AuthorContext, id: string): Promise<EventView> {
+  assertCanView(ctx, "planning", { kind: "EVENT", id: id });
   const row = await db.calendarEvent.findFirst({
     where: { id, workspaceId: ctx.workspaceId, ...liveEvent },
     select: eventSelect,
@@ -162,6 +163,7 @@ export async function calendarRange(
   ctx: AuthorContext,
   { from, to, penNameId }: { from: DateString; to: DateString; penNameId: string | null },
 ): Promise<CalendarDay[]> {
+  assertCanView(ctx, "planning");
   const [events, tasks, words] = await Promise.all([
     db.calendarEvent.findMany({
       where: {
@@ -233,6 +235,7 @@ export async function calendarMonth(
   ctx: AuthorContext,
   { month, penNameId }: { month: string; penNameId: string | null },
 ) {
+  assertCanView(ctx, "planning");
   const m = monthInput.parse(month);
   const from = startOfMonthGrid(m);
   const [y, mm] = m.split("-").map(Number);
@@ -247,6 +250,7 @@ export async function upcoming(
   ctx: AuthorContext,
   { from, days = 7, penNameId }: { from: DateString; days?: number; penNameId: string | null },
 ) {
+  assertCanView(ctx, "planning");
   const range = await calendarRange(ctx, { from, to: addDays(from, days - 1), penNameId });
   return range.filter((d) => d.entries.length > 0);
 }
@@ -298,6 +302,7 @@ export async function deadlinesFor(
   ctx: AuthorContext,
   subjectIds?: string[],
 ): Promise<Map<string, DateString>> {
+  assertCanView(ctx, "planning");
   const rows = await db.calendarEvent.findMany({
     where: {
       workspaceId: ctx.workspaceId,

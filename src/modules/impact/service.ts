@@ -8,7 +8,7 @@ import { positionAtEnd } from "@/lib/ordering";
 import { requireAssignablePenName } from "@/modules/pen-names";
 import { kindsWhere, relationshipTitle } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 import { buildReport } from "./report";
 import type { ImpactBlocker, ImpactItem, ImpactReport } from "./types";
@@ -513,6 +513,7 @@ export async function previewIdentityMove(
   ctx: AuthorContext,
   move: IdentityMove,
 ): Promise<ImpactReport> {
+  assertCanView(ctx, "identity");
   return (await planIdentityMove(db, ctx, move)).report;
 }
 

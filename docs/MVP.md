@@ -31,6 +31,13 @@ the suggestion boundary).
 | Pen-name branding, links, publishing accounts | v1.1  | Pen names, archive, assignment and identity switching shipped in M1. |
 | More import sources (Scrivener, Plottr, DOCX) | Later | Import Engine (M6): a source parser produces a Workspace Bundle.     |
 
+## Milestone 9 checklist (Access Boundary)
+
+- [x] Reads authorized below the UI: `assertCanView` first in every read service, by the existing grants; refused named objects look like missing ones; the Story Graph funnel drops what a role may not view; enforced by a test over every exported read service
+- [x] Device drafts owned by one account (user and workspace); another account on the same browser never sees them; drafts from before M9 adopted only by an account that can open the document
+- [x] Sign-out warning when unsynced writing exists: what is unsynced, what signing out means, Stay signed in or Sign out anyway (nothing deleted)
+- [x] Architecture baseline (29 invariants) recorded in `docs/ARCHITECTURE.md`, derived rules in `AGENTS.md`, decisions 103–106 (including Scene Participation, built later)
+
 ## Milestone 8 checklist (Safety & Readiness)
 
 - [x] Editor: local draft on this device first (IndexedDB), cloud autosave in the background, honest status (cloud / this device · offline / retrying); crash recovery; older-version drafts kept as a separate version

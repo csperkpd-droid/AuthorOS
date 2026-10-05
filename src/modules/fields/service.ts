@@ -10,7 +10,7 @@ import { getPenName, requireAssignablePenName } from "@/modules/pen-names";
 import { buildReport } from "@/modules/impact";
 import { resolveNode, resolveNodes } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 import { fieldLabel, fieldValue, newFieldInput, type NewFieldInput } from "./schemas";
 
@@ -31,6 +31,7 @@ export type FieldContext = {
 };
 
 export async function fieldContext(ctx: AuthorContext, nodeId: string): Promise<FieldContext> {
+  assertCanView(ctx, "any", { kind: "NODE", id: nodeId });
   const node = await resolveNode(ctx, nodeId);
   if (!node) throw new NotFoundError("Item");
   let bookIds: string[] = [];
@@ -106,6 +107,7 @@ export async function listFieldDefinitions(
   ctx: AuthorContext,
   { nodeKind, context }: { nodeKind: StoryNodeKind; context: FieldContext },
 ) {
+  assertCanView(ctx, "storyBible");
   const rows = await db.fieldDefinition.findMany({
     where: {
       workspaceId: ctx.workspaceId,
@@ -130,6 +132,7 @@ export async function listFieldDefinitions(
  * name first (the default), then every identity, its series, its books.
  */
 export async function fieldScopeOptions(ctx: AuthorContext, context: FieldContext) {
+  assertCanView(ctx, "storyBible");
   const [pen, series, books] = await Promise.all([
     context.penNameId ? getPenName(ctx, context.penNameId) : null,
     context.seriesId ? getSeries(ctx, context.seriesId).catch(() => null) : null,
@@ -210,6 +213,7 @@ export async function renameFieldDefinition(ctx: AuthorContext, id: string, labe
  * for it, and the values that will be lost. The objects themselves stay.
  */
 export async function previewDeleteField(ctx: AuthorContext, id: string) {
+  assertCanView(ctx, "storyBible", { kind: "FIELD", id: id });
   await requireDefinition(ctx, id);
   const def = await db.fieldDefinition.findUniqueOrThrow({
     where: { id },
@@ -267,6 +271,7 @@ export async function getFieldValues(
   ctx: AuthorContext,
   nodeId: string,
 ): Promise<Record<string, string>> {
+  assertCanView(ctx, "any", { kind: "NODE", id: nodeId });
   const rows = await db.nodeFieldValue.findMany({
     where: { nodeId, workspaceId: ctx.workspaceId },
     select: { fieldId: true, value: true },

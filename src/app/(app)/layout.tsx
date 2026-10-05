@@ -4,6 +4,7 @@ import { Brand } from "@/components/shell/brand";
 import { MobileNav } from "@/components/shell/mobile-nav";
 import { SidebarNav } from "@/components/shell/sidebar-nav";
 import { UserMenu } from "@/components/shell/user-menu";
+import { draftOwner } from "@/lib/local-drafts";
 import { listPenNames } from "@/modules/pen-names";
 import { IdentitySwitcher } from "@/modules/pen-names/ui";
 import { hasTimeZone } from "@/modules/progress";
@@ -37,13 +38,16 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <SidebarNav />
         </div>
         <div className="px-3 pb-4">
-          <UserMenu user={user} />
+          <UserMenu user={user} draftOwner={draftOwner(ctx)} />
         </div>
       </aside>
 
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-surface px-4 lg:hidden">
         <Brand />
-        <MobileNav header={switcher} footer={<UserMenu user={user} />} />
+        <MobileNav
+          header={switcher}
+          footer={<UserMenu user={user} draftOwner={draftOwner(ctx)} />}
+        />
       </header>
 
       <main className="min-w-0 px-4 py-8 sm:px-8 lg:px-12">

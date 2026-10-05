@@ -8,7 +8,7 @@ import { getPenNameForNewWork, requireAssignablePenName } from "@/modules/pen-na
 import { createStoryNode, liveCharacter, liveScene, liveSeries } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 import { recordFieldHistory } from "@/modules/history";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 import { characterInput, profileFieldInput, type CharacterInput } from "./schemas";
 
@@ -47,6 +47,7 @@ export async function listCharacters(
   ctx: AuthorContext,
   { penNameId = null }: { penNameId?: string | null } = {},
 ) {
+  assertCanView(ctx, "storyBible");
   const rows = await db.character.findMany({
     where: { workspaceId: ctx.workspaceId, ...liveCharacter, ...(penNameId ? { penNameId } : {}) },
     orderBy: { name: "asc" },
@@ -72,6 +73,7 @@ export async function listCharacters(
 }
 
 export async function getCharacter(ctx: AuthorContext, id: string): Promise<CharacterSummary> {
+  assertCanView(ctx, "storyBible", { kind: "CHARACTER", id: id });
   const row = await db.character.findFirst({
     where: { id, workspaceId: ctx.workspaceId, ...liveCharacter },
     select: characterSelect,

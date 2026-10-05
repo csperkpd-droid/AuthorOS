@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { searchConfigFor } from "@/lib/languages";
 import { kindsWhere, resolveNodes, searchNodes, type NodeSummary } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
+import { assertCanView } from "@/server/policy";
 
 /**
  * Global search across the Story Graph. Two kinds of matching, combined:
@@ -203,6 +204,7 @@ export async function search(
     limit = 50,
   }: { query: string; penNameId?: string | null; limit?: number },
 ): Promise<SearchResult[]> {
+  assertCanView(ctx, "any");
   const { words, phrases } = parseQuery(query);
   const exact = exactQuery(words, phrases);
   if (!exact) return [];

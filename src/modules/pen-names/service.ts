@@ -6,7 +6,7 @@ import { createStoryNode } from "@/modules/story-graph";
 import { NotFoundError, RuleError } from "@/lib/errors";
 import type { AuthorContext } from "@/server/context";
 import { recordFieldHistory } from "@/modules/history";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 import { penNameInput, type PenNameInput } from "./schemas";
 
@@ -36,6 +36,7 @@ export async function listPenNames(
   ctx: AuthorContext,
   { includeArchived = false }: { includeArchived?: boolean } = {},
 ): Promise<PenNameSummary[]> {
+  assertCanView(ctx, "identity");
   return db.penName.findMany({
     where: { workspaceId: ctx.workspaceId, ...(includeArchived ? {} : { archivedAt: null }) },
     orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
@@ -45,6 +46,7 @@ export async function listPenNames(
 
 /** Every identity with how much work sits under it, for the All Identities view. */
 export async function listIdentities(ctx: AuthorContext) {
+  assertCanView(ctx, "identity");
   const penNames = await db.penName.findMany({
     where: { workspaceId: ctx.workspaceId },
     orderBy: [{ isDefault: "desc" }, { createdAt: "asc" }],
@@ -68,6 +70,7 @@ export async function listIdentities(ctx: AuthorContext) {
 }
 
 export async function getPenName(ctx: AuthorContext, id: string): Promise<PenNameSummary> {
+  assertCanView(ctx, "identity", { kind: "PEN_NAME", id: id });
   const penName = await db.penName.findFirst({
     where: { id, workspaceId: ctx.workspaceId },
     select: penNameSelect,
@@ -77,6 +80,7 @@ export async function getPenName(ctx: AuthorContext, id: string): Promise<PenNam
 }
 
 export async function getDefaultPenName(ctx: AuthorContext): Promise<PenNameSummary> {
+  assertCanView(ctx, "identity");
   const penName = await db.penName.findFirst({
     where: { workspaceId: ctx.workspaceId, isDefault: true },
     select: penNameSelect,
@@ -90,6 +94,7 @@ export async function requireAssignablePenName(
   ctx: AuthorContext,
   id: string,
 ): Promise<PenNameSummary> {
+  assertCanView(ctx, "identity", { kind: "PEN_NAME", id: id });
   const penName = await getPenName(ctx, id);
   if (penName.archivedAt)
     throw new RuleError(`“${penName.name}” is archived. Restore it before assigning work to it.`);
@@ -98,6 +103,7 @@ export async function requireAssignablePenName(
 
 /** The pen name new work goes to: the active identity, else the default. */
 export async function getPenNameForNewWork(ctx: AuthorContext): Promise<PenNameSummary> {
+  assertCanView(ctx, "identity");
   const active = await getActivePenName(ctx);
   return active ?? getDefaultPenName(ctx);
 }
@@ -209,6 +215,7 @@ export async function setActiveIdentity(
 
 /** The active identity, or null when working across all identities. */
 export async function getActivePenName(ctx: AuthorContext): Promise<PenNameSummary | null> {
+  assertCanView(ctx, "identity");
   if (!ctx.activePenNameId) return null;
   return db.penName.findFirst({
     where: { id: ctx.activePenNameId, workspaceId: ctx.workspaceId, archivedAt: null },

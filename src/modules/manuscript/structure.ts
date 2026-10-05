@@ -8,7 +8,7 @@ import { assertReviewed, attachmentsOf, buildReport } from "@/modules/impact";
 import { getBook } from "@/modules/library";
 import { createStoryNode, purgeStoryNodes } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
-import { assertCan } from "@/server/policy";
+import { assertCan, assertCanView } from "@/server/policy";
 
 import { structureTitle } from "./schemas";
 
@@ -55,6 +55,7 @@ export type BookTree = {
  * the Trash, are excluded.
  */
 export async function getBookTree(ctx: AuthorContext, bookId: string): Promise<BookTree> {
+  assertCanView(ctx, "manuscript", { kind: "BOOK", id: bookId });
   await getBook(ctx, bookId);
   const where = { bookId, workspaceId: ctx.workspaceId, deletedAt: null };
   const [parts, chapters, scenes] = await Promise.all([
@@ -396,6 +397,7 @@ export async function moveScene(
  * book's top level; links, field values and dates of the part itself go.
  */
 export async function previewDissolvePart(ctx: AuthorContext, id: string) {
+  assertCanView(ctx, "manuscript", { kind: "PART", id: id });
   const part = await requirePart(ctx, id);
   const [title, chapters, attached] = await Promise.all([
     db.part.findUniqueOrThrow({ where: { id }, select: { title: true } }),

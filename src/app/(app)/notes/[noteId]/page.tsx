@@ -9,6 +9,7 @@ import { ConnectionsPanel } from "@/modules/connections/ui";
 import { RevisionsDialog } from "@/modules/history/ui";
 import { getNote } from "@/modules/notes";
 import { NoteEditor, trashNoteAction } from "@/modules/notes/ui";
+import { draftOwner } from "@/lib/local-drafts";
 import { requireAuthorContext } from "@/server/context";
 import { orNotFound } from "@/server/not-found";
 
@@ -66,6 +67,7 @@ export default async function NotePage({ params }: Props) {
         title={note.title}
         body={note.body}
         version={note.version}
+        draftOwner={draftOwner(ctx)}
       />
     </div>
   );

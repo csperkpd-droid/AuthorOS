@@ -1,7 +1,7 @@
 import "server-only";
 
 import type { WorkspaceRole } from "@/generated/prisma/client";
-import { ForbiddenError } from "@/lib/errors";
+import { ForbiddenError, NotFoundError } from "@/lib/errors";
 import type { StoryArea } from "@/modules/story-graph";
 
 import type { AuthorContext } from "./context";
@@ -21,9 +21,15 @@ import type { AuthorContext } from "./context";
  *   and viewers are defined so co-authors, editors, beta readers and ARC
  *   readers can be added by granting, not by rewriting services.
  *
- * Reads are scoped by workspace membership (`requireAuthorContext`).
- * Sharing a single book (beta readers, ARC) will add resource grants:
- * `can(ctx, action, area, resource)` already takes the resource.
+ * - **Reads** (M9) are checked the same way, below the UI: every service
+ *   that returns author data calls `assertCanView()` first (enforced by
+ *   tests/integration/read-authorization.test.ts), and the Story Graph
+ *   resolver and search drop what the context may not view. Workspace
+ *   membership alone grants nothing: the role's grants decide.
+ *
+ * Sharing a single book (beta readers, ARC, co-authors) will add resource
+ * grants: `can(ctx, action, area, resource)` already takes the resource, and
+ * every read and write already passes through it.
  */
 
 export type PolicyAction = "view" | "comment" | "suggest" | "edit" | "manage";
@@ -78,4 +84,31 @@ export function assertCan(
   resource?: PolicyResource,
 ): void {
   if (!can(ctx, action, area, resource)) throw new ForbiddenError();
+}
+
+/**
+ * Reads (M9): whether the context may view data in `area` (`"any"` = in at
+ * least one area). Same grants as every other action.
+ */
+export function canView(
+  ctx: Pick<AuthorContext, "role">,
+  area: PolicyArea | "any",
+  resource?: PolicyResource,
+): boolean {
+  return can(ctx, "view", area, resource);
+}
+
+/**
+ * Call first in every service that returns author data. A refused read of a
+ * specific object (`resource`) is reported as not found, exactly like an id
+ * that doesn't exist, so a refusal never reveals that the object exists.
+ * A refused list or search is forbidden (it names no object).
+ */
+export function assertCanView(
+  ctx: Pick<AuthorContext, "role">,
+  area: PolicyArea | "any",
+  resource?: PolicyResource,
+): void {
+  if (canView(ctx, area, resource)) return;
+  throw resource ? new NotFoundError("Item") : new ForbiddenError();
 }
