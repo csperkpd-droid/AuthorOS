@@ -8,6 +8,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { availabilityLabel, navigation } from "@/config/navigation";
 import { formatDay } from "@/lib/dates";
+import { draftOwner } from "@/lib/local-drafts";
 import { formatDateTime, formatNumber, formatWords } from "@/lib/format";
 import { deadlinesFor, upcoming } from "@/modules/calendar";
 import { listLibrary } from "@/modules/library";
@@ -15,6 +16,8 @@ import { listRecentScenes } from "@/modules/manuscript";
 import { getActivePenName } from "@/modules/pen-names";
 import { bookPace, writingStats } from "@/modules/progress";
 import { BookPaceList, DailyGoalDialog, LogWordsDialog, WordsChart } from "@/modules/progress/ui";
+import { getWritingPlace } from "@/modules/work-context";
+import { ContinueWritingButton } from "@/modules/work-context/ui";
 import { getWorkspace } from "@/modules/workspaces";
 import { getSessionUser, requireAuthorContext } from "@/server/context";
 
@@ -23,7 +26,7 @@ export const metadata: Metadata = { title: "Dashboard" };
 export default async function DashboardPage() {
   const ctx = await requireAuthorContext();
   const penNameId = ctx.activePenNameId;
-  const [user, workspace, active, recent, stats, pace, library] = await Promise.all([
+  const [user, workspace, active, recent, stats, pace, library, place] = await Promise.all([
     getSessionUser(),
     getWorkspace(ctx.workspaceId),
     getActivePenName(ctx),
@@ -31,7 +34,21 @@ export default async function DashboardPage() {
     writingStats(ctx, { days: 30 }),
     deadlinesFor(ctx).then((deadlines) => bookPace(ctx, { penNameId, deadlines })),
     listLibrary(ctx, { penNameId }),
+    getWritingPlace(ctx),
   ]);
+  // Continue Writing: the latest writing place; without one (or if it is no
+  // longer available), the most recently written scene.
+  const resume = place
+    ? place
+    : recent[0]
+      ? {
+          sceneId: recent[0].id,
+          href: `/books/${recent[0].book.id}/scenes/${recent[0].id}`,
+          title: recent[0].title,
+          context: `${recent[0].book.title} › ${recent[0].chapter.title}`,
+          anchor: null,
+        }
+      : null;
   const soon = await upcoming(ctx, { from: stats.today, days: 7, penNameId });
   const books = [...library.series.flatMap((s) => s.books), ...library.standalone].map((b) => ({
     id: b.id,
@@ -61,6 +78,29 @@ export default async function DashboardPage() {
           />
         }
       />
+
+      {resume && (
+        <section
+          aria-labelledby="resume-heading"
+          className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-border bg-surface p-4"
+        >
+          <div className="min-w-0">
+            <h2 id="resume-heading" className="text-xs text-muted-foreground">
+              Where you left off
+            </h2>
+            <p className="truncate font-medium">{resume.title}</p>
+            {resume.context && (
+              <p className="truncate text-xs text-muted-foreground">{resume.context}</p>
+            )}
+          </div>
+          <ContinueWritingButton
+            owner={draftOwner(ctx)}
+            sceneId={resume.sceneId}
+            href={resume.href}
+            anchor={resume.anchor}
+          />
+        </section>
+      )}
 
       <section aria-labelledby="today-heading" className="space-y-4">
         <h2 id="today-heading" className="sr-only">
@@ -184,7 +224,7 @@ export default async function DashboardPage() {
 
       <section aria-labelledby="continue-heading" className="space-y-4">
         <h2 id="continue-heading" className="font-serif text-xl">
-          Continue writing
+          Recent scenes
         </h2>
         {recent.length === 0 ? (
           <p className="text-sm text-muted-foreground">

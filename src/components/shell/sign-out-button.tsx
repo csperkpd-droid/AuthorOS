@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { markSignedOutHere } from "@/lib/auth/signed-out-here";
 import { listLocalDrafts, type LocalDraft } from "@/lib/local-drafts";
+import { clearWork } from "@/lib/work-place";
 import { signOutAction } from "@/modules/auth/ui";
 
 /**
@@ -41,6 +42,7 @@ export function SignOutButton({ draftOwner }: { draftOwner: string }) {
 
   function signOut() {
     if (!navigator.onLine) return signOutHere();
+    clearWork(); // Return to Work belongs to this session only.
     confirmed.current = true;
     form.current?.requestSubmit();
   }
@@ -48,6 +50,7 @@ export function SignOutButton({ draftOwner }: { draftOwner: string }) {
   /** Signed out on this device now; the server finishes on the next request. */
   function signOutHere() {
     markSignedOutHere();
+    clearWork();
     setOpen(false);
     // A full load, not client navigation: /sign-out is a route handler and the
     // signed-in app must be dropped from memory.

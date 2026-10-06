@@ -9,6 +9,7 @@ import { listPenNames } from "@/modules/pen-names";
 import { IdentitySwitcher } from "@/modules/pen-names/ui";
 import { hasTimeZone } from "@/modules/progress";
 import { TimeZoneSync } from "@/modules/progress/ui";
+import { ReturnToWork } from "@/modules/work-context/ui";
 import { getSessionUser, requireAuthorContext } from "@/server/context";
 
 // The layout fetches the user and identities for the shell UI only.
@@ -34,6 +35,9 @@ export default async function AppLayout({ children }: { children: React.ReactNod
           <Brand />
         </div>
         <div className="px-4 pb-4">{switcher}</div>
+        <div className="px-3 pb-4 empty:hidden">
+          <ReturnToWork owner={draftOwner(ctx)} />
+        </div>
         <div className="flex-1 overflow-y-auto px-3">
           <SidebarNav />
         </div>
@@ -44,10 +48,13 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
       <header className="sticky top-0 z-30 flex h-14 items-center justify-between border-b border-border bg-surface px-4 lg:hidden">
         <Brand />
-        <MobileNav
-          header={switcher}
-          footer={<UserMenu user={user} draftOwner={draftOwner(ctx)} />}
-        />
+        <div className="flex items-center gap-2">
+          <ReturnToWork owner={draftOwner(ctx)} compact />
+          <MobileNav
+            header={switcher}
+            footer={<UserMenu user={user} draftOwner={draftOwner(ctx)} />}
+          />
+        </div>
       </header>
 
       <main className="min-w-0 px-4 py-8 sm:px-8 lg:px-12">

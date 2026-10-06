@@ -998,3 +998,23 @@ cookie the page can set), stops all saving, and tells the author the
 writing is only on this device; the server ends the session on the next
 request (`/sign-out`). Nothing is uploaded on the way out and nothing is
 deleted.
+
+## Milestone 10 (Work Context)
+
+### 107. Work Context: Back, Return to Work and Continue Writing — Accepted (M10)
+
+Three behaviours, three homes. **Back** is the browser's history.
+**Return to Work** is a work stack in the tab's `sessionStorage`, owned by
+one account and cleared at sign-out: it must survive navigation and
+refresh, not devices. **Continue Writing** is three columns on the
+member's row, because it must survive devices and sign-in. Looking at
+other documents is a detour; writing in another scene moves the work on;
+writing in a note during a detour nests it. Positions are version-aware
+(version, cursor, surrounding text, scroll) and are only restored when the
+author comes back through Return to Work or Continue Writing; a position
+that can't be found is never invented, and the author is told. Titles for
+the control always come from the server through the read funnel, so a
+place that is gone or no longer viewable is never named. **Rejected:** one
+"last page" mechanism (it collapses the three behaviours); a work-context
+table (one member row is enough); restoring the position on every visit
+(a scene opened from the binder starts at the top).

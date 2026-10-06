@@ -6,7 +6,7 @@ relationships, story structure, romance planning, notes, tasks and more.
 **Principles:** authors stay in control · AI suggests, never changes ·
 everything is connected · built to grow.
 
-> **Status:** the MVP is complete, plus Milestone 6 (JSON import, search languages, relationship roles) Milestone 7 (Foundations: Story Object Registry, authorization, one model for dates, Story Graph integrity) Milestone 8 (Safety & Readiness: local drafts, version and field history, stale-edit protection, document formats, Change Impact levels) and Milestone 9 (Access Boundary: permission-aware reads, account-owned device drafts, the architecture baseline). See [docs/ROADMAP.md](docs/ROADMAP.md).
+> **Status:** the MVP is complete, plus Milestone 6 (JSON import, search languages, relationship roles) Milestone 7 (Foundations: Story Object Registry, authorization, one model for dates, Story Graph integrity) Milestone 8 (Safety & Readiness: local drafts, version and field history, stale-edit protection, document formats, Change Impact levels) Milestone 9 (Access Boundary: permission-aware reads, account-owned device drafts, the architecture baseline) and Milestone 10 (Work Context: Back, Return to Work, Continue Writing). See [docs/ROADMAP.md](docs/ROADMAP.md).
 
 ## Documentation
 

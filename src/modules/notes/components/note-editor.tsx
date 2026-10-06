@@ -56,6 +56,10 @@ export function NoteEditor({
         version={version}
         onSave={save}
         onKeepDraft={keep}
+        workPlace={{
+          owner: draftOwner,
+          entry: { kind: "note", id: noteId, href: `/notes/${noteId}` },
+        }}
         draft={{
           owner: draftOwner,
           item: `note:${noteId}`,

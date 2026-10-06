@@ -22,6 +22,7 @@ import * as storyGraph from "@/modules/story-graph";
 import * as structure from "@/modules/structure";
 import * as tasks from "@/modules/tasks";
 import * as trash from "@/modules/trash";
+import * as workContext from "@/modules/work-context";
 import * as workspaces from "@/modules/workspaces";
 import type { AuthorContext } from "@/server/context";
 import { assertCanView, canView, ROLE_GRANTS } from "@/server/policy";
@@ -54,6 +55,7 @@ const MODULES = {
   structure,
   tasks,
   trash,
+  workContext,
   workspaces,
 } as Record<string, Record<string, unknown>>;
 

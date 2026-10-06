@@ -5,6 +5,7 @@ import { useCallback } from "react";
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import type { Doc } from "@/lib/text";
 import { keepDeviceDraftAction } from "@/modules/history/ui";
+import { setWritingPlaceAction } from "@/modules/work-context/ui";
 
 import { saveSceneContentAction } from "../actions";
 
@@ -44,6 +45,12 @@ export function SceneEditor({
       onSave={save}
       onKeepDraft={keep}
       draft={{ owner: draftOwner, item: `scene:${sceneId}`, label: draftLabel, href }}
+      workPlace={{
+        owner: draftOwner,
+        entry: { kind: "scene", id: sceneId, href },
+        // Continue Writing, on any device.
+        onPlace: (anchor) => void setWritingPlaceAction(sceneId, anchor),
+      }}
       label="Scene text"
       thing="scene"
     />

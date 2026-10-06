@@ -22,6 +22,7 @@ import * as storyGraph from "@/modules/story-graph";
 import * as structure from "@/modules/structure";
 import * as tasks from "@/modules/tasks";
 import * as trash from "@/modules/trash";
+import * as workContext from "@/modules/work-context";
 import * as workspaces from "@/modules/workspaces";
 import type { AuthorContext } from "@/server/context";
 import { can, ROLE_GRANTS } from "@/server/policy";
@@ -49,6 +50,7 @@ const MODULES = {
   structure,
   tasks,
   trash,
+  workContext,
   workspaces,
 } as Record<string, Record<string, unknown>>;
 
@@ -66,6 +68,7 @@ const NOT_ROLE_CHECKED = new Set([
   "penNames.setActiveIdentity", // the member's own "Writing as"
   "progress.setDailyGoal", // the member's own goal
   "progress.setTimeZone", // the member's own time zone
+  "workContext.setWritingPlace", // the member's own place (needs view of the scene)
   "progress.recordEditorWords", // inside the scene save's transaction
   "imports.readUpload", // transport helper
   "exports.exportScopeInput", // a schema

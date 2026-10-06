@@ -31,6 +31,14 @@ the suggestion boundary).
 | Pen-name branding, links, publishing accounts | v1.1  | Pen names, archive, assignment and identity switching shipped in M1. |
 | More import sources (Scrivener, Plottr, DOCX) | Later | Import Engine (M6): a source parser produces a Workspace Bundle.     |
 
+## Milestone 10 checklist (Work Context)
+
+- [x] Back stays the browser's history
+- [x] Return to Work (sidebar and phone header): back to the place being worked on from any detour; nested work for notes written in during a detour; survives refresh; owned by one account, cleared at sign-out
+- [x] Continue Writing (dashboard): the latest writing place on any device; falls back to the most recent scene
+- [x] Version-aware positions: restored exactly, followed when the text moved, or the author is told; never invented; changes made during a detour stay
+- [x] A place that is gone or no longer viewable is never named
+
 ## Milestone 9 checklist (Access Boundary)
 
 - [x] Reads authorized below the UI: `assertCanView` first in every read service, by the existing grants; refused named objects look like missing ones; the Story Graph funnel drops what a role may not view; enforced by a test over every exported read service

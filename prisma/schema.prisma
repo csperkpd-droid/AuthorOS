@@ -125,14 +125,23 @@ model WorkspaceMember {
   activePenNameId String?       @map("active_pen_name_id") @db.Uuid
   /// Words per day this member aims for. Null = no daily goal.
   dailyWordGoal   Int?          @map("daily_word_goal")
+  /// Work Context (M10): the scene this member last wrote in, for Continue
+  /// Writing on any device. Working state, not story data; read through the
+  /// Story Graph funnel, never used to authorize.
+  writingSceneId  String?       @map("writing_scene_id") @db.Uuid
+  /// Where in it: version, cursor position and surrounding text (lib/work-place.ts).
+  writingAnchor   Json?         @map("writing_anchor")
+  writingAt       DateTime?     @map("writing_at")
   createdAt       DateTime      @default(now()) @map("created_at")
 
   workspace     Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
   user          User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   activePenName PenName?  @relation(fields: [activePenNameId], references: [id], onDelete: SetNull)
+  writingScene  Scene?    @relation(fields: [writingSceneId], references: [id], onDelete: SetNull)
 
   @@id([workspaceId, userId])
   @@index([userId])
+  @@index([writingSceneId])
   @@map("workspace_members")
 }
 
@@ -399,6 +408,8 @@ model Scene {
   book    Book        @relation(fields: [bookId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   chapter Chapter     @relation(fields: [chapterId, bookId], references: [id, bookId], onDelete: Cascade)
   beats   BeatScene[]
+
+  writingMembers WorkspaceMember[]
 
   @@unique([id, workspaceId])
   @@index([bookId])

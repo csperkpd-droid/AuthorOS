@@ -125,8 +125,7 @@ the mechanisms. "Not built" marks designed parts with no code yet.
 22. **Work Context.** Temporary detours never lose the author's place.
     **Back** (browser history), **Return to Work** (the exact place being
     worked on) and **Continue Writing** (the latest writing place, on any
-    device) are three distinct behaviours. Partly built (dashboard
-    Continue writing).
+    device) are three distinct behaviours. Built (M10); see Work Context.
 23. **Adaptive devices.** Desktop, tablet and phone use the same
     architecture, data and capabilities; only presentation adapts. No
     device-specific data or feature forks.
@@ -481,6 +480,47 @@ node; a new versioned kind adds one accessor in `history/versioned.ts`.
 Trash lists the topmost trashed item of each branch; restoring brings back
 its contents (except things trashed separately). "Delete forever" removes
 the item, its descendants and their revisions.
+
+## Work Context (M10)
+
+Work Context is temporary working state, not story data: where the author
+is working, so a detour never loses their place. It is never exported,
+never undoes anything (changes made during a detour stay), and never
+authorizes anything.
+
+| Behaviour            | Means                                                       | Kept in                                           | Survives                                                |
+| -------------------- | ----------------------------------------------------------- | ------------------------------------------------- | ------------------------------------------------------- |
+| **Back**             | the previous page                                           | the browser's own history                         | as the browser keeps it                                 |
+| **Return to Work**   | the place being worked on before this detour, from anywhere | this tab (`sessionStorage`), owned by one account | navigation and refresh in this tab; cleared at sign-out |
+| **Continue Writing** | the latest manuscript writing place                         | the member's row (`workspace_members.writing_*`)  | devices, sign-out and sign-in                           |
+
+**The work stack** (`lib/work-place.ts`). Opening a document that is in
+the stack returns to it (detours above it are finished). With an empty
+stack, the opened document becomes the work. Only _looking_ at another
+scene or note is a detour; _writing_ in another scene moves the work on,
+and writing in a note during a detour nests it: Return to Work goes to the
+note, and from the note to the scene before it. The control ("Return to
+work", sidebar and phone header) shows only while away; its title comes
+from the server through the read funnel (`listWorkPlaces`), so a place
+that is gone or no longer viewable is dropped without being named.
+
+**Version-aware positions.** A place is the document version, the cursor
+position, the 40 characters either side of it, and the page scroll. It is
+restored only when coming back through Return to Work or Continue
+Writing, after any device draft is recovered. Same text at the same
+position: restored (with the same scroll if the version is unchanged).
+Text on both sides found exactly once elsewhere: the cursor goes there.
+One side only: the nearest place, and the author is told it may not be
+exact. Neither: the start of the document and a note that the place
+couldn't be found. A position is never invented. Scroll is not carried
+across devices.
+
+**Continue Writing** (dashboard, "Where you left off"): the scene editor
+records the place on the server when it opens and a few seconds after the
+cursor or scroll moves (`setWritingPlace`, the member's own state, only
+for a scene they can view; never after signing out on the device). If the
+place is gone or no longer viewable, the most recent scene is offered
+instead, without saying why.
 
 ## Author content safety (M8)
 

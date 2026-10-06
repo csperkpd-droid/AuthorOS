@@ -16,6 +16,18 @@ import {
   type DraftRef,
 } from "@/lib/local-drafts";
 import { countWords, type Doc } from "@/lib/text";
+import {
+  captureAnchor,
+  editWork,
+  readWork,
+  resolveAnchor,
+  takeRestore,
+  updateWorkAnchor,
+  visitWork,
+  writeWork,
+  type PlaceAnchor,
+  type WorkEntry,
+} from "@/lib/work-place";
 import { cn } from "@/lib/utils";
 
 /**
@@ -30,6 +42,8 @@ type DeviceState = "idle" | "saved" | "unavailable";
 const AUTOSAVE_DELAY_MS = 1000;
 const LOCAL_DELAY_MS = 150;
 const RETRY_DELAY_MS = 5000;
+const PLACE_DELAY_MS = 300;
+const SERVER_PLACE_DELAY_MS = 3000;
 
 export type SaveResult =
   | { ok: true; data: { version: number; savedAt: Date | string } }
@@ -68,6 +82,7 @@ export function RichTextEditor({
   label,
   placeholder = "Start writing…",
   thing = "text",
+  workPlace,
 }: {
   content: Doc | null;
   version: number;
@@ -84,6 +99,17 @@ export function RichTextEditor({
   placeholder?: string;
   /** What is being edited, for messages ("scene", "note"). */
   thing?: string;
+  /**
+   * Work Context (M10): this document as a working place. Its position is
+   * kept for Return to Work (this tab) and, with `onPlace`, recorded on the
+   * server for Continue Writing; it is restored only when the author comes
+   * back through those.
+   */
+  workPlace?: {
+    owner: string;
+    entry: Omit<WorkEntry, "anchor">;
+    onPlace?: (anchor: PlaceAnchor) => void;
+  };
 }) {
   // Stable while the same document is open (the prop is a new object each render).
   const { owner, item, label: draftLabel, href } = draft;
@@ -92,6 +118,13 @@ export function RichTextEditor({
     [owner, item, draftLabel, href],
   );
   const versionRef = useRef(version);
+  const placeRef = useRef(workPlace);
+  const placeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const serverPlaceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const placeReady = useRef(false);
+  const edited = useRef(false);
+  // Coming back after the text changed: "near" (not exactly) or "lost" (start).
+  const [placeLost, setPlaceLost] = useState<"near" | "lost" | null>(null);
   const [state, setState] = useState<SaveState>("saved");
   const stateRef = useRef<SaveState>("saved");
   const [device, setDevice] = useState<DeviceState>("idle");
@@ -111,6 +144,10 @@ export function RichTextEditor({
   const editorRef = useRef<Editor | null>(null);
   // Retries and queued saves call the latest `save` through this ref.
   const saveRef = useRef<() => Promise<void>>(async () => {});
+
+  // Work Context: remembers where the author is (set up once the editor exists).
+  const notePlaceRef = useRef<() => void>(() => {});
+  const openPlaceRef = useRef<() => void>(() => {});
 
   const update = useCallback((next: SaveState) => {
     stateRef.current = next;
@@ -155,6 +192,7 @@ export function RichTextEditor({
       if (result.ok) {
         versionRef.current = result.data.version;
         setSavedAt(new Date(result.data.savedAt));
+        notePlaceRef.current();
         if (changeSeq.current === seq) {
           update("saved");
           // The cloud has exactly this text: the device copy is no longer needed.
@@ -209,6 +247,12 @@ export function RichTextEditor({
     },
     onUpdate: ({ editor }) => {
       changeSeq.current += 1;
+      // Writing here makes this the work (lib/work-place.ts).
+      const place = placeRef.current;
+      if (place && placeReady.current && !edited.current) {
+        edited.current = true;
+        writeWork(place.owner, editWork(readWork(place.owner), place.entry));
+      }
       if (stateRef.current !== "conflict" && stateRef.current !== "waiting") update("dirty");
       setWordCount(countWords(editor.getText({ blockSeparator: "\n\n" })));
       if (localTimer.current) clearTimeout(localTimer.current);
@@ -216,6 +260,7 @@ export function RichTextEditor({
       if (timer.current) clearTimeout(timer.current);
       timer.current = setTimeout(() => void saveRef.current(), AUTOSAVE_DELAY_MS);
     },
+    onSelectionUpdate: () => notePlaceRef.current(),
     onBlur: () => {
       // Leaving the text (e.g. to sign out): put unsaved text on this device
       // now rather than after the short delay, then save to the cloud.
@@ -227,11 +272,103 @@ export function RichTextEditor({
     },
   });
 
+  // ─── Work Context (M10) ───────────────────────────────────────────────────
+  const capturePlace = useCallback((): PlaceAnchor | null => {
+    if (!editor || editor.isDestroyed) return null;
+    return captureAnchor(
+      editor.state.doc,
+      editor.state.selection.from,
+      versionRef.current,
+      Math.round(window.scrollY),
+    );
+  }, [editor]);
+
+  /** Records the writing place on the server (never after signing out here). */
+  const sendPlace = useCallback(() => {
+    if (serverPlaceTimer.current) clearTimeout(serverPlaceTimer.current);
+    serverPlaceTimer.current = null;
+    const place = placeRef.current;
+    const anchor = capturePlace();
+    if (!place?.onPlace || !anchor || isSignedOutHere()) return;
+    place.onPlace(anchor);
+  }, [capturePlace]);
+
+  useEffect(() => {
+    notePlaceRef.current = () => {
+      const place = placeRef.current;
+      if (!place || !placeReady.current) return;
+      if (placeTimer.current) clearTimeout(placeTimer.current);
+      placeTimer.current = setTimeout(() => {
+        const anchor = capturePlace();
+        if (anchor) updateWorkAnchor(place.owner, place.entry.id, anchor);
+      }, PLACE_DELAY_MS);
+      if (place.onPlace) {
+        if (serverPlaceTimer.current) clearTimeout(serverPlaceTimer.current);
+        serverPlaceTimer.current = setTimeout(sendPlace, SERVER_PLACE_DELAY_MS);
+      }
+    };
+
+    /**
+     * Opening: this document is visited in the work stack, and if the author
+     * came back through Return to Work or Continue Writing, their place is
+     * restored when it can be found safely (never invented).
+     */
+    openPlaceRef.current = () => {
+      const place = placeRef.current;
+      if (!editor || !place) return;
+      writeWork(place.owner, visitWork(readWork(place.owner), place.entry));
+      placeReady.current = true;
+      const restore = takeRestore(place.owner, place.entry.id);
+      if (restore?.anchor) {
+        const found = resolveAnchor(editor.state.doc, restore.anchor, versionRef.current);
+        if (!found) {
+          setPlaceLost("lost");
+          window.scrollTo(0, 0);
+        } else {
+          if (found.how === "near") setPlaceLost("near");
+          const { scrollY } = restore.anchor;
+          editor.commands.setTextSelection(found.pos);
+          editor.commands.focus(undefined, { scrollIntoView: false });
+          requestAnimationFrame(() =>
+            requestAnimationFrame(() => {
+              // Same text at the same place on the same version: same scroll.
+              if (found.how === "exact" && found.sameVersion && scrollY >= 0)
+                window.scrollTo(0, scrollY);
+              else editor.commands.scrollIntoView();
+            }),
+          );
+        }
+      }
+      const anchor = capturePlace();
+      if (anchor) updateWorkAnchor(place.owner, place.entry.id, anchor);
+      sendPlace();
+    };
+  }, [editor, capturePlace, sendPlace]);
+
+  // Scrolling moves the place too; leaving keeps the latest one.
+  useEffect(() => {
+    const onScroll = () => notePlaceRef.current();
+    const place = placeRef.current;
+    window.addEventListener("scroll", onScroll, { passive: true });
+    return () => {
+      window.removeEventListener("scroll", onScroll);
+      if (placeTimer.current) clearTimeout(placeTimer.current);
+      if (!place || !placeReady.current) return;
+      try {
+        const anchor = capturePlace();
+        if (anchor) updateWorkAnchor(place.owner, place.entry.id, anchor);
+        if (serverPlaceTimer.current) sendPlace();
+      } catch {
+        // The editor is already gone: the last recorded place stands.
+      }
+    };
+  }, [capturePlace, sendPlace]);
+
   // On open: text from this device that never reached the cloud?
   useEffect(() => {
     if (!editor) return;
     let cancelled = false;
-    void (async () => {
+    const handleDraft = async () => {
       const draft = await readLocalDraft(draftRef);
       if (cancelled || !draft) return;
       const local = JSON.stringify(draft.content);
@@ -259,7 +396,11 @@ export function RichTextEditor({
       } else {
         setRecovered({ kind: "failed", writtenAt: draft.writtenAt, content: draft.content as Doc });
       }
-    })();
+    };
+    // The place is restored after any device text, so it is found in what is shown.
+    void handleDraft().then(() => {
+      if (!cancelled) openPlaceRef.current();
+    });
     return () => {
       cancelled = true;
     };
@@ -355,6 +496,23 @@ export function RichTextEditor({
               `This device has text from ${formatTime(recovered.writtenAt)} that never reached the cloud, and this ${thing} changed elsewhere since. It is still on this device; reload when you’re online to keep it as a version.`}
           </span>
           <Button size="sm" variant="ghost" onClick={() => setRecovered(null)}>
+            Dismiss
+          </Button>
+        </div>
+      )}
+
+      {placeLost && (
+        <div
+          role="status"
+          data-testid="place-notice"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/50 p-3 text-sm"
+        >
+          <span>
+            {placeLost === "lost"
+              ? `This ${thing} changed while you were away, so your exact place couldn’t be found. You’re at the start of the ${thing}.`
+              : `This ${thing} changed while you were away, so this may not be exactly where you were. You’re at the nearest place that could be found.`}
+          </span>
+          <Button size="sm" variant="ghost" onClick={() => setPlaceLost(null)}>
             Dismiss
           </Button>
         </div>

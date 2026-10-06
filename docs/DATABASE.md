@@ -257,6 +257,16 @@ marks text saved before an import replaced it.
 - Migrations: `20261009090000_pen_name_node_kind` (adds the enum value on
   its own: it must be committed before use), `20261009090100_foundations`.
 
+### Work Context (Milestone 10)
+
+- **`workspace_members.writing_scene_id`** (FK → `scenes`, `ON DELETE SET
+NULL`), **`writing_anchor`** (jsonb: version, position, surrounding text,
+  scroll) and **`writing_at`**: the member's latest writing place for
+  Continue Writing. Working state, not story data: not exported, read
+  through the Story Graph funnel, never used to authorize. Return to Work
+  lives in the browser tab, not the database.
+- Migration: `20261011090000_work_context`.
+
 ### Safety and readiness (Milestone 8)
 
 - **`books.writing_status`** (`writing_status` enum: `IDEA`, `PLANNING`,
