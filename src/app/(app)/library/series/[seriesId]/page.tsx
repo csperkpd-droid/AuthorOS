@@ -18,7 +18,10 @@ import {
   OutlineList,
   SaveKitDialog,
 } from "@/modules/structure/ui";
+import { listTropes, tropesOf } from "@/modules/tropes";
+import { TropePicker } from "@/modules/tropes/ui";
 import { requireAuthorContext } from "@/server/context";
+import { can, canView } from "@/server/policy";
 import { orNotFound } from "@/server/not-found";
 
 export async function generateMetadata({
@@ -41,6 +44,9 @@ export default async function SeriesPage({ params }: PageProps<"/library/series/
     listKits(ctx),
   ]);
   const penOptions = penNames.map((p) => ({ id: p.id, name: p.name }));
+  const [tropes, allTropes] = canView(ctx, "storyBible")
+    ? await Promise.all([tropesOf(ctx, seriesId), listTropes(ctx)])
+    : [null, []];
   const totalWords = series.books.reduce((n, b) => n + b.wordCount, 0);
 
   return (
@@ -109,6 +115,16 @@ export default async function SeriesPage({ params }: PageProps<"/library/series/
       />
       {series.description && (
         <p className="max-w-prose text-muted-foreground">{series.description}</p>
+      )}
+
+      {tropes && (
+        <TropePicker
+          targetId={series.id}
+          targetTitle={series.title}
+          tropes={tropes}
+          allTropes={allTropes}
+          canEdit={can(ctx, "edit", "storyBible")}
+        />
       )}
 
       {series.books.length === 0 ? (

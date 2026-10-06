@@ -48,7 +48,8 @@ export type BundleKey =
   | "tasks"
   | "calendarEvents"
   | "outlines"
-  | "timelineEvents";
+  | "timelineEvents"
+  | "tropes";
 
 export type StoryObjectType = {
   kind: StoryNodeKind;
@@ -335,6 +336,23 @@ const DEFINITIONS = {
     dated: false,
     bundle: "timelineEvents",
     table: "timeline_events",
+  },
+  TROPE: {
+    label: { one: "Trope", many: "Tropes" },
+    noun: { one: "trope", many: "tropes" },
+    area: "storyBible",
+    identity: "shared",
+    hierarchy: null,
+    structure: { owner: false, placedOnBeats: false },
+    connectable: true,
+    fieldable: false,
+    search: "title",
+    versioned: false,
+    lifecycle: "trash",
+    movesWithIdentity: false,
+    dated: false,
+    bundle: "tropes",
+    table: "tropes",
   },
 } as const satisfies Record<StoryNodeKind, Entry>;
 

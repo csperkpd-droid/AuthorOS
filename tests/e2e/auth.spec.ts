@@ -52,6 +52,8 @@ test("a used sign-in link cannot be reused", async ({ page, browser }) => {
   await page.goto("/sign-in");
   await page.getByLabel("Email").fill(email);
   await page.getByRole("button", { name: "Email me a sign-in link" }).click();
+  // The link is stored by the time this page shows (it's emailed in parallel).
+  await expect(page).toHaveURL(/\/sign-in\/check-email$/);
   const link = await waitForMagicLink(email);
   await page.goto(link);
   await expect(page).toHaveURL(/\/dashboard$/);

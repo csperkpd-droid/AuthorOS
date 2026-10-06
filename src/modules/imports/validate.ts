@@ -108,6 +108,15 @@ export function validateBundle(b: WorkspaceBundle): string[] {
     if (penOf(a.sceneId) !== penOf(beatOutline.get(a.beatId)!))
       problems.push(`a beat is assigned a scene of another pen name`);
 
+  // ── Tropes: one live trope per name, ignoring case and surrounding spaces ──
+  const tropeNames = new Set<string>();
+  for (const t of b.tropes) {
+    if (t.deletedAt) continue;
+    const key = t.name.trim().toLowerCase();
+    if (tropeNames.has(key)) problems.push(`the trope “${t.name}” is listed twice`);
+    tropeNames.add(key);
+  }
+
   // ── Story Time ──
   for (const e of b.timelineEvents)
     if ((e.bookId ? 1 : 0) + (e.seriesId ? 1 : 0) !== 1)

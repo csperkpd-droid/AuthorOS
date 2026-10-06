@@ -76,6 +76,7 @@ export type ImportOps = {
   templateBeats: TableOps;
   outlines: TableOps;
   timelineEvents: TableOps;
+  tropes: TableOps;
   sceneStoryTimes: TableOps;
   outlineBeats: TableOps;
   beatScenes: Row[];
@@ -202,6 +203,7 @@ export async function planImport(
     exEvents,
     exOutlines,
     exTimelineEvents,
+    exTropes,
   ] = await Promise.all([
     byId(
       chunked(existingIds(b.series), (ids) =>
@@ -269,6 +271,11 @@ export async function planImport(
     byId(
       chunked(existingIds(b.timelineEvents), (ids) =>
         client.timelineEvent.findMany({ where: { workspaceId: ws, id: { in: ids } } }),
+      ),
+    ),
+    byId(
+      chunked(existingIds(b.tropes), (ids) =>
+        client.trope.findMany({ where: { workspaceId: ws, id: { in: ids } } }),
       ),
     ),
   ]);
@@ -413,7 +420,6 @@ export async function planImport(
       description: r.description,
       writingStatus: r.writingStatus,
       targetWordCount: r.targetWordCount,
-      tropes: r.tropes,
       heatLevel: r.heatLevel,
       ...soft(r),
     }),
@@ -776,6 +782,36 @@ export async function planImport(
     }),
     { fixed: ["bookId", "seriesId", "relationshipId", "characterId", "kind"] },
   );
+
+  // ── Tropes: a live trope of the same name here is reused, never doubled ──
+  const liveTropes = new Map(
+    (
+      await client.trope.findMany({
+        where: { workspaceId: ws, deletedAt: null },
+        select: { id: true, name: true },
+      })
+    ).map((t) => [t.name.trim().toLowerCase(), t]),
+  );
+  const matchedTropes: string[] = [];
+  const newTropes = b.tropes.filter((t) => {
+    const here = liveTropes.get(t.name.trim().toLowerCase());
+    if (t.deletedAt || nodeAction.get(t.id) !== "create" || !here) return true;
+    map.set(t.id, here.id);
+    nodeAction.set(t.id, "existing");
+    matchedTropes.push(here.name);
+    count("tropes", "Tropes", "skip");
+    decisions.push(["trope", t.id, "match", here.id]);
+    return false;
+  });
+  if (matchedTropes.length)
+    adjustments.push(
+      `${matchedTropes.length === 1 ? "A trope is" : `${matchedTropes.length} tropes are`} imported into your existing trope${matchedTropes.length === 1 ? "" : "s"} of the same name (${matchedTropes.join(", ")}).`,
+    );
+  nodes("tropes", "Tropes", newTropes, exTropes, (r) => ({
+    name: r.name.trim(),
+    description: r.description,
+    ...soft(r),
+  }));
 
   // ── Story Time: timeline events, then scenes' places ──────────────────────
   nodes(
@@ -1282,6 +1318,7 @@ export async function planImport(
     ...created(ops.calendarEvents.create, "EVENT"),
     ...created(ops.outlines.create, "OUTLINE"),
     ...created(ops.timelineEvents.create, "TIMELINE_EVENT"),
+    ...created(ops.tropes.create, "TROPE"),
   ];
 
   const order = COUNT_ORDER;
@@ -1312,6 +1349,7 @@ const COUNT_ORDER = [
   "beatScenes",
   "timelineEvents",
   "sceneStoryTimes",
+  "tropes",
   "sceneParticipations",
   "connections",
   "templates",
@@ -1360,6 +1398,7 @@ function emptyOps(): ImportOps {
     templateBeats: t(),
     outlines: t(),
     timelineEvents: t(),
+    tropes: t(),
     sceneStoryTimes: t(),
     outlineBeats: t(),
     beatScenes: [],
@@ -1445,6 +1484,7 @@ function nodeTitles(b: WorkspaceBundle) {
     for (const r of rows) titles.set(r.id, r.title);
   for (const p of b.penNames) titles.set(p.id, p.name);
   for (const c of b.characters) titles.set(c.id, c.name);
+  for (const t of b.tropes) titles.set(t.id, t.name);
   const names = new Map(b.characters.map((c) => [c.id, c.name]));
   for (const r of b.relationships)
     titles.set(r.id, `${r.type}: ${r.members.map((m) => names.get(m.characterId)).join(", ")}`);

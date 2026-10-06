@@ -197,6 +197,7 @@ enum StoryNodeKind {
   EVENT
   PEN_NAME
   TIMELINE_EVENT
+  TROPE
 
   @@map("story_node_kind")
 }
@@ -221,6 +222,7 @@ model StoryNode {
   relationship   Relationship?
   note           Note?
   idea           Idea?
+  trope          Trope?
   outline        Outline?
   timelineEvent  TimelineEvent?
   task           Task?
@@ -292,9 +294,8 @@ model Book {
   description     String?
   writingStatus   WritingStatus @default(PLANNING) @map("writing_status")
   targetWordCount Int?          @map("target_word_count")
-  /// Romance metadata (any genre may use tropes).
-  /// TEMPORARY compatibility field: replaced by the Trope object (DECISIONS 92).
-  tropes          String[]      @default([])
+  /// Heat level (romance metadata; any genre may use it). Tropes are Trope
+  /// objects linked by `uses_trope` connections (M13).
   heatLevel       HeatLevel?    @map("heat_level")
   /// Deadline for the current draft (shown on the calendar and dashboard).
   createdAt       DateTime      @default(now()) @map("created_at")
@@ -618,6 +619,27 @@ model Idea {
   @@unique([id, workspaceId])
   @@index([workspaceId])
   @@map("ideas")
+}
+
+/// A trope (decision 110, M13): a shared, reusable story descriptor ("Enemies
+/// to lovers") linked to books, series, relationships and structures by
+/// `uses_trope` connections. Not owned by a pen name. Hand-written
+/// constraint: names unique among live tropes of a workspace, ignoring case
+/// and surrounding spaces (`tropes_unique_live_name`).
+model Trope {
+  id          String    @id @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  name        String
+  description String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  node StoryNode @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+
+  @@unique([id, workspaceId])
+  @@index([workspaceId])
+  @@map("tropes")
 }
 
 // ─── Universal connections ──────────────────────────────────────────────────

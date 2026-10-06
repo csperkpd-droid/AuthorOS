@@ -50,6 +50,14 @@ export const CONNECTION_KINDS = {
     to: ["SCENE"],
     hint: "A scene where this relationship changes.",
   },
+  uses_trope: {
+    label: "Tropes",
+    inverseLabel: "Used in",
+    directed: true,
+    from: ["BOOK", "SERIES", "RELATIONSHIP", "OUTLINE"],
+    to: ["TROPE"],
+    hint: "A trope this book, series, relationship or structure uses.",
+  },
   about: {
     label: "About",
     inverseLabel: "Notes",

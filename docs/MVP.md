@@ -31,6 +31,15 @@ the suggestion boundary).
 | Pen-name branding, links, publishing accounts | v1.1  | Pen names, archive, assignment and identity switching shipped in M1. |
 | More import sources (Scrivener, Plottr, DOCX) | Later | Import Engine (M6): a source parser produces a Workspace Bundle.     |
 
+## Milestone 13 checklist (Tropes)
+
+- [x] `TROPE` story object (shared, story-bible area): registry, adapter, Trash, restore, delete forever with review, search, integrity test and audit
+- [x] `uses_trope` connection kind: books, series, relationships and structures → tropes; other kinds refused
+- [x] Names unique among live tropes ignoring case and spaces; an existing name is reused; restoring a trope whose name is taken is refused
+- [x] Tropes page and trope page (description with history, "Used in"); chip pickers on books and series with search, new tropes and common suggestions
+- [x] `books.tropes` migrated into tropes and links (trimmed, merged ignoring case, blanks dropped), then dropped; migration test
+- [x] Export format 6 with upgrades from older files; imports reuse existing tropes of the same name
+
 ## Milestone 12 checklist (Story Time)
 
 - [x] A scene is a single point in Story Time (`scene_story_times`), ordered with `lib/ordering` positions; not placed until the author places it
@@ -134,7 +143,7 @@ the suggestion boundary).
 - [x] Notes version history: checkpoints, named versions, preview, restore (shared `history` module)
 - [x] Characters belong to a pen name (and optionally a series); "Writing as" filters characters, relationships, structures and pickers; no links across identities
 - [x] Custom fields: definitions per kind (optionally per pen name), values per object; on characters
-- [x] Books: tropes (with suggestions) and heat level
+- [x] Books: tropes (with suggestions) and heat level (tropes are Trope objects since M13)
 - [x] Tests: integration tests for structure, identity rules, history and fields; end-to-end structure, history, identity and custom-field flows
 
 ## Milestone 2 checklist

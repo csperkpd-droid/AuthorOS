@@ -827,7 +827,7 @@ Published", "Paperback: Published", "Hardcover: In production",
 book field "Publication status" = "Published" so the fact is kept until
 editions exist.
 
-### 92. Tropes will be a reusable object — Accepted (M8, not built)
+### 92. Tropes will be a reusable object — Accepted (M8, built in M13: decision 110)
 
 Tropes are not permanently plain text. A future `TROPE` kind (a controlled
 common list plus custom tropes) connects to books, series, romance arcs and
@@ -998,6 +998,36 @@ cookie the page can set), stops all saving, and tells the author the
 writing is only on this device; the server ends the session on the next
 request (`/sign-out`). Nothing is uploaded on the way out and nothing is
 deleted.
+
+## Milestone 13 (Tropes)
+
+### 110. Tropes are shared story objects linked by `uses_trope` — Accepted (M13)
+
+Decision 92 is built. A **Trope** (`TROPE`, story-bible area) is a shared
+workspace object (not owned by a pen name): a name and an optional
+description. Locked decisions:
+
+- **Links** use Universal Connections, one kind `uses_trope`: Book, Series,
+  Relationship or Structure (any structure, not only romance arcs) → Trope.
+  No dedicated link table and no romance-specific relationship.
+- **Names** are unique among live tropes of a workspace, ignoring case and
+  surrounding spaces (partial unique index on `lower(btrim(name))`).
+  Creating a duplicate returns the existing live trope; no fuzzy matching,
+  aliases or merging. Restoring a trope whose name is now taken is refused.
+- **The common list** is static suggestions in code; choosing one creates
+  the workspace's trope. Nothing is seeded.
+- **Permissions:** creating, editing, linking, trashing and restoring need
+  story-bible edit rights; delete forever follows the existing rule.
+- **Author-stated:** never inferred, detected or assigned from text.
+- **History:** the description has field history. Names (titles) have no
+  history in the existing model (no story object keeps title history), so
+  none is added for tropes.
+- **Migration:** `books.tropes` became tropes and links (trimmed, case
+  duplicates merged into one trope per workspace, blanks discarded), then
+  the column was dropped; it is no longer a second source of truth.
+- **Portability:** export format 6 (`tropes`, `uses_trope` connections, no
+  `books.tropes`); older files upgrade, and imports reuse a workspace's
+  live trope of the same name.
 
 ## Milestone 12 (Story Time)
 

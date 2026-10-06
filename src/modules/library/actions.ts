@@ -85,7 +85,6 @@ export async function updateBookAction(id: string, formData: FormData) {
       description: field(formData, "description"),
       writingStatus: field(formData, "writingStatus") as BookInput["writingStatus"],
       targetWordCount: field(formData, "targetWordCount"),
-      ...(formData.has("tropes") && { tropes: field(formData, "tropes") }),
       ...(formData.has("heatLevel") && {
         heatLevel: field(formData, "heatLevel") as BookInput["heatLevel"],
       }),

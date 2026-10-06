@@ -168,15 +168,14 @@ the mechanisms. "Not built" marks designed parts with no code yet.
 - **Beats and Beat Assignments (decision 90).** The beat (definition) is
   separate from where it happens, so one scene can satisfy several
   structures without duplication.
-- **Tropes become a reusable object (decision 92)**: a common list plus
-  custom tropes.
 
 ### Temporary compatibility architecture
 
-`books.tropes` (plain text) and the "Publication status" book field
-(created by the M8 migration) are stopgaps until the Trope object and the
-Edition/Publishing systems replace them. They are kept for display,
-search, export and import only; new features must not build on them.
+The "Publication status" book field (created by the M8 migration) is a
+stopgap until the Edition/Publishing systems replace it. It is kept for
+display, search, export and import only; new features must not build on
+it. (`books.tropes`, the other stopgap, was replaced by Trope objects in
+M13 and removed.)
 
 ## System overview
 
@@ -476,6 +475,28 @@ Trash lists the topmost trashed item of each branch; restoring brings back
 its contents (except things trashed separately). "Delete forever" removes
 the item, its descendants and their revisions.
 
+## Tropes (M13)
+
+A trope (decision 110) is a shared story object (`TROPE`, story-bible
+area, not owned by a pen name): a name and an optional description. Books,
+series, relationships and structures use tropes through `uses_trope`
+Universal Connections, the only link store. Names are unique among a
+workspace's live tropes, ignoring case and surrounding spaces; asking for
+an existing name gives the existing trope (no fuzzy matching, aliases or
+merging). The common list (`tropes/suggestions.ts`) is suggestions in code;
+choosing one creates the author's trope. Tropes are always the author's
+statement, never inferred from text.
+
+**Actions:** `createTrope`, `updateTrope` (stale forms refused; description
+history), `trashTrope`, `restoreTrope` (refused while the name is taken),
+`deleteTropeForever` (the reviewed Trash path, Red), `addTrope` (by trope
+or by name), `removeTrope` — story-bible edit rights; delete forever needs
+workspace management, as for every object. **Reads:** `listTropes`,
+`getTrope` ("Used in" through the read funnel: nothing hidden is named),
+`tropesOf`. Books and series have a chip picker; relationships and
+structures use the Connect panel. Names have no history (no story object
+keeps title history); descriptions do.
+
 ## Story Time (M12)
 
 The story's own chronology (decision 109), separate from reading order (the
@@ -687,7 +708,7 @@ would close it. Revisit them when the related feature is built.
 | Browser storage unavailable or cleared   | Only unsynced text is at risk; the status says when this device can't keep a copy ("unavailable"), and cloud autosave still runs.   | The offline-first sync architecture (persistent storage request, sync queue).                   |
 | Gradual deletion across many saves       | Each small save is below the large-edit threshold; 10-minute checkpoints and named versions still capture earlier text.             | A cumulative-removal check against the last snapshot.                                           |
 | Unlimited history retention              | Text history is small next to its value; nothing is pruned, so nothing is lost.                                                     | A retention rule (thinning old autosave checkpoints, never named versions) with storage limits. |
-| Temporary trope and publication fields   | Compatibility stopgaps, marked temporary (decisions 91–92); nothing new may build on them.                                          | The Trope object and the Edition/Publishing systems, which migrate and remove them.             |
+| Temporary publication field              | A compatibility stopgap, marked temporary (decision 91); nothing new may build on it. (Tropes: closed in M13, decision 110.)        | The Edition/Publishing systems, which migrate and remove it.                                    |
 | Few Yellow Change Impact suggestions     | The mechanism is general (report groups with `level: "suggested"`); two suggestions exist.                                          | Adding suggestions to other reports as features need them.                                      |
 
 ## Story Graph and Universal Connections
@@ -732,13 +753,14 @@ an optional single-choice attribute. Characters in scenes are not a
 connection kind: they are Scene Participation (M11). The service validates every
 connection against it; the UI builds the "Connect" picker from it.
 
-| Kind          | From → To              | Reads as                           | Attribute |
-| ------------- | ---------------------- | ---------------------------------- | --------- |
-| `develops_in` | Relationship → Scene   | Develops in / Relationship moments |           |
-| `about`       | Note → any             | About / Notes                      |           |
-| `inspired`    | Idea → any             | Inspired / Inspired by             |           |
-| `concerns`    | Task/Event → any       | Concerns / Tasks & dates           |           |
-| `related`     | any ↔ any (undirected) | Related to                         |           |
+| Kind          | From → To                                  | Reads as                           | Attribute |
+| ------------- | ------------------------------------------ | ---------------------------------- | --------- |
+| `develops_in` | Relationship → Scene                       | Develops in / Relationship moments |           |
+| `about`       | Note → any                                 | About / Notes                      |           |
+| `inspired`    | Idea → any                                 | Inspired / Inspired by             |           |
+| `concerns`    | Task/Event → any                           | Concerns / Tasks & dates           |           |
+| `uses_trope`  | Book/Series/Relationship/Structure → Trope | Tropes / Used in                   |           |
+| `related`     | any ↔ any (undirected)                     | Related to                         |           |
 
 **Resolution.** `story-graph/resolve.ts` turns node ids into summaries
 (kind, title, context, link) with the registry's adapter per kind, each

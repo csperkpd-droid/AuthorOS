@@ -41,9 +41,11 @@ export const EXPORT_FORMAT = "authoros.workspace";
  * (`sceneParticipations`: presence and point of view), no longer
  * `appears_in` connections.
  * Version 5 (M12): Story Time (`timelineEvents`, `sceneStoryTimes`).
+ * Version 6 (M13): tropes are objects (`tropes`) linked by `uses_trope`
+ * connections; books no longer have `tropes`.
  * The importer upgrades older files.
  */
-export const EXPORT_VERSION = 5;
+export const EXPORT_VERSION = 6;
 
 /**
  * "standard": the backup (all story data, no version history).
@@ -92,12 +94,13 @@ export async function exportWorkspaceJson(
   const timelineEvents = await db.timelineEvent.findMany({
     where: { workspaceId: ws, OR: [{ bookId: { in: bookIds } }, { seriesId: { in: seriesIds } }] },
   });
-  const [outlineBeats, notes, ideas, tasks, events] = await Promise.all([
+  const [outlineBeats, notes, ideas, tasks, events, tropes] = await Promise.all([
     db.outlineBeat.findMany({ where: { outlineId: { in: outlineIds } } }),
     db.note.findMany({ where: { workspaceId: ws } }),
     db.idea.findMany({ where: { workspaceId: ws } }),
     db.task.findMany({ where: { workspaceId: ws } }),
     db.calendarEvent.findMany({ where: { workspaceId: ws } }),
+    db.trope.findMany({ where: { workspaceId: ws } }),
   ]);
 
   // Identity objects in scope, then shared objects unless linked only elsewhere.
@@ -115,7 +118,7 @@ export async function exportWorkspaceJson(
   ]);
   // A date that belongs to an object (a deadline) goes where its object goes.
   const ownEvents = events.filter((e) => !e.subjectId);
-  const sharedIds = [...notes, ...ideas, ...tasks, ...ownEvents].map((x) => x.id);
+  const sharedIds = [...notes, ...ideas, ...tasks, ...ownEvents, ...tropes].map((x) => x.id);
   const allConnections = await db.connection.findMany({ where: { workspaceId: ws } });
   let included = new Set<string>([...identityIds, ...sharedIds]);
   const datesOf = (set: Set<string>) =>
@@ -241,6 +244,7 @@ export async function exportWorkspaceJson(
     ideas: ideas.filter((i) => has(i.id)),
     tasks: tasks.filter((t) => has(t.id)),
     calendarEvents: events.filter((e) => has(e.id)),
+    tropes: tropes.filter((t) => has(t.id)),
     connections,
     outlines,
     outlineBeats,
@@ -288,6 +292,7 @@ export type IntegrityInput = {
   ideas: Id[];
   tasks: Id[];
   calendarEvents: (Id & { subjectId?: Ref })[];
+  tropes: Id[];
   connections: { sourceId: string; targetId: string }[];
   outlines: (Id & {
     bookId: Ref;

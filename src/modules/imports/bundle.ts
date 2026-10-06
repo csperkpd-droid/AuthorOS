@@ -116,6 +116,7 @@ const book = z.object({
   /** Version 1–2 files only: the old status, publication included (see upgrade.ts). */
   status: z.string().max(40).optional(),
   targetWordCount: optInt(0, 10_000_000),
+  /** Before version 6 only: book tropes as text (upgraded into Trope objects). */
   tropes: z.array(str(200)).max(100).optional().default([]),
   heatLevel: z
     .enum(HeatLevel)
@@ -290,6 +291,14 @@ const timelineEvent = z.object({
   ...softDeleted,
 });
 
+/** A trope (version 6): shared, linked by `uses_trope` connections. */
+const trope = z.object({
+  id,
+  name: title(200),
+  description: optStr(20_000),
+  ...softDeleted,
+});
+
 /** A scene's place in Story Time (version 5). */
 const sceneStoryTime = z.object({
   sceneId: id,
@@ -406,7 +415,7 @@ const fieldRevision = z.object({
 
 export const workspaceBundle = z.object({
   /** Format version of the file (upgraded to the current one after parsing). */
-  version: z.number().int().min(1).max(5),
+  version: z.number().int().min(1).max(6),
   /** "standard" backups have no version history; "archive" ones do. */
   kind: z.enum(["standard", "archive"]).optional().default("standard"),
   exportedAt: optDate,
@@ -441,6 +450,7 @@ export const workspaceBundle = z.object({
   beatScenes: list(beatScene, 1_000_000),
   sceneParticipations: list(sceneParticipation, 1_000_000),
   timelineEvents: list(timelineEvent),
+  tropes: list(trope),
   sceneStoryTimes: list(sceneStoryTime, 1_000_000),
   structureTemplates: list(structureTemplate, 10_000),
   builtInTemplates: list(builtInTemplate, 10_000),

@@ -41,18 +41,6 @@ export const bookInput = z.object({
       .nullable(),
   ),
   penNameId: z.uuid().optional(),
-  /** Comma-separated in forms. */
-  tropes: z
-    .union([z.string(), z.array(z.string())])
-    .optional()
-    .transform((v) =>
-      v === undefined
-        ? undefined
-        : (Array.isArray(v) ? v : v.split(","))
-            .map((t) => t.trim())
-            .filter(Boolean)
-            .slice(0, 30),
-    ),
   heatLevel: z.preprocess((v) => (v === "" ? null : v), z.enum(HeatLevel).nullish()),
 });
 export type BookInput = z.input<typeof bookInput>;

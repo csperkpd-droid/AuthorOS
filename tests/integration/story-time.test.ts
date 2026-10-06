@@ -434,12 +434,12 @@ describe("Story Time: characters, access, Trash", () => {
 });
 
 describe("Story Time: backups", () => {
-  it("exports format 5 and restores the same timeline; older files import without it", async () => {
+  it("exports the current format and restores the same timeline; older files import without it", async () => {
     await placeSceneInTime(ctx, s2, { afterId: null, label: "Ten years earlier" });
     await placeSceneInTime(ctx, s1, { afterId: s2 });
     await createTimelineEvent(ctx, { ownerId: bookId, title: "Wreck", afterId: s2 });
     const { data } = await exportWorkspaceJson(ctx, { scope: { kind: "all" } });
-    expect(data.version).toBe(5);
+    expect(data.version).toBe(6);
     const expected = await storyOrder();
 
     const v4 = { ...data, version: 4, timelineEvents: undefined, sceneStoryTimes: undefined };

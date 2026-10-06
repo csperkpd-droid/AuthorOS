@@ -17,6 +17,7 @@ export function upgradeBundle(bundle: WorkspaceBundle): WorkspaceBundle {
   if (b.version < 4) b = toVersion4(b);
   // Version 5 (M12) only added Story Time (`timelineEvents`, `sceneStoryTimes`).
   if (b.version < 5) b = { ...b, version: 5 };
+  if (b.version < 6) b = toVersion6(b);
   return b;
 }
 
@@ -137,6 +138,70 @@ function toVersion4(b: WorkspaceBundle): WorkspaceBundle {
         isPov: c.attributes.role === "POV",
         createdAt: c.createdAt,
         updatedAt: c.updatedAt,
+      })),
+    ],
+  };
+}
+
+/**
+ * Version 6 (M13): book tropes are Trope objects linked by `uses_trope`
+ * connections, as the database migration did: trimmed, blanks dropped,
+ * values equal ignoring case are one trope (named by the most used
+ * spelling), and every book keeps each of its tropes.
+ */
+function toVersion6(b: WorkspaceBundle): WorkspaceBundle {
+  const spellings = new Map<string, Map<string, number>>();
+  const uses: { bookId: string; key: string; at: Date }[] = [];
+  for (const book of b.books) {
+    const keys = new Set<string>();
+    for (const raw of book.tropes ?? []) {
+      const name = raw.trim();
+      if (!name) continue;
+      const key = name.toLowerCase();
+      const counts = spellings.get(key) ?? new Map<string, number>();
+      counts.set(name, (counts.get(name) ?? 0) + 1);
+      spellings.set(key, counts);
+      if (!keys.has(key)) uses.push({ bookId: book.id, key, at: book.updatedAt });
+      keys.add(key);
+    }
+  }
+  // Ids from the file's own ids: the first book using each trope.
+  const idOf = new Map(
+    [...spellings.keys()].map((key) => [
+      key,
+      derivedId(`${uses.find((u) => u.key === key)!.bookId}:trope:${key}`),
+    ]),
+  );
+  const tropes = [...spellings].map(([key, counts]) => {
+    const [name] = [...counts].sort((x, y) => y[1] - x[1] || (x[0] < y[0] ? -1 : 1))[0];
+    const at = uses.find((u) => u.key === key)!.at;
+    return {
+      id: idOf.get(key)!,
+      name: name.slice(0, 200),
+      description: null,
+      createdAt: at,
+      updatedAt: at,
+      deletedAt: null,
+    };
+  });
+  return {
+    ...b,
+    version: 6,
+    books: b.books.map((book) => ({ ...book, tropes: [] })),
+    storyNodes: [...b.storyNodes, ...tropes.map((t) => ({ id: t.id, kind: "TROPE" as const }))],
+    tropes: [...b.tropes, ...tropes],
+    connections: [
+      ...b.connections,
+      ...uses.map((u) => ({
+        id: derivedId(`${u.bookId}:uses_trope:${u.key}`),
+        sourceId: u.bookId,
+        targetId: idOf.get(u.key)!,
+        kind: "uses_trope",
+        label: null,
+        note: null,
+        attributes: {},
+        createdAt: u.at,
+        updatedAt: u.at,
       })),
     ],
   };

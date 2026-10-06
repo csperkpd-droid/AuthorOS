@@ -24,6 +24,7 @@ import * as structure from "@/modules/structure";
 import * as tasks from "@/modules/tasks";
 import * as timeline from "@/modules/timeline";
 import * as trash from "@/modules/trash";
+import * as tropes from "@/modules/tropes";
 import * as workContext from "@/modules/work-context";
 import * as workspaces from "@/modules/workspaces";
 import type { AuthorContext } from "@/server/context";
@@ -59,6 +60,7 @@ const MODULES = {
   tasks,
   timeline,
   trash,
+  tropes,
   workContext,
   workspaces,
 } as Record<string, Record<string, unknown>>;

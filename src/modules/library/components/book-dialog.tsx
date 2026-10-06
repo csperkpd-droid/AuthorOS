@@ -15,7 +15,7 @@ import { useAction } from "@/hooks/use-action";
 import { ImpactReview, type ImpactReport } from "@/modules/impact/ui";
 
 import { createBookAction, previewBookSeriesAction, updateBookAction } from "../actions";
-import { WRITING_STATUS_LABELS, HEAT_LEVEL_LABELS, TROPE_SUGGESTIONS } from "../labels";
+import { WRITING_STATUS_LABELS, HEAT_LEVEL_LABELS } from "../labels";
 
 type Option = { id: string; name: string };
 type SeriesOption = { id: string; title: string; penName: { id: string; name: string } };
@@ -27,7 +27,6 @@ export type EditableBook = {
   description: string | null;
   writingStatus: WritingStatus;
   targetWordCount: number | null;
-  tropes: string[];
   heatLevel: HeatLevel | null;
   /** The book's deadline ("YYYY-MM-DD"), a calendar entry about the book. */
   dueOn: string | null;
@@ -227,14 +226,7 @@ export function BookDialog({
                   rows={4}
                 />
               </Field>
-              <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
-                <Field
-                  label="Tropes"
-                  htmlFor={`${id}-tropes`}
-                  hint="Separated by commas, e.g. enemies to lovers, slow burn."
-                >
-                  <TropesInput id={`${id}-tropes`} initial={book.tropes} />
-                </Field>
+              <div className="grid gap-4 sm:grid-cols-[12rem]">
                 <Field label="Heat level" htmlFor={`${id}-heat`}>
                   <Select id={`${id}-heat`} name="heatLevel" defaultValue={book.heatLevel ?? ""}>
                     <option value="">Not set</option>
@@ -261,34 +253,5 @@ export function BookDialog({
         </form>
       </DialogContent>
     </Dialog>
-  );
-}
-
-/** Comma-separated tropes, with common ones a tap away. */
-function TropesInput({ id, initial }: { id: string; initial: string[] }) {
-  const [value, setValue] = useState(initial.join(", "));
-  const current = value
-    .split(",")
-    .map((t) => t.trim().toLowerCase())
-    .filter(Boolean);
-  const suggestions = TROPE_SUGGESTIONS.filter((t) => !current.includes(t.toLowerCase()));
-  return (
-    <>
-      <Input id={id} name="tropes" value={value} onChange={(e) => setValue(e.target.value)} />
-      {suggestions.length > 0 && (
-        <div className="mt-2 flex flex-wrap gap-1.5">
-          {suggestions.slice(0, 6).map((t) => (
-            <button
-              key={t}
-              type="button"
-              onClick={() => setValue((v) => (v.trim() ? `${v.replace(/,\s*$/, "")}, ${t}` : t))}
-              className="rounded-full border border-dashed border-border px-2 py-0.5 text-xs text-muted-foreground hover:bg-muted"
-            >
-              + {t}
-            </button>
-          ))}
-        </div>
-      )}
-    </>
   );
 }

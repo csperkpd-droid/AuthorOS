@@ -191,6 +191,15 @@ async function deletionSet(ctx: AuthorContext, roots: { kind: StoryNodeKind; id:
     }),
   );
   add(
+    "TROPE",
+    (
+      await db.trope.findMany({
+        where: { workspaceId: ws, id: { in: byKind("TROPE") } },
+        select: { id: true, name: true },
+      })
+    ).map((t) => ({ id: t.id, title: t.name })),
+  );
+  add(
     "TIMELINE_EVENT",
     await db.timelineEvent.findMany({
       where: {

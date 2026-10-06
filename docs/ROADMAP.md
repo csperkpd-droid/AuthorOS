@@ -19,7 +19,8 @@ Scope details: [MVP.md](MVP.md). Schema: [DATABASE.md](DATABASE.md).
 | 9   | Access Boundary: permission-aware reads, account-owned device drafts, sign-out warning, architecture baseline in the repository                            | ✅ Complete                     |
 | 10  | Work Context: Back, Return to Work and Continue Writing, with version-aware positions                                                                      | ✅ Complete                     |
 | 11  | Scene Participation: point of view, present and mentioned characters as a dedicated relationship                                                           | ✅ Complete                     |
-| 12  | Story Time: scenes and timeline events in story order, per book or series, apart from reading order and real-world time                                    | ✅ Complete (awaiting approval) |
+| 12  | Story Time: scenes and timeline events in story order, per book or series, apart from reading order and real-world time                                    | ✅ Complete                     |
+| 13  | Tropes: shared, reusable trope objects for books, series, relationships and structures (replacing the book trope text)                                     | ✅ Complete (awaiting approval) |
 
 **Why this order:** the editor and binder are used every day, so they come
 first. The story bible needs scenes to link to. Structure maps onto scenes

@@ -33,7 +33,6 @@ const bookCardSelect = {
   subtitle: true,
   writingStatus: true,
   targetWordCount: true,
-  tropes: true,
   heatLevel: true,
   seriesId: true,
   seriesPosition: true,
@@ -331,7 +330,6 @@ export async function updateBook(
         description: data.description ?? null,
         writingStatus: data.writingStatus,
         targetWordCount: data.targetWordCount,
-        ...(data.tropes !== undefined && { tropes: data.tropes }),
         ...(data.heatLevel !== undefined && { heatLevel: data.heatLevel }),
       },
     });

@@ -38,6 +38,8 @@ export const liveNote = { deletedAt: null } satisfies Prisma.NoteWhereInput;
 
 export const liveIdea = { deletedAt: null } satisfies Prisma.IdeaWhereInput;
 
+export const liveTrope = { deletedAt: null } satisfies Prisma.TropeWhereInput;
+
 export const liveTask = { deletedAt: null } satisfies Prisma.TaskWhereInput;
 
 /**

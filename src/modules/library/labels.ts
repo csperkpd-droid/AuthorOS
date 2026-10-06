@@ -18,16 +18,3 @@ export const HEAT_LEVEL_LABELS: Record<HeatLevel, string> = {
   OPEN_DOOR: "Open door",
   EXPLICIT: "Explicit",
 };
-
-export const TROPE_SUGGESTIONS = [
-  "Enemies to lovers",
-  "Friends to lovers",
-  "Second chance",
-  "Fake relationship",
-  "Forced proximity",
-  "Grumpy/sunshine",
-  "Only one bed",
-  "Slow burn",
-  "Small town",
-  "Forbidden love",
-];

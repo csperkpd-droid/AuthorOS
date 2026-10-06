@@ -1,6 +1,7 @@
 import "server-only";
 
 import type { Prisma, StoryNodeKind } from "@/generated/prisma/client";
+import { RuleError } from "@/lib/errors";
 import { db } from "@/lib/db";
 import type { AuthorContext } from "@/server/context";
 
@@ -19,6 +20,7 @@ import {
   liveSeries,
   liveTask,
   liveTimelineEvent,
+  liveTrope,
 } from "./visibility";
 
 /**
@@ -778,6 +780,61 @@ export const KIND_ADAPTERS = {
         restore: async (id) => void (await db.timelineEvent.update({ where: { id }, ...restore })),
       } satisfies TrashAdapter;
     })(),
+  },
+  TROPE: {
+    async load(ctx, { ids, query, take }) {
+      const rows = await db.trope.findMany({
+        where: { ...scope(ctx, ids), ...liveTrope, name: contains(query) },
+        select: { id: true, name: true },
+        ...page(take),
+      });
+      return rows.map((r) => ({
+        id: r.id,
+        kind: "TROPE" as const,
+        title: r.name,
+        context: null,
+        href: `/tropes/${r.id}`,
+        penNameId: null,
+        seriesId: null,
+      }));
+    },
+    trash: {
+      async list(ctx) {
+        const rows = await db.trope.findMany({
+          where: trashed(ctx),
+          select: { id: true, deletedAt: true, name: true },
+        });
+        return rows.map((r) => ({
+          id: r.id,
+          title: r.name,
+          context: null,
+          deletedAt: trashedAt(r),
+        }));
+      },
+      isListed: async (ctx, id) =>
+        Boolean(await db.trope.findFirst({ where: { ...trashed(ctx), id }, select: { id: true } })),
+      // Names are unique among live tropes: a trope whose name was taken
+      // meanwhile stays in the Trash (rename the other one first).
+      async restore(id) {
+        const trope = await db.trope.findUniqueOrThrow({
+          where: { id },
+          select: { workspaceId: true, name: true },
+        });
+        const taken = await db.trope.findFirst({
+          where: {
+            workspaceId: trope.workspaceId,
+            deletedAt: null,
+            name: { equals: trope.name.trim(), mode: "insensitive" },
+          },
+          select: { name: true },
+        });
+        if (taken)
+          throw new RuleError(
+            `There is already a trope called “${taken.name}”. Rename it first, then restore this one.`,
+          );
+        await db.trope.update({ where: { id }, ...restore });
+      },
+    },
   },
 } satisfies Record<StoryNodeKind, KindAdapter>;
 

@@ -140,6 +140,8 @@ export async function applyPlan(tx: Tx, ctx: AuthorContext, ops: ImportOps) {
   await update(ops.outlineBeats, ({ id, data }) => tx.outlineBeat.update({ where: { id }, data }));
   await insert(ops.beatScenes, (data) => tx.beatScene.createMany({ data }));
 
+  await insert(ops.tropes.create, (data) => tx.trope.createMany({ data }));
+  await update(ops.tropes, ({ id, data }) => tx.trope.update({ where: { id }, data }));
   await insert(ops.timelineEvents.create, (data) => tx.timelineEvent.createMany({ data }));
   await update(ops.timelineEvents, ({ id, data }) =>
     tx.timelineEvent.update({ where: { id }, data }),

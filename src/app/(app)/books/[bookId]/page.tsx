@@ -33,7 +33,10 @@ import {
   OutlineList,
   SaveKitDialog,
 } from "@/modules/structure/ui";
+import { listTropes, tropesOf } from "@/modules/tropes";
+import { TropePicker } from "@/modules/tropes/ui";
 import { requireAuthorContext } from "@/server/context";
+import { can, canView } from "@/server/policy";
 import { orNotFound } from "@/server/not-found";
 
 export async function generateMetadata({
@@ -50,6 +53,10 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
   const found = await orNotFound(getBook(ctx, bookId));
   // The deadline lives on the calendar (one source of truth for dates).
   const book = { ...found, dueOn: (await deadlinesFor(ctx, [bookId])).get(bookId) ?? null };
+  // Tropes are story-bible objects: shown to those who may view the story bible.
+  const [tropes, allTropes] = canView(ctx, "storyBible")
+    ? await Promise.all([tropesOf(ctx, bookId), listTropes(ctx)])
+    : [null, []];
   const [tree, penNames, seriesOptions, connections, outlines, structureOptions, kits] =
     await Promise.all([
       orNotFound(getBookTree(ctx, bookId)),
@@ -170,21 +177,19 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
         </Stat>
       </dl>
       {book.description && <p className="max-w-prose text-muted-foreground">{book.description}</p>}
-      {(book.tropes.length > 0 || book.heatLevel) && (
-        <ul aria-label="Tropes and heat level" className="flex flex-wrap gap-2">
-          {book.heatLevel && (
-            <li>
-              <Badge className="bg-primary/10 text-primary">
-                {HEAT_LEVEL_LABELS[book.heatLevel]}
-              </Badge>
-            </li>
-          )}
-          {book.tropes.map((t) => (
-            <li key={t}>
-              <Badge>{t}</Badge>
-            </li>
-          ))}
-        </ul>
+      {book.heatLevel && (
+        <p>
+          <Badge className="bg-primary/10 text-primary">{HEAT_LEVEL_LABELS[book.heatLevel]}</Badge>
+        </p>
+      )}
+      {tropes && (
+        <TropePicker
+          targetId={book.id}
+          targetTitle={book.title}
+          tropes={tropes}
+          allTropes={allTropes}
+          canEdit={can(ctx, "edit", "storyBible")}
+        />
       )}
 
       <BinderManager bookId={book.id} items={tree.items} />
@@ -232,6 +237,7 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
         nodeKind="BOOK"
         connections={connections}
         heading="Notes & links"
+        hideKinds={["uses_trope"]}
         emptyText="Notes, research, ideas and other links for this book."
         actions={
           <div className="flex flex-wrap gap-2">
