@@ -69,3 +69,9 @@ export const liveOutline = {
     { OR: [{ characterId: null }, { character: liveCharacter }] },
   ],
 } satisfies Prisma.OutlineWhereInput;
+
+/** A timeline event is visible while it and its book (or series) are. */
+export const liveTimelineEvent = {
+  deletedAt: null,
+  OR: [{ book: liveBook }, { series: liveSeries }],
+} satisfies Prisma.TimelineEventWhereInput;

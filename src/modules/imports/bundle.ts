@@ -278,6 +278,27 @@ const outlineBeat = z.object({
 
 const beatScene = z.object({ beatId: id, sceneId: id, createdAt: stamp });
 
+/** Something that happens in the story world (Story Time, version 5). */
+const timelineEvent = z.object({
+  id,
+  bookId: ref,
+  seriesId: ref,
+  title: title(),
+  description: optStr(20_000),
+  label: optStr(200),
+  position,
+  ...softDeleted,
+});
+
+/** A scene's place in Story Time (version 5). */
+const sceneStoryTime = z.object({
+  sceneId: id,
+  position,
+  label: optStr(200),
+  createdAt: stamp,
+  updatedAt: stamp,
+});
+
 /** A character in a scene (Scene Participation, version 4). */
 const sceneParticipation = z.object({
   sceneId: id,
@@ -385,7 +406,7 @@ const fieldRevision = z.object({
 
 export const workspaceBundle = z.object({
   /** Format version of the file (upgraded to the current one after parsing). */
-  version: z.number().int().min(1).max(4),
+  version: z.number().int().min(1).max(5),
   /** "standard" backups have no version history; "archive" ones do. */
   kind: z.enum(["standard", "archive"]).optional().default("standard"),
   exportedAt: optDate,
@@ -419,6 +440,8 @@ export const workspaceBundle = z.object({
   outlineBeats: list(outlineBeat),
   beatScenes: list(beatScene, 1_000_000),
   sceneParticipations: list(sceneParticipation, 1_000_000),
+  timelineEvents: list(timelineEvent),
+  sceneStoryTimes: list(sceneStoryTime, 1_000_000),
   structureTemplates: list(structureTemplate, 10_000),
   builtInTemplates: list(builtInTemplate, 10_000),
   templateKits: list(templateKit, 10_000),

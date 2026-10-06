@@ -371,7 +371,7 @@ describe("Scene Participation: backups", () => {
     await addParticipant(ctx, sceneId, { characterId: charlie, pov: true });
     await addParticipant(ctx, sceneId, { characterId: mara, presence: "MENTIONED" });
     const { data } = await exportWorkspaceJson(ctx, { scope: { kind: "all" } });
-    expect(data.version).toBe(4);
+    expect(data.version).toBe(5);
 
     // The same backup as an older (version 3) file: appearances as connections.
     const v3 = {

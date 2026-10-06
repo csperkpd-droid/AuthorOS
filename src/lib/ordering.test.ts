@@ -1,6 +1,12 @@
 import { describe, expect, it } from "vitest";
 
-import { planInsertAfter, positionAtEnd, sortByPosition, type Positioned } from "./ordering";
+import {
+  planInsertAfter,
+  positionAtEnd,
+  positionsAfter,
+  sortByPosition,
+  type Positioned,
+} from "./ordering";
 
 function apply(siblings: Positioned[], id: string, afterId: string | null) {
   const plan = planInsertAfter(siblings, afterId);
@@ -57,5 +63,15 @@ describe("ordering", () => {
 
   it("rejects an unknown sibling", () => {
     expect(() => planInsertAfter(abc, "missing")).toThrow();
+  });
+});
+
+describe("positionsAfter", () => {
+  it("gives n increasing keys after the last one", () => {
+    const keys = positionsAfter("a5", 3);
+    expect(keys).toHaveLength(3);
+    expect([...keys].sort()).toEqual(keys);
+    expect(keys.every((k) => k > "a5")).toBe(true);
+    expect(positionsAfter(null, 0)).toEqual([]);
   });
 });

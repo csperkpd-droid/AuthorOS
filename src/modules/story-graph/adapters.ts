@@ -18,6 +18,7 @@ import {
   liveScene,
   liveSeries,
   liveTask,
+  liveTimelineEvent,
 } from "./visibility";
 
 /**
@@ -706,6 +707,75 @@ export const KIND_ADAPTERS = {
             }),
           ),
         restore: async (id) => void (await db.calendarEvent.update({ where: { id }, ...restore })),
+      } satisfies TrashAdapter;
+    })(),
+  },
+  TIMELINE_EVENT: {
+    async load(ctx, { ids, query, take, penNameId }) {
+      const rows = await db.timelineEvent.findMany({
+        where: {
+          ...scope(ctx, ids),
+          ...liveTimelineEvent,
+          ...(penNameId
+            ? { AND: [{ OR: [{ book: { penNameId } }, { series: { penNameId } }] }] }
+            : {}),
+          title: contains(query),
+        },
+        select: {
+          id: true,
+          title: true,
+          label: true,
+          seriesId: true,
+          book: bookScope,
+          series: { select: { title: true, penNameId: true } },
+        },
+        ...page(take),
+      });
+      // An event belongs to a book's or a whole series' timeline.
+      return rows.map((r) => ({
+        id: r.id,
+        kind: "TIMELINE_EVENT" as const,
+        title: r.title,
+        context: trail(r.book?.title ?? r.series?.title, r.label),
+        href: `/timeline/events/${r.id}`,
+        penNameId: r.book?.penNameId ?? r.series!.penNameId,
+        seriesId: r.book ? r.book.seriesId : r.seriesId,
+      }));
+    },
+    trash: (() => {
+      // Listed on its own only while its book (or series) is live.
+      const where = (ctx: AuthorContext) =>
+        ({
+          ...trashed(ctx),
+          OR: [{ book: liveBook }, { series: liveSeries }],
+        }) satisfies Prisma.TimelineEventWhereInput;
+      return {
+        async list(ctx) {
+          const rows = await db.timelineEvent.findMany({
+            where: where(ctx),
+            select: {
+              id: true,
+              deletedAt: true,
+              title: true,
+              book: { select: { title: true } },
+              series: { select: { title: true } },
+            },
+          });
+          return rows.map((r) => ({
+            id: r.id,
+            title: r.title,
+            context: r.book?.title ?? r.series?.title ?? null,
+            deletedAt: trashedAt(r),
+          }));
+        },
+        isListed: async (ctx, id) =>
+          Boolean(
+            await db.timelineEvent.findFirst({
+              where: { ...where(ctx), id },
+              select: { id: true },
+            }),
+          ),
+        restore: async (id) => void (await db.timelineEvent.update({ where: { id }, ...restore })),
       } satisfies TrashAdapter;
     })(),
   },

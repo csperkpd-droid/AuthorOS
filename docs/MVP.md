@@ -31,6 +31,17 @@ the suggestion boundary).
 | Pen-name branding, links, publishing accounts | v1.1  | Pen names, archive, assignment and identity switching shipped in M1. |
 | More import sources (Scrivener, Plottr, DOCX) | Later | Import Engine (M6): a source parser produces a Workspace Bundle.     |
 
+## Milestone 12 checklist (Story Time)
+
+- [x] A scene is a single point in Story Time (`scene_story_times`), ordered with `lib/ordering` positions; not placed until the author places it
+- [x] Free-form story-time labels ("Day 3, evening", "Unknown"), never read as dates; no calendar behaviour
+- [x] Timeline events (a new story object) on a book's or series' timeline, with notes, links, history and Trash
+- [x] Timeline page per standalone book or series: story order with reading order beside it, not-placed scenes, drag and Earlier/Later, character filter by part
+- [x] Reading order and Story Time never change each other; manuscript text never changes
+- [x] Moving a book into or out of a series lists its Story Time and needs approval (Red); delete forever reports what goes
+- [x] Story History of every change; manuscript rights for scenes, story-bible rights for events; reads through the Story Graph funnel
+- [x] Export format 5 with import of older files; integrity test and audit cover the new kind
+
 ## Milestone 11 checklist (Scene Participation)
 
 - [x] A dedicated relationship (`scene_participations`): Present or Mentioned, plus point of view; Mentioned never implies Present; POV + Present together

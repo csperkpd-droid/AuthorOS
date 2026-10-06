@@ -41,6 +41,7 @@ model User {
   fieldRevisions FieldRevision[]
   connections    Connection[]
   participations SceneParticipation[]
+  storyTimes     SceneStoryTime[]
   writing        WritingSession[]
 
   @@map("users")
@@ -195,6 +196,7 @@ enum StoryNodeKind {
   TASK
   EVENT
   PEN_NAME
+  TIMELINE_EVENT
 
   @@map("story_node_kind")
 }
@@ -220,6 +222,7 @@ model StoryNode {
   note           Note?
   idea           Idea?
   outline        Outline?
+  timelineEvent  TimelineEvent?
   task           Task?
   event          CalendarEvent?    @relation("EventNode")
   penName        PenName?
@@ -248,12 +251,13 @@ model Series {
   updatedAt   DateTime  @updatedAt @map("updated_at")
   deletedAt   DateTime? @map("deleted_at")
 
-  node       StoryNode         @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  penName    PenName           @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
-  characters Character[]
-  books      Book[]
-  outlines   Outline[]
-  fields     FieldDefinition[]
+  node           StoryNode         @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  penName        PenName           @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
+  characters     Character[]
+  books          Book[]
+  outlines       Outline[]
+  timelineEvents TimelineEvent[]
+  fields         FieldDefinition[]
 
   @@unique([id, workspaceId])
   @@index([workspaceId])
@@ -297,16 +301,17 @@ model Book {
   updatedAt       DateTime      @updatedAt @map("updated_at")
   deletedAt       DateTime?     @map("deleted_at")
 
-  node         StoryNode         @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  penName      PenName           @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
-  series       Series?           @relation(fields: [seriesId], references: [id], onDelete: Cascade)
-  parts        Part[]
-  chapters     Chapter[]
-  scenes       Scene[]
-  outlines     Outline[]
-  plannedBeats OutlineBeat[]
-  fields       FieldDefinition[]
-  writing      WritingSession[]
+  node           StoryNode         @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  penName        PenName           @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
+  series         Series?           @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  parts          Part[]
+  chapters       Chapter[]
+  scenes         Scene[]
+  outlines       Outline[]
+  timelineEvents TimelineEvent[]
+  plannedBeats   OutlineBeat[]
+  fields         FieldDefinition[]
+  writing        WritingSession[]
 
   @@unique([id, workspaceId])
   @@index([workspaceId])
@@ -412,6 +417,7 @@ model Scene {
 
   writingMembers WorkspaceMember[]
   participants   SceneParticipation[]
+  storyTime      SceneStoryTime?
 
   @@unique([id, workspaceId])
   @@index([bookId])
@@ -646,6 +652,57 @@ model Connection {
   @@index([targetId])
   @@index([workspaceId, kind])
   @@map("connections")
+}
+
+// ─── Story Time ─────────────────────────────────────────────────────────────
+
+/// Where a scene happens in the story's own chronology (decision 109, M12):
+/// a single point, as a position in its timeline (its book's, or its
+/// series' when the book is in one; derived, never stored) and a free-form
+/// label ("Day 3, evening"). Never a date. No row = not placed yet.
+model SceneStoryTime {
+  sceneId     String   @id @map("scene_id") @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  /// Fractional position (lib/ordering), COLLATE "C".
+  position    String
+  label       String?
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  scene     Scene @relation(fields: [sceneId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@unique([sceneId, workspaceId])
+  @@index([workspaceId])
+  @@map("scene_story_times")
+}
+
+/// Something that happens in the story world, placed on a timeline with
+/// the scenes (decision 109). Owned by exactly one of a book or a series.
+/// Not a calendar entry.
+model TimelineEvent {
+  id          String    @id @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  bookId      String?   @map("book_id") @db.Uuid
+  seriesId    String?   @map("series_id") @db.Uuid
+  title       String
+  description String?
+  label       String?
+  /// Fractional position (lib/ordering) in its timeline, COLLATE "C".
+  position    String
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  node   StoryNode @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  book   Book?     @relation(fields: [bookId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  series Series?   @relation(fields: [seriesId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+
+  @@unique([id, workspaceId])
+  @@index([bookId])
+  @@index([seriesId])
+  @@map("timeline_events")
 }
 
 // ─── Scene Participation ────────────────────────────────────────────────────

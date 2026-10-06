@@ -40,9 +40,10 @@ export const EXPORT_FORMAT = "authoros.workspace";
  * Version 4 (M11): characters in scenes are Scene Participation
  * (`sceneParticipations`: presence and point of view), no longer
  * `appears_in` connections.
+ * Version 5 (M12): Story Time (`timelineEvents`, `sceneStoryTimes`).
  * The importer upgrades older files.
  */
-export const EXPORT_VERSION = 4;
+export const EXPORT_VERSION = 5;
 
 /**
  * "standard": the backup (all story data, no version history).
@@ -88,6 +89,9 @@ export async function exportWorkspaceJson(
     where: { workspaceId: ws, OR: [{ bookId: { in: bookIds } }, { seriesId: { in: seriesIds } }] },
   });
   const outlineIds = outlines.map((o) => o.id);
+  const timelineEvents = await db.timelineEvent.findMany({
+    where: { workspaceId: ws, OR: [{ bookId: { in: bookIds } }, { seriesId: { in: seriesIds } }] },
+  });
   const [outlineBeats, notes, ideas, tasks, events] = await Promise.all([
     db.outlineBeat.findMany({ where: { outlineId: { in: outlineIds } } }),
     db.note.findMany({ where: { workspaceId: ws } }),
@@ -107,6 +111,7 @@ export async function exportWorkspaceJson(
     ...characterIds,
     ...relationshipIds,
     ...outlineIds,
+    ...timelineEvents.map((e) => e.id),
   ]);
   // A date that belongs to an object (a deadline) goes where its object goes.
   const ownEvents = events.filter((e) => !e.subjectId);
@@ -140,6 +145,7 @@ export async function exportWorkspaceJson(
 
   const [
     beatScenes,
+    sceneStoryTimes,
     participations,
     templates,
     kits,
@@ -149,6 +155,10 @@ export async function exportWorkspaceJson(
     member,
   ] = await Promise.all([
     db.beatScene.findMany({ where: { beat: { outlineId: { in: outlineIds } } } }),
+    db.sceneStoryTime.findMany({
+      where: { workspaceId: ws, sceneId: { in: [...sceneIds] } },
+      select: { sceneId: true, position: true, label: true, createdAt: true, updatedAt: true },
+    }),
     db.sceneParticipation.findMany({
       where: { workspaceId: ws, sceneId: { in: [...sceneIds] } },
       select: {
@@ -236,6 +246,8 @@ export async function exportWorkspaceJson(
     outlineBeats,
     beatScenes: beatScenes.filter((b) => sceneIds.has(b.sceneId)),
     sceneParticipations: participations.filter((p) => characterIds.has(p.characterId)),
+    timelineEvents,
+    sceneStoryTimes,
     // The author's templates in full; built-in ones (seeded with fixed ids in
     // every installation) by reference only.
     structureTemplates: templates.filter((t) => t.workspaceId !== null),
@@ -287,6 +299,8 @@ export type IntegrityInput = {
   outlineBeats: (Id & { outlineId: string; bookId: Ref })[];
   beatScenes: { beatId: string; sceneId: string }[];
   sceneParticipations: { sceneId: string; characterId: string }[];
+  timelineEvents: (Id & { bookId: Ref; seriesId: Ref })[];
+  sceneStoryTimes: { sceneId: string }[];
   structureTemplates: Id[];
   builtInTemplates: Id[];
   templateKits: { items: { templateId: string }[] }[];
@@ -373,6 +387,11 @@ export function checkExportIntegrity(data: IntegrityInput): string[] {
     need("assignment.beat", bs.beatId, beats);
     need("assignment.scene", bs.sceneId, ids(data.scenes));
   }
+  for (const e of data.timelineEvents) {
+    need("timelineEvent.book", e.bookId, books);
+    need("timelineEvent.series", e.seriesId, series);
+  }
+  for (const t of data.sceneStoryTimes) need("storyTime.scene", t.sceneId, ids(data.scenes));
   for (const p of data.sceneParticipations) {
     need("appearance.scene", p.sceneId, ids(data.scenes));
     need("appearance.character", p.characterId, characters);

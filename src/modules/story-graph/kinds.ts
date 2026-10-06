@@ -28,7 +28,7 @@ export type StoryArea = "identity" | "manuscript" | "storyBible" | "structure" |
  * - `column`: its own `pen_name_id`;
  * - `book`: its book's pen name (parts, chapters, scenes);
  * - `members`: its members' (relationships; members share one pen name);
- * - `owner`: its book's or series' (structures);
+ * - `owner`: its book's or series' (structures, timeline events);
  * - `shared`: none; shared by every identity of the workspace.
  */
 export type IdentityRule = "self" | "column" | "book" | "members" | "owner" | "shared";
@@ -47,7 +47,8 @@ export type BundleKey =
   | "ideas"
   | "tasks"
   | "calendarEvents"
-  | "outlines";
+  | "outlines"
+  | "timelineEvents";
 
 export type StoryObjectType = {
   kind: StoryNodeKind;
@@ -317,6 +318,23 @@ const DEFINITIONS = {
     dated: false,
     bundle: "calendarEvents",
     table: "calendar_events",
+  },
+  TIMELINE_EVENT: {
+    label: { one: "Timeline event", many: "Timeline events" },
+    noun: { one: "timeline event", many: "timeline events" },
+    area: "storyBible",
+    identity: "owner",
+    hierarchy: null,
+    structure: { owner: false, placedOnBeats: false },
+    connectable: true,
+    fieldable: false,
+    search: "title",
+    versioned: false,
+    lifecycle: "trash",
+    movesWithIdentity: true,
+    dated: false,
+    bundle: "timelineEvents",
+    table: "timeline_events",
   },
 } as const satisfies Record<StoryNodeKind, Entry>;
 

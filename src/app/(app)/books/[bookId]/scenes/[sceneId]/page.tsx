@@ -15,6 +15,8 @@ import { ConnectionsPanel } from "@/modules/connections/ui";
 import { NewNoteDialog } from "@/modules/notes/ui";
 import { listParticipants } from "@/modules/participation";
 import { SceneParticipants } from "@/modules/participation/ui";
+import { getSceneStoryTime } from "@/modules/timeline";
+import { SceneStoryTime } from "@/modules/timeline/ui";
 import { TaskDialog } from "@/modules/tasks/ui";
 import { beatsForScene } from "@/modules/structure";
 import { SceneBeats } from "@/modules/structure/ui";
@@ -34,12 +36,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ScenePage({ params }: Props) {
   const { bookId, sceneId } = await params;
   const ctx = await requireAuthorContext();
-  const [book, editor, connections, beats, participants] = await Promise.all([
+  const [book, editor, connections, beats, participants, storyTime] = await Promise.all([
     orNotFound(getBook(ctx, bookId)),
     orNotFound(getSceneForEditor(ctx, sceneId)),
     orNotFound(listConnections(ctx, sceneId)),
     beatsForScene(ctx, sceneId),
     orNotFound(listParticipants(ctx, sceneId)),
+    orNotFound(getSceneStoryTime(ctx, sceneId)),
   ]);
   const { scene, tree, previous, next } = editor;
   if (scene.bookId !== bookId) notFound();
@@ -97,6 +100,16 @@ export default async function ScenePage({ params }: Props) {
             presence: p.presence,
             pov: p.pov,
           }))}
+        />
+        <SceneStoryTime
+          sceneId={scene.id}
+          sceneTitle={scene.title}
+          placed={storyTime.placed}
+          label={storyTime.label}
+          order={storyTime.order}
+          timelineHref={storyTime.timeline.owner.href}
+          choices={storyTime.timeline.entries}
+          canEdit={can(ctx, "edit", "manuscript")}
         />
         <SceneEditor
           key={scene.id}

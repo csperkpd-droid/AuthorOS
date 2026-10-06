@@ -109,7 +109,7 @@ the mechanisms. "Not built" marks designed parts with no code yet.
 18. **Story Time ≠ real-world time.** Fictional story time is separate
     from the author's planner time, publication dates and version
     timestamps. The calendar and writing progress are real-world time.
-    Story Time not built.
+    Built (M12, decision 109); see Story Time.
 19. **Asset ≠ File.** An Asset is a meaningful reusable object (a cover, a
     map, a reference image); a File is stored bytes representing it, in
     formats and versions. Not built.
@@ -475,6 +475,43 @@ node; a new versioned kind adds one accessor in `history/versioned.ts`.
 Trash lists the topmost trashed item of each branch; restoring brings back
 its contents (except things trashed separately). "Delete forever" removes
 the item, its descendants and their revisions.
+
+## Story Time (M12)
+
+The story's own chronology (decision 109), separate from reading order (the
+binder) and from real-world time. Owned by the `timeline` module.
+
+| Piece               | What it is                                                                                        |
+| ------------------- | ------------------------------------------------------------------------------------------------- |
+| **Timeline**        | A standalone book's, or its series' when the book is in one. Derived from the book; never stored. |
+| **Scene placement** | `scene_story_times`: one point per scene (position + free-form label). No row = not placed yet.   |
+| **Timeline event**  | `TIMELINE_EVENT`, a story object owned by a book or series, placed on the same timeline.          |
+
+**Order** uses fractional positions (`lib/ordering`); scenes and events of a
+timeline share one ordering space. **Labels** are the author's words ("Day
+3, evening", "Unknown"), never dates: no calendars, arithmetic or ages.
+Nothing is placed automatically or inferred from the text, and nothing in
+Story Time changes reading order or manuscript text (or the reverse).
+
+**Actions:** `placeSceneInTime` (place or move after a scene or event; null
+= first), `setStoryTimeLabel` (refused if the label changed since the
+author saw it), `removeSceneFromTime` — manuscript edit rights, each kept in
+the scene's Story History (field `storyTime`). `createTimelineEvent`,
+`updateTimelineEvent` (description history, stale forms refused),
+`moveTimelineEvent`, `trashTimelineEvent` — story-bible edit rights.
+**Reads:** `listTimelines`, `getTimeline` (story order, the scenes not
+placed yet in reading order, optional character filter through Scene
+Participation), `getSceneStoryTime`, `getTimelineEvent`, all through the
+Story Graph funnel: a manuscript-only reader sees scenes, not events;
+anything in the Trash is left out and comes back where it was.
+
+**Change Impact:** moving a book into or out of a series changes its
+timeline — Red, listed in the series-change review and applied only with
+the author's approval (joining: after the series' items, in their own
+order; leaving: same order, series events stay). Delete forever reports
+"Places in Story Time" and the timeline events that go. The UI is the
+same on desktop and phone: the scene's "Story time" line, and the
+Timeline page (drag on desktop; Earlier / Later and "Place" everywhere).
 
 ## Scene Participation (M11)
 

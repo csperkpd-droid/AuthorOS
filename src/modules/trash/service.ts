@@ -190,6 +190,20 @@ async function deletionSet(ctx: AuthorContext, roots: { kind: StoryNodeKind; id:
       select: { id: true, title: true },
     }),
   );
+  add(
+    "TIMELINE_EVENT",
+    await db.timelineEvent.findMany({
+      where: {
+        workspaceId: ws,
+        OR: [
+          { id: { in: byKind("TIMELINE_EVENT") } },
+          { bookId: { in: ids("BOOK") } },
+          { seriesId: { in: ids("SERIES") } },
+        ],
+      },
+      select: { id: true, title: true },
+    }),
+  );
   for (const [kind, find] of [
     [
       "NOTE",
@@ -245,43 +259,52 @@ async function deletionReport(
   const doomed = await deletionSet(ctx, roots);
   const all = [...doomed.values()].flat().map((r) => r.id);
   const ws = ctx.workspaceId;
-  const [revisions, links, appearances, placements, fieldValues, keptCharacters, scopedFields] =
-    await Promise.all([
-      db.contentRevision.count({ where: { workspaceId: ws, nodeId: { in: all } } }),
-      db.connection.findMany({
-        where: { workspaceId: ws, OR: [{ sourceId: { in: all } }, { targetId: { in: all } }] },
-        select: { id: true, sourceId: true, targetId: true },
-      }),
-      db.sceneParticipation.findMany({
-        where: { workspaceId: ws, OR: [{ sceneId: { in: all } }, { characterId: { in: all } }] },
-        select: { sceneId: true, characterId: true },
-      }),
-      db.beatScene.count({
-        where: {
-          workspaceId: ws,
-          OR: [{ sceneId: { in: all } }, { beat: { outlineId: { in: all } } }],
-        },
-      }),
-      db.nodeFieldValue.count({ where: { workspaceId: ws, nodeId: { in: all } } }),
-      db.character.findMany({
-        where: {
-          workspaceId: ws,
-          seriesId: { in: (doomed.get("SERIES") ?? []).map((s) => s.id) },
-          id: { notIn: all },
-        },
-        select: { id: true, name: true },
-      }),
-      db.fieldDefinition.findMany({
-        where: {
-          workspaceId: ws,
-          OR: [
-            { seriesId: { in: (doomed.get("SERIES") ?? []).map((s) => s.id) } },
-            { bookId: { in: (doomed.get("BOOK") ?? []).map((b) => b.id) } },
-          ],
-        },
-        select: { id: true, label: true, _count: { select: { values: true } } },
-      }),
-    ]);
+  const [
+    revisions,
+    links,
+    appearances,
+    placements,
+    storyTimes,
+    fieldValues,
+    keptCharacters,
+    scopedFields,
+  ] = await Promise.all([
+    db.contentRevision.count({ where: { workspaceId: ws, nodeId: { in: all } } }),
+    db.connection.findMany({
+      where: { workspaceId: ws, OR: [{ sourceId: { in: all } }, { targetId: { in: all } }] },
+      select: { id: true, sourceId: true, targetId: true },
+    }),
+    db.sceneParticipation.findMany({
+      where: { workspaceId: ws, OR: [{ sceneId: { in: all } }, { characterId: { in: all } }] },
+      select: { sceneId: true, characterId: true },
+    }),
+    db.beatScene.count({
+      where: {
+        workspaceId: ws,
+        OR: [{ sceneId: { in: all } }, { beat: { outlineId: { in: all } } }],
+      },
+    }),
+    db.sceneStoryTime.count({ where: { workspaceId: ws, sceneId: { in: all } } }),
+    db.nodeFieldValue.count({ where: { workspaceId: ws, nodeId: { in: all } } }),
+    db.character.findMany({
+      where: {
+        workspaceId: ws,
+        seriesId: { in: (doomed.get("SERIES") ?? []).map((s) => s.id) },
+        id: { notIn: all },
+      },
+      select: { id: true, name: true },
+    }),
+    db.fieldDefinition.findMany({
+      where: {
+        workspaceId: ws,
+        OR: [
+          { seriesId: { in: (doomed.get("SERIES") ?? []).map((s) => s.id) } },
+          { bookId: { in: (doomed.get("BOOK") ?? []).map((b) => b.id) } },
+        ],
+      },
+      select: { id: true, label: true, _count: { select: { values: true } } },
+    }),
+  ]);
   // Links to things that stay: the link goes, the other item stays.
   const doomedSet = new Set(all);
   const onlyAbout = await onlyAboutDoomed(ctx, doomedSet, links);
@@ -337,6 +360,14 @@ async function deletionReport(
           title: n.title,
           href: n.href,
         })),
+      },
+      {
+        key: "STORY_TIME",
+        label: "Places in Story Time",
+        noun: { one: "place in story time", many: "places in story time" },
+        effect: "Removed with their scenes; the rest of the timeline keeps its order",
+        count: storyTimes,
+        items: [],
       },
       {
         key: "PLACEMENTS",

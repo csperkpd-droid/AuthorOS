@@ -19,3 +19,5 @@ export { listFieldHistory, recordFieldHistory, restoreFieldValue } from "./field
 export type { FieldRevisionView, FieldValues } from "./fields";
 export { listParticipationHistory, recordParticipationChange } from "./participation";
 export type { ParticipationChangeView, ParticipationSnapshot } from "./participation";
+export { listStoryTimeHistory, recordStoryTimeChange } from "./story-time";
+export type { StoryTimeChange, StoryTimeChangeView } from "./story-time";

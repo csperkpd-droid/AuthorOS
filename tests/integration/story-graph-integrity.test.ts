@@ -32,6 +32,7 @@ import { createOutline, trashOutline } from "@/modules/structure";
 import { createTask, trashTask } from "@/modules/tasks";
 import { deleteForever, listTrash, previewDeleteForever, restoreFromTrash } from "@/modules/trash";
 import { addParticipant } from "@/modules/participation";
+import { createTimelineEvent, placeSceneInTime, trashTimelineEvent } from "@/modules/timeline";
 import type { AuthorContext } from "@/server/context";
 
 import { createAuthor, resetDatabase } from "../support/db";
@@ -79,6 +80,8 @@ async function world(): Promise<World> {
   const idea = await createIdea(ctx, { title: "Idea Tidewater" });
   const task = await createTask(ctx, { title: "Task Outline revisions" });
   const event = await createEvent(ctx, { title: "Event Writers retreat", startsOn: "2027-01-10" });
+  const happening = await createTimelineEvent(ctx, { ownerId: series.id, title: "Shipwreck" });
+  await placeSceneInTime(ctx, scene.id, { afterId: happening.id, label: "Day 1" });
   return {
     PEN_NAME: { id: pen.id, title: "Rose Hart" },
     SERIES: { id: series.id, title: "Crown of Ash" },
@@ -93,6 +96,7 @@ async function world(): Promise<World> {
     IDEA: { id: idea.id, title: "Idea Tidewater" },
     TASK: { id: task.id, title: "Task Outline revisions" },
     EVENT: { id: event.id, title: "Event Writers retreat" },
+    TIMELINE_EVENT: { id: happening.id, title: "Shipwreck" },
   };
 }
 
@@ -110,6 +114,7 @@ const TRASH: Record<StoryNodeKind, ((ctx: AuthorContext, id: string) => Promise<
   IDEA: trashIdea,
   TASK: trashTask,
   EVENT: trashEvent,
+  TIMELINE_EVENT: trashTimelineEvent,
 };
 
 describe("Story Graph integrity, for every kind in the registry", () => {

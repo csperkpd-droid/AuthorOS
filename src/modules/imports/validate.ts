@@ -108,6 +108,16 @@ export function validateBundle(b: WorkspaceBundle): string[] {
     if (penOf(a.sceneId) !== penOf(beatOutline.get(a.beatId)!))
       problems.push(`a beat is assigned a scene of another pen name`);
 
+  // ── Story Time ──
+  for (const e of b.timelineEvents)
+    if ((e.bookId ? 1 : 0) + (e.seriesId ? 1 : 0) !== 1)
+      problems.push(`timeline event “${e.title}” needs exactly one book or series`);
+  const placed = new Set<string>();
+  for (const t of b.sceneStoryTimes) {
+    if (placed.has(t.sceneId)) problems.push(`scene ${t.sceneId} is placed in story time twice`);
+    placed.add(t.sceneId);
+  }
+
   // ── Connections ──
   const pairs = new Set<string>();
   const pov = new Set<string>();
@@ -229,7 +239,7 @@ export function penLookup(b: WorkspaceBundle): (id: string) => string | null {
     const p = r.members.length ? pen.get(r.members[0].characterId) : undefined;
     if (p) pen.set(r.id, p);
   }
-  for (const o of b.outlines) {
+  for (const o of [...b.outlines, ...b.timelineEvents]) {
     const p = pen.get((o.bookId ?? o.seriesId)!);
     if (p) pen.set(o.id, p);
   }

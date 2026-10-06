@@ -18,7 +18,8 @@ Scope details: [MVP.md](MVP.md). Schema: [DATABASE.md](DATABASE.md).
 | 8   | Safety & Readiness: local drafts, large-edit checkpoints, field history, stale-edit protection, document formats, Change Impact levels, writing status     | ✅ Complete                     |
 | 9   | Access Boundary: permission-aware reads, account-owned device drafts, sign-out warning, architecture baseline in the repository                            | ✅ Complete                     |
 | 10  | Work Context: Back, Return to Work and Continue Writing, with version-aware positions                                                                      | ✅ Complete                     |
-| 11  | Scene Participation: point of view, present and mentioned characters as a dedicated relationship                                                           | ✅ Complete (awaiting approval) |
+| 11  | Scene Participation: point of view, present and mentioned characters as a dedicated relationship                                                           | ✅ Complete                     |
+| 12  | Story Time: scenes and timeline events in story order, per book or series, apart from reading order and real-world time                                    | ✅ Complete (awaiting approval) |
 
 **Why this order:** the editor and binder are used every day, so they come
 first. The story bible needs scenes to link to. Structure maps onto scenes
@@ -38,7 +39,7 @@ readiness; Timeline stays in v1.1.
 
 ### v1.1: Timeline, publishing, pen-name branding
 
-- In-world timeline across books and series (custom calendars via label + sort key).
+- ~~In-world timeline~~: built in M12 (Story Time). Later: custom calendars, durations, an event ↔ scene "shown in" link (backlog).
 - Per-book publishing workflows from a default checklist; editions and retail listings.
 - Pen-name depth: per-edition pen names, links/socials, brand kit, publishing accounts.
 - Background jobs (pg-boss) for exports and statistics.

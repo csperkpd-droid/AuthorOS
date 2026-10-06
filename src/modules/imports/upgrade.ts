@@ -15,6 +15,8 @@ export function upgradeBundle(bundle: WorkspaceBundle): WorkspaceBundle {
   if (b.version < 2) b = toVersion2(b);
   if (b.version < 3) b = toVersion3(b);
   if (b.version < 4) b = toVersion4(b);
+  // Version 5 (M12) only added Story Time (`timelineEvents`, `sceneStoryTimes`).
+  if (b.version < 5) b = { ...b, version: 5 };
   return b;
 }
 

@@ -22,6 +22,7 @@ import * as search from "@/modules/search";
 import * as storyGraph from "@/modules/story-graph";
 import * as structure from "@/modules/structure";
 import * as tasks from "@/modules/tasks";
+import * as timeline from "@/modules/timeline";
 import * as trash from "@/modules/trash";
 import * as workContext from "@/modules/work-context";
 import * as workspaces from "@/modules/workspaces";
@@ -56,6 +57,7 @@ const MODULES = {
   storyGraph,
   structure,
   tasks,
+  timeline,
   trash,
   workContext,
   workspaces,
@@ -97,9 +99,11 @@ const NOT_A_READ = new Set([
   "storyGraph.sameIdentity",
   "storyGraph.storyObjectType",
   "storyGraph.viewableKinds",
+  "timeline.ordinal",
   // Steps inside a checked write's transaction.
   "history.recordFieldHistory",
   "history.recordParticipationChange",
+  "history.recordStoryTimeChange",
   "progress.recordEditorWords",
   "storyGraph.purgeStoryNodes",
   // The member's own settings, not author data.

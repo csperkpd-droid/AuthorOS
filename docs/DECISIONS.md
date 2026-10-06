@@ -999,6 +999,50 @@ writing is only on this device; the server ends the session on the next
 request (`/sign-out`). Nothing is uploaded on the way out and nothing is
 deleted.
 
+## Milestone 12 (Story Time)
+
+### 109. Story Time: scenes and timeline events in story order — Accepted (M12)
+
+Story Time (invariant 18) is the story's own chronology, separate from
+reading order (the binder) and from real-world time (calendar, planner,
+publication dates, timestamps). Locked decisions:
+
+- **Order** uses the fractional positions of `lib/ordering` (as the
+  binder), not a numeric sort key. One ordering space per **timeline**: a
+  standalone book's, or its series' when the book is in a series (scenes
+  of several books then interleave). The timeline is derived from the
+  book's series, never stored separately.
+- **A scene is a single point** in Story Time (`scene_story_times`, a
+  dedicated relationship, not columns on `scenes`). An unplaced scene has
+  no row and is shown as "not placed yet"; nothing is ever placed for the
+  author. No durations, spans, overlaps, lanes or Gantt behaviour.
+- **Labels** are free-form narrative-time descriptions ("Day 3, evening",
+  "Ten years earlier", "Unknown"). They are never interpreted as dates: no
+  calendars, date arithmetic, weekdays, real dates or ages.
+- **Timeline events** (`TIMELINE_EVENT`, story-bible area) are things that
+  happen in the story world, owned by a book or a series. They have no
+  relationship to scenes: the timeline itself places scenes and events
+  together. (An event ↔ scene link, e.g. "shown in", is backlog.) Beats
+  are not timeline objects.
+- **Permissions:** a scene's story time needs manuscript edit rights (as
+  Scene Participation); events need story-bible edit rights.
+- **Never inferred** from the text (no date detection, no AI, no automatic
+  placement). Reading order and Story Time never change each other, and
+  neither changes manuscript text.
+- **Series moves are Red:** moving a book into or out of a series changes
+  its timeline. When the book has anything in Story Time, the change lists
+  it and needs explicit approval. Leaving keeps the book's own order;
+  joining places the book's items after the series' existing ones, in
+  their own order. Nothing is rearranged silently.
+- **History:** placement and label changes are kept in the scene's Story
+  History (field history, field `storyTime`, as M11's participation
+  record); event descriptions have field history.
+- **Portability:** export format 5 (`sceneStoryTimes`, `timelineEvents`).
+
+**Rejected:** a numeric `story_sort_key` (authors would manage numbers);
+story time columns on `scenes` (Scene is the bridge); a timeline id column
+(a second source of truth for the book's series).
+
 ## Milestone 11 (Scene Participation)
 
 ### 108. Scene Participation, built — Accepted (M11)

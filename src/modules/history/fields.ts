@@ -8,6 +8,7 @@ import type { AuthorContext } from "@/server/context";
 import { assertCan, assertCanView } from "@/server/policy";
 
 import { PARTICIPATION_FIELD } from "./participation";
+import { STORY_TIME_FIELD } from "./story-time";
 
 /**
  * Field history (M8): earlier values of the long-form text that isn't a
@@ -40,6 +41,7 @@ const COLUMNS: Partial<Record<StoryNodeKind, Record<string, { table: string; col
   TASK: { notes: { table: "tasks", column: "notes" } },
   EVENT: { description: { table: "calendar_events", column: "description" } },
   PEN_NAME: { bio: { table: "pen_names", column: "bio" } },
+  TIMELINE_EVENT: { description: { table: "timeline_events", column: "description" } },
 };
 
 function fieldOf(kind: StoryNodeKind, field: string) {
@@ -165,8 +167,12 @@ export async function listFieldHistory(
     where: {
       workspaceId: ctx.workspaceId,
       nodeId,
-      // Scene participation changes are a record, not earlier text.
-      ...(field ? { field } : { NOT: { field: { startsWith: PARTICIPATION_FIELD } } }),
+      // Participation and Story Time changes are a record, not earlier text.
+      ...(field
+        ? { field }
+        : {
+            NOT: [{ field: { startsWith: PARTICIPATION_FIELD } }, { field: STORY_TIME_FIELD }],
+          }),
     },
     orderBy: { createdAt: "desc" },
     select: { id: true, field: true, value: true, source: true, createdAt: true },

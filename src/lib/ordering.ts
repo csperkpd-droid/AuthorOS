@@ -62,3 +62,8 @@ export function positionAtEnd(siblings: readonly Positioned[]): string {
   const sorted = sortByPosition(siblings);
   return generateKeyBetween(sorted.at(-1)?.position ?? null, null);
 }
+
+/** `n` positions after `last` (null = from the start), in order. */
+export function positionsAfter(last: string | null, n: number): string[] {
+  return n > 0 ? generateNKeysBetween(last, null, n) : [];
+}

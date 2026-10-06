@@ -75,6 +75,8 @@ export type ImportOps = {
   templates: TableOps;
   templateBeats: TableOps;
   outlines: TableOps;
+  timelineEvents: TableOps;
+  sceneStoryTimes: TableOps;
   outlineBeats: TableOps;
   beatScenes: Row[];
   sceneParticipations: TableOps;
@@ -199,6 +201,7 @@ export async function planImport(
     exTasks,
     exEvents,
     exOutlines,
+    exTimelineEvents,
   ] = await Promise.all([
     byId(
       chunked(existingIds(b.series), (ids) =>
@@ -261,6 +264,11 @@ export async function planImport(
     byId(
       chunked(existingIds(b.outlines), (ids) =>
         client.outline.findMany({ where: { workspaceId: ws, id: { in: ids } } }),
+      ),
+    ),
+    byId(
+      chunked(existingIds(b.timelineEvents), (ids) =>
+        client.timelineEvent.findMany({ where: { workspaceId: ws, id: { in: ids } } }),
       ),
     ),
   ]);
@@ -769,6 +777,65 @@ export async function planImport(
     { fixed: ["bookId", "seriesId", "relationshipId", "characterId", "kind"] },
   );
 
+  // ── Story Time: timeline events, then scenes' places ──────────────────────
+  nodes(
+    "timelineEvents",
+    "Timeline events",
+    b.timelineEvents.filter((e) => {
+      if (nodeAction.get((e.bookId ?? e.seriesId)!) === "conflict") {
+        nodeAction.set(e.id, "conflict");
+        return false;
+      }
+      return true;
+    }),
+    exTimelineEvents,
+    (r) => ({
+      bookId: toRef(r.bookId),
+      seriesId: toRef(r.seriesId),
+      title: r.title,
+      description: r.description,
+      label: r.label,
+      position: r.position,
+      ...soft(r),
+    }),
+    { fixed: ["bookId", "seriesId"] },
+  );
+  const storyTimes = b.sceneStoryTimes.filter((t) => nodeAction.get(t.sceneId) !== "conflict");
+  const currentStoryTimes = new Map(
+    (
+      await chunked(
+        storyTimes.map((t) => to(t.sceneId)),
+        (ids) =>
+          client.sceneStoryTime.findMany({
+            where: { workspaceId: ws, sceneId: { in: ids } },
+            select: { sceneId: true, position: true, label: true },
+          }),
+      )
+    ).map((t) => [t.sceneId, t]),
+  );
+  for (const t of storyTimes) {
+    const sceneId = to(t.sceneId);
+    const data = { position: t.position, label: t.label };
+    const current = currentStoryTimes.get(sceneId);
+    if (current) {
+      const action = replace && differs(current, data) ? "update" : "skip";
+      if (action === "update") ops.sceneStoryTimes.update.push({ id: sceneId, data });
+      count("sceneStoryTimes", "Places in story time", action);
+      decisions.push(["storyTime", t.sceneId, action]);
+      continue;
+    }
+    ops.sceneStoryTimes.create.push({
+      sceneId,
+      workspaceId: ws,
+      ...data,
+      createdById: ctx.userId,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
+    });
+    count("sceneStoryTimes", "Places in story time", "create");
+    decisions.push(["storyTime", t.sceneId, "create"]);
+  }
+
   const usedBeats = await taken(
     "outline_beats",
     b.outlineBeats.map((x) => x.id),
@@ -1214,6 +1281,7 @@ export async function planImport(
     ...created(ops.tasks.create, "TASK"),
     ...created(ops.calendarEvents.create, "EVENT"),
     ...created(ops.outlines.create, "OUTLINE"),
+    ...created(ops.timelineEvents.create, "TIMELINE_EVENT"),
   ];
 
   const order = COUNT_ORDER;
@@ -1242,6 +1310,8 @@ const COUNT_ORDER = [
   "outlines",
   "outlineBeats",
   "beatScenes",
+  "timelineEvents",
+  "sceneStoryTimes",
   "sceneParticipations",
   "connections",
   "templates",
@@ -1289,6 +1359,8 @@ function emptyOps(): ImportOps {
     templates: t(),
     templateBeats: t(),
     outlines: t(),
+    timelineEvents: t(),
+    sceneStoryTimes: t(),
     outlineBeats: t(),
     beatScenes: [],
     sceneParticipations: t(),
@@ -1368,6 +1440,7 @@ function nodeTitles(b: WorkspaceBundle) {
     b.tasks,
     b.calendarEvents,
     b.outlines,
+    b.timelineEvents,
   ])
     for (const r of rows) titles.set(r.id, r.title);
   for (const p of b.penNames) titles.set(p.id, p.name);

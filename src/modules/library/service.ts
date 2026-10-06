@@ -8,6 +8,7 @@ import { planInsertAfter, positionAtEnd, sortByPosition } from "@/lib/ordering";
 import { assertReviewed, buildReport } from "@/modules/impact";
 import { getPenNameForNewWork, requireAssignablePenName } from "@/modules/pen-names";
 import { createStoryNode, liveBook } from "@/modules/story-graph";
+import { getBookStoryTime, moveBookStoryTime } from "@/modules/timeline";
 import type { AuthorContext } from "@/server/context";
 import { recordFieldHistory } from "@/modules/history";
 import { assertCan, assertCanView } from "@/server/policy";
@@ -345,6 +346,7 @@ export async function updateBook(
  * being planned for a book (they stay in the series arc), and this book's
  * scenes are no longer placed on the series' beats (the scenes stay).
  * Characters of the series who appear in its scenes block the change.
+ * Anything of the book in Story Time changes timeline: listed (Red).
  */
 async function seriesChangePlan(ctx: AuthorContext, id: string, seriesId: string | null) {
   const book = await getBook(ctx, id);
@@ -395,6 +397,8 @@ async function seriesChangePlan(ctx: AuthorContext, id: string, seriesId: string
         }),
       ])
     : [[], [], []];
+  // Story Time: changing series changes the book's timeline (Red).
+  const storyTime = book.seriesId === seriesId ? null : await getBookStoryTime(ctx, id);
   const action = !seriesId
     ? `Make “${book.title}” a standalone book?`
     : from
@@ -404,7 +408,9 @@ async function seriesChangePlan(ctx: AuthorContext, id: string, seriesId: string
     title: action,
     description: leaving
       ? `The book leaves “${leaving.title}”, so it leaves that series’ structures. The beats and scenes themselves stay.`
-      : "The book joins the series. Nothing else changes.",
+      : storyTime?.count
+        ? "The book joins the series, and its Story Time joins the series’ timeline."
+        : "The book joins the series. Nothing else changes.",
     groups: [
       {
         key: "PLANNED_BEATS",
@@ -416,6 +422,16 @@ async function seriesChangePlan(ctx: AuthorContext, id: string, seriesId: string
           title: `${b.outline.title} › ${b.title}`,
           href: `/structure/${b.outline.id}`,
         })),
+      },
+      {
+        key: "STORY_TIME",
+        label: "Scenes and events in Story Time",
+        noun: { one: "item in story time", many: "items in story time" },
+        effect: seriesId
+          ? `Join “${target!.title}”’s timeline, after what is already there, in their own order. Move them afterwards if needed.`
+          : "Leave the series’ timeline for the book’s own, in the same order; series events stay with the series.",
+        count: storyTime?.count ?? 0,
+        items: storyTime?.items ?? [],
       },
       {
         key: "PLACEMENTS",
@@ -464,6 +480,7 @@ export async function setBookSeries(
   if (book.seriesId === seriesId) return false;
   assertReviewed(report, token);
   await db.$transaction(async (tx) => {
+    await moveBookStoryTime(ctx, id, seriesId, tx);
     if (plannedBeats.length)
       await tx.outlineBeat.updateMany({
         where: { id: { in: plannedBeats.map((b) => b.id) } },

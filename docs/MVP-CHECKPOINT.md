@@ -239,17 +239,17 @@ Adding enum values without tables would break the registry's guarantees
 integrity test). Instead, **reserve them in the documentation now**, with
 their decisions made, and add each when its feature starts:
 
-| Reserved kind            | Area       | Identity                      | Lifecycle            | Notes                                                                                                |
-| ------------------------ | ---------- | ----------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------- |
-| `TIMELINE_EVENT` (v1.1)  | storyBible | owner (book or series)        | trash                | In-world time (label + sort key); links to scenes by connection; not a calendar entry                |
-| `LOCATION`               | storyBible | column (pen name), series opt | trash                | Hierarchy of places (parent location); `set_in` Scene → Location                                     |
-| `WORLD_ENTRY`            | storyBible | column                        | trash                | Generic worldbuilding (factions, magic systems, items) with an author-defined type and custom fields |
-| `PLOT_THREAD`            | structure  | owner                         | trash                | Threads across scenes (connections); could replace subplot structures later                          |
-| `RESEARCH_ITEM`          | storyBible | shared                        | trash                | Source, citation, file (asset); `about` any                                                          |
-| `ASSET`                  | storyBible | shared                        | trash                | Images, files, covers, mood-board items (object storage); Inspiration = assets + ideas               |
-| `EDITION` (Publishing)   | manuscript | column (pen name)             | archive              | Format, ISBN, release date (a `RELEASE` calendar entry about it), retailers                          |
-| `CAMPAIGN` (Marketing)   | planning   | column                        | trash                | Launches, promotions; its steps are tasks and dated entries                                          |
-| `BEAT` (if C14 says yes) | structure  | owner                         | (with its structure) | Today a structure's child rows                                                                       |
+| Reserved kind                 | Area       | Identity                      | Lifecycle            | Notes                                                                                                |
+| ----------------------------- | ---------- | ----------------------------- | -------------------- | ---------------------------------------------------------------------------------------------------- |
+| `TIMELINE_EVENT` (built, M12) | storyBible | owner (book or series)        | trash                | Built in M12 (decision 109): a position on the timeline and a free-form label; no link to scenes     |
+| `LOCATION`                    | storyBible | column (pen name), series opt | trash                | Hierarchy of places (parent location); `set_in` Scene → Location                                     |
+| `WORLD_ENTRY`                 | storyBible | column                        | trash                | Generic worldbuilding (factions, magic systems, items) with an author-defined type and custom fields |
+| `PLOT_THREAD`                 | structure  | owner                         | trash                | Threads across scenes (connections); could replace subplot structures later                          |
+| `RESEARCH_ITEM`               | storyBible | shared                        | trash                | Source, citation, file (asset); `about` any                                                          |
+| `ASSET`                       | storyBible | shared                        | trash                | Images, files, covers, mood-board items (object storage); Inspiration = assets + ideas               |
+| `EDITION` (Publishing)        | manuscript | column (pen name)             | archive              | Format, ISBN, release date (a `RELEASE` calendar entry about it), retailers                          |
+| `CAMPAIGN` (Marketing)        | planning   | column                        | trash                | Launches, promotions; its steps are tasks and dated entries                                          |
+| `BEAT` (if C14 says yes)      | structure  | owner                         | (with its structure) | Today a structure's child rows                                                                       |
 
 Deliberately **not** story objects: comments, suggestions and annotations
 (they annotate nodes and text); publishing workflows (a template applied

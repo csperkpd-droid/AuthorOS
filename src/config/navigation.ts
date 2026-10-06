@@ -156,8 +156,8 @@ export const navigation: NavGroup[] = [
         label: "Timeline",
         href: "/timeline",
         icon: ChartGantt,
-        description: "In-world chronology of events across books.",
-        availability: { status: "later", release: "v1.1" },
+        description: "When things happen in your story: scenes and events in story order.",
+        availability: { status: "available" },
       },
       {
         label: "Publishing",

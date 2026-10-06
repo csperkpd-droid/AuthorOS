@@ -257,6 +257,24 @@ marks text saved before an import replaced it.
 - Migrations: `20261009090000_pen_name_node_kind` (adds the enum value on
   its own: it must be committed before use), `20261009090100_foundations`.
 
+### Story Time (Milestone 12)
+
+- **`scene_story_times`**: `scene_id` (primary key; tenant-safe FK to
+  `scenes`, cascade), `workspace_id`, `position` (text `COLLATE "C"`,
+  fractional), `label` (free text ≤ 200, never a date), `created_by_id`,
+  timestamps. One point per scene; no row = not placed yet.
+- **`timeline_events`** (node kind `TIMELINE_EVENT`, with the two
+  story-node triggers): `book_id?` / `series_id?` (CHECK: exactly one;
+  tenant-safe FKs, cascade), `title`, `description`, `label`, `position`,
+  `deleted_at`, timestamps.
+- The timeline of a scene or book event is its book's series if any, else
+  the book: derived, not stored. Positions of a timeline's scenes and
+  events share one ordering space.
+- History: changes to a scene's story time are kept in `field_revisions`
+  (field `storyTime`); event descriptions have field history.
+- Migrations `20261013090000_timeline_event_node_kind` (the enum value, on
+  its own) and `20261013090100_story_time`. Export format 5.
+
 ### Scene Participation (Milestone 11)
 
 | Column                                      | Notes                                                                                                        |
@@ -366,15 +384,14 @@ template_id, position)`: apply a main plot, romance and character arcs
 - An `import_jobs` / `exports` table when imports and exports run as
   background jobs (v1.1), with the uploaded file in object storage.
 
-### v1.1: timeline and publishing
+### v1.1: publishing (the timeline was built in M12)
 
-| Table                                      | Key columns                                                                                             | Notes                                                                                                                                                                                                                                       |
-| ------------------------------------------ | ------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `timeline_events`                          | node id, `book_id?`, `series_id?`, `title`, `story_time_label`, `story_sort_key` (numeric), `scene_id?` | In-world time as a label plus a sortable key (custom calendars).                                                                                                                                                                            |
-| `publishing_workflows`, `publishing_steps` | `book_id`; `stage`, `status`, `due_at?`, `position`                                                     | From a default checklist.                                                                                                                                                                                                                   |
-| `editions`                                 | `book_id`, `pen_name_id?`, `format`, `isbn?`, `release_date?`                                           | **The extension point for a book-level publication identity.** A book's pen name follows its series; an edition may be published under a different identity via `pen_name_id`. Built with Publishing (v1.1); nothing earlier depends on it. |
-| `retail_listings`                          | `edition_id`, `retailer`, `url`, `asin?`                                                                |                                                                                                                                                                                                                                             |
-| `pen_names` (+)                            | `pen_name_links` (website, socials), brand kit                                                          | Pen-name branding and publishing accounts.                                                                                                                                                                                                  |
+| Table                                      | Key columns                                                   | Notes                                                                                                                                                                                                                                       |
+| ------------------------------------------ | ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `publishing_workflows`, `publishing_steps` | `book_id`; `stage`, `status`, `due_at?`, `position`           | From a default checklist.                                                                                                                                                                                                                   |
+| `editions`                                 | `book_id`, `pen_name_id?`, `format`, `isbn?`, `release_date?` | **The extension point for a book-level publication identity.** A book's pen name follows its series; an edition may be published under a different identity via `pen_name_id`. Built with Publishing (v1.1); nothing earlier depends on it. |
+| `retail_listings`                          | `edition_id`, `retailer`, `url`, `asin?`                      |                                                                                                                                                                                                                                             |
+| `pen_names` (+)                            | `pen_name_links` (website, socials), brand kit                | Pen-name branding and publishing accounts.                                                                                                                                                                                                  |
 
 ### Decided shapes for later systems (M8)
 
