@@ -3,6 +3,7 @@ import "server-only";
 import { Prisma } from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { searchConfigFor } from "@/lib/languages";
+import { listCharacterScenes, type ParticipationRole } from "@/modules/participation";
 import { kindsWhere, resolveNodes, searchNodes, type NodeSummary } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 import { assertCanView } from "@/server/policy";
@@ -195,6 +196,12 @@ async function languagesInScope(ctx: AuthorContext, penNameId: string | null) {
 /**
  * Searches everything visible. With `penNameId`, objects of other identities
  * are left out (shared notes, ideas, tasks and events always match).
+ *
+ * With `participant`, only scenes that character is in (Scene
+ * Participation): all of them, or where they are the point of view,
+ * present or mentioned; the query, if any, narrows those scenes. Read
+ * through the same funnel, so a character or scene the reader can't view
+ * gives no results.
  */
 export async function search(
   ctx: AuthorContext,
@@ -202,9 +209,25 @@ export async function search(
     query,
     penNameId = null,
     limit = 50,
-  }: { query: string; penNameId?: string | null; limit?: number },
+    participant,
+  }: {
+    query: string;
+    penNameId?: string | null;
+    limit?: number;
+    participant?: { characterId: string; role: ParticipationRole };
+  },
 ): Promise<SearchResult[]> {
   assertCanView(ctx, "any");
+  if (participant) {
+    const scenes = await listCharacterScenes(ctx, participant.characterId, {
+      role: participant.role,
+    });
+    if (!query.trim())
+      return scenes.slice(0, limit).map(({ scene }) => ({ node: scene, snippet: null }));
+    const inScenes = new Set(scenes.map((s) => s.scene.id));
+    const all = await search(ctx, { query, penNameId, limit: 1000 });
+    return all.filter((r) => inScenes.has(r.node.id)).slice(0, limit);
+  }
   const { words, phrases } = parseQuery(query);
   const exact = exactQuery(words, phrases);
   if (!exact) return [];

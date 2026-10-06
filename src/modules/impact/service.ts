@@ -21,8 +21,8 @@ import type { ImpactBlocker, ImpactItem, ImpactReport } from "./types";
  *
  * - the book (or the series and all its books) with its manuscript and
  *   structures;
- * - every character of the old pen name connected to that work: appearing in
- *   its scenes, owning its arcs, in a relationship with such a character, or
+ * - every character of the old pen name connected to that work: in its
+ *   scenes (Scene Participation), owning its arcs, in a relationship with such a character, or
  *   linked to it, transitively (a series' own characters always move);
  * - their relationships;
  * - values of custom fields limited to the old pen name (the field is copied
@@ -227,10 +227,24 @@ async function planIdentityMove(
     // Follow links out of everything admitted so far.
     const batch = frontier;
     frontier = [];
-    const links = await client.connection.findMany({
-      where: { workspaceId: ws, OR: [{ sourceId: { in: batch } }, { targetId: { in: batch } }] },
-      select: { sourceId: true, targetId: true },
-    });
+    // Universal Connections and Scene Participation (character ↔ scene).
+    const [connections, participations] = await Promise.all([
+      client.connection.findMany({
+        where: { workspaceId: ws, OR: [{ sourceId: { in: batch } }, { targetId: { in: batch } }] },
+        select: { sourceId: true, targetId: true },
+      }),
+      client.sceneParticipation.findMany({
+        where: {
+          workspaceId: ws,
+          OR: [{ characterId: { in: batch } }, { sceneId: { in: batch } }],
+        },
+        select: { characterId: true, sceneId: true },
+      }),
+    ]);
+    const links = [
+      ...connections,
+      ...participations.map((p) => ({ sourceId: p.characterId, targetId: p.sceneId })),
+    ];
     const outside = new Map<string, string>(); // other end → the inside end it links to
     for (const l of links) {
       if (!inside(l.sourceId)) outside.set(l.sourceId, l.targetId);

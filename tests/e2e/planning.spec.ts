@@ -2,7 +2,7 @@ import { expect, test, type Page } from "@playwright/test";
 
 import { signUp } from "./support/auth";
 import { editorText, expectSaved } from "./support/manuscript";
-import { createBookWithScene, createCharacter } from "./support/story-bible";
+import { addToScene, createBookWithScene, createCharacter } from "./support/story-bible";
 
 const post = (page: Page) => page.waitForResponse((r) => r.request().method() === "POST");
 
@@ -141,12 +141,7 @@ test.describe("Milestone 4", () => {
     await expect(pen).toBeHidden();
 
     const sceneUrl = await createBookWithScene(page, "Harbour Lights");
-    const cast = page.getByRole("region", { name: "Characters in this scene" });
-    await cast.getByRole("button", { name: "Add character" }).click();
-    const add = page.getByRole("dialog", { name: "Add a character to this scene" });
-    await add.getByLabel("Character name").fill("Mara Quinn");
-    await add.getByRole("button", { name: "Create “Mara Quinn”" }).click();
-    await expect(cast.getByLabel("Role of Mara Quinn")).toBeVisible();
+    await addToScene(page, "Mara Quinn", { create: true });
 
     await page.goto(sceneUrl.split("/scenes/")[0]);
     await page.getByRole("button", { name: "Change pen name…" }).click();

@@ -30,7 +30,7 @@ export function AddConnectionDialog({
 }: {
   nodeId: string;
   nodeKind: StoryNodeKind;
-  /** Limit the offered connection kinds (e.g. only "appears_in"). */
+  /** Limit the offered connection kinds (e.g. only "about"). */
   onlyKinds?: ConnectionKind[];
   trigger: ReactNode;
   title?: string;

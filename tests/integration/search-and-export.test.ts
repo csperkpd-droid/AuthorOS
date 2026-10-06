@@ -5,7 +5,6 @@ import { db } from "@/lib/db";
 import { setDeadline } from "@/modules/calendar";
 import { RuleError } from "@/lib/errors";
 import { createCharacter, trashCharacter, updateProfileField } from "@/modules/characters";
-import { connect } from "@/modules/connections";
 import {
   checkExportIntegrity,
   exportDocx,
@@ -28,6 +27,7 @@ import { createRelationship } from "@/modules/relationships";
 import { search, toPrefixQuery } from "@/modules/search";
 import { assignScene, createKit, createOutline, getOutline } from "@/modules/structure";
 import { createTask } from "@/modules/tasks";
+import { addParticipant } from "@/modules/participation";
 import type { AuthorContext } from "@/server/context";
 
 import { createAuthor, resetDatabase } from "../support/db";
@@ -238,7 +238,7 @@ describe("workspace JSON export", () => {
       ),
     );
     await updateProfileField(ctx, a, "goal", "Survive");
-    await connect(ctx, { sourceId: a, targetId: sceneId, kind: "appears_in", attribute: "POV" });
+    await addParticipant(ctx, sceneId, { characterId: a, pov: true });
     const group = await createRelationship(ctx, { characterIds: [a, b, c], type: "Romance" });
     const arc = await createOutline(ctx, {
       seriesId: series.id,
@@ -271,16 +271,17 @@ describe("workspace JSON export", () => {
     expect(filename).toMatch(/^authoros-workspace-archive-\d{4}-\d{2}-\d{2}\.json$/);
     expect(data).toMatchObject({
       format: "authoros.workspace",
-      version: 3,
+      version: 4,
       scope: { kind: "workspace" },
     });
     expect(checkExportIntegrity(data)).toEqual([]);
     expect(data.books.map((b) => b.id).sort()).toEqual([s.book.id, s.roseBook.id].sort());
     expect(data.scenes[0]).toMatchObject({ id: s.sceneId, contentText: "Ash fell." });
     expect(data.relationships[0].members).toHaveLength(3);
-    expect(data.connections.find((c) => c.kind === "appears_in")?.attributes).toEqual({
-      role: "POV",
-    });
+    expect(data.sceneParticipations).toEqual([
+      expect.objectContaining({ sceneId: s.sceneId, presence: "PRESENT", isPov: true }),
+    ]);
+    expect(data.connections.some((c) => c.kind === "appears_in")).toBe(false);
     expect(data.beatScenes).toEqual([expect.objectContaining({ sceneId: s.sceneId })]);
     expect(data.outlines[0]).toMatchObject({
       id: s.arc.id,

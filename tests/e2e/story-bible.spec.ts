@@ -2,9 +2,13 @@ import { expect, test } from "@playwright/test";
 
 import { signUp } from "./support/auth";
 import {
+  addToScene,
+  castMember,
+  changePart,
   connectTo,
   createBookWithScene,
   createCharacter,
+  expectPart,
   expectSaved,
 } from "./support/story-bible";
 
@@ -18,7 +22,7 @@ test.describe("story bible and universal connections", () => {
     await signUp(page);
   });
 
-  test("casts characters into a scene, creating one inline and handing over POV", async ({
+  test("casts characters into a scene, creating one inline and changing the POV explicitly", async ({
     page,
   }) => {
     const maraUrl = await createCharacter(page, "Mara Quinn", "Protagonist");
@@ -27,41 +31,39 @@ test.describe("story bible and universal connections", () => {
     await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
 
     const sceneUrl = await createBookWithScene(page, "The Long Night");
-    const cast = page.getByRole("region", { name: "Characters in this scene" });
+    await expect(page.getByTestId("scene-pov")).toHaveText("No point of view chosen");
 
-    // First character defaults to point of view.
-    await cast.getByRole("button", { name: "Add character" }).click();
-    let dialog = page.getByRole("dialog", { name: "Add a character to this scene" });
-    await dialog.getByLabel("Character name").fill("Mara");
-    await dialog
-      .getByRole("list", { name: "Characters" })
-      .getByRole("button", { name: "Mara Quinn" })
-      .click();
-    await expect(cast.getByLabel("Role of Mara Quinn")).toHaveValue("POV");
+    // The first character is offered as the point of view.
+    await addToScene(page, "Mara Quinn", { search: "Mara" });
+    await expectPart(page, "Mara Quinn", "Point of view, present");
+    await expect(page.getByTestId("scene-pov")).toHaveText("Point of view:Mara Quinn");
 
     // Create a brand-new character straight from the scene.
-    await cast.getByRole("button", { name: "Add character" }).click();
-    dialog = page.getByRole("dialog", { name: "Add a character to this scene" });
-    await dialog.getByLabel("Character name").fill("Harbourmaster Bell");
-    await dialog.getByRole("button", { name: "Create “Harbourmaster Bell”" }).click();
-    await expect(cast.getByLabel("Role of Harbourmaster Bell")).toHaveValue("PRESENT");
+    await addToScene(page, "Harbourmaster Bell", { create: true });
+    await expectPart(page, "Harbourmaster Bell", "Present");
 
-    // A scene has one POV: giving it to Bell hands it over.
-    await cast.getByLabel("Role of Harbourmaster Bell").selectOption("POV");
-    await expect(cast.getByLabel("Role of Mara Quinn")).toHaveValue("PRESENT");
-    await expect(cast.getByLabel("Role of Harbourmaster Bell")).toHaveValue("POV");
+    // A scene has one POV: giving it to Bell is an explicit, confirmed change.
+    await changePart(page, "Harbourmaster Bell", "Make point of view");
+    const confirm = page.getByRole("dialog", {
+      name: "Change the point of view to Harbourmaster Bell?",
+    });
+    await expect(confirm).toContainText("Mara Quinn stays in the scene as present");
+    await confirm.getByRole("button", { name: "Change point of view" }).click();
+    await expect(confirm).toBeHidden();
+    await expectPart(page, "Mara Quinn", "Present");
+    await expectPart(page, "Harbourmaster Bell", "Point of view, present");
 
-    // The character page shows the appearance (and survives a reload).
+    // The character page lists the scene, with Mara's part in it (after a reload too).
     await page.goto(maraUrl);
     await expect(page.getByLabel("Goal")).toHaveValue("Keep the light burning");
-    const appears = page.getByRole("list", { name: "Appears in" });
-    await expect(appears.getByRole("link", { name: /Scene 1/ })).toBeVisible();
-    await expect(appears.getByLabel("Role of Scene 1")).toHaveValue("PRESENT");
+    const scenes = page.getByRole("list", { name: "Scenes with Mara Quinn" });
+    await expect(scenes.getByRole("link", { name: "Scene 1" })).toBeVisible();
+    await expect(scenes).toContainText("Present");
 
     // Remove from the scene.
     await page.goto(sceneUrl);
-    await cast.getByRole("button", { name: "Remove Mara Quinn from this scene" }).click();
-    await expect(cast.getByLabel("Role of Mara Quinn")).toHaveCount(0);
+    await changePart(page, "Mara Quinn", "Remove from this scene");
+    await expect(castMember(page, "Mara Quinn")).toHaveCount(0);
   });
 
   test("notes connect to scenes, characters and anything else", async ({ page }) => {
@@ -180,15 +182,7 @@ test.describe("story bible and universal connections", () => {
   test("trashing a character hides its links; restoring brings them back", async ({ page }) => {
     const maraUrl = await createCharacter(page, "Mara Quinn");
     const sceneUrl = await createBookWithScene(page, "Trash Test");
-    const cast = page.getByRole("region", { name: "Characters in this scene" });
-    await cast.getByRole("button", { name: "Add character" }).click();
-    await page.getByRole("dialog").getByLabel("Character name").fill("Mara");
-    await page
-      .getByRole("dialog")
-      .getByRole("list", { name: "Characters" })
-      .getByRole("button", { name: "Mara Quinn" })
-      .click();
-    await expect(cast.getByLabel("Role of Mara Quinn")).toBeVisible();
+    await addToScene(page, "Mara Quinn", { search: "Mara" });
 
     await page.goto(maraUrl);
     await page.getByRole("button", { name: "Move character to Trash" }).click();
@@ -196,7 +190,7 @@ test.describe("story bible and universal connections", () => {
     await expect(page).toHaveURL(/\/characters$/);
 
     await page.goto(sceneUrl);
-    await expect(cast.getByLabel("Role of Mara Quinn")).toHaveCount(0);
+    await expect(castMember(page, "Mara Quinn")).toHaveCount(0);
 
     await page.goto("/trash");
     await page
@@ -204,8 +198,10 @@ test.describe("story bible and universal connections", () => {
       .filter({ hasText: "Mara Quinn" })
       .getByRole("button", { name: "Restore" })
       .click();
+    // Wait for the restore to finish before leaving the Trash.
+    await expect(page.getByRole("listitem").filter({ hasText: "Mara Quinn" })).toHaveCount(0);
     await page.goto(sceneUrl);
-    await expect(cast.getByLabel("Role of Mara Quinn")).toHaveValue("POV");
+    await expectPart(page, "Mara Quinn", "Point of view, present");
   });
 });
 

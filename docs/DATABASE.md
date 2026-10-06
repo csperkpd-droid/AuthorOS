@@ -147,7 +147,7 @@ Any two story nodes can be linked. One table holds every link:
 | ------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
 | `id`, `workspace_id`                        |                                                                                                                              |
 | `source_id`, `target_id`                    | Composite tenant-safe FKs to `story_nodes (id, workspace_id)`, `ON DELETE CASCADE`: a connection disappears with either end. |
-| `kind`                                      | Registry key (`appears_in`, `develops_in`, `about`, `inspired`, `concerns`, `related`). CHECK: lowercase identifier.         |
+| `kind`                                      | Registry key (`develops_in`, `about`, `inspired`, `concerns`, `related`). CHECK: lowercase identifier.                       |
 | `label`, `note`                             | The author's own wording and a short note.                                                                                   |
 | `attributes`                                | `jsonb` object (CHECK) holding kind-specific values validated by the registry, e.g. `{ "role": "POV" }`.                     |
 | `created_by_id`, `created_at`, `updated_at` |                                                                                                                              |
@@ -157,9 +157,9 @@ Constraints and indexes:
 - `UNIQUE (source_id, target_id, kind)`. Undirected kinds are stored once
   per pair in id order, so `related` can't be duplicated from the other side.
 - CHECK `connections_not_self`: no self-links.
-- Partial unique index `connections_one_pov_per_scene`: at most one
-  `appears_in` with `role = POV` per scene. Kind-specific rules that the
-  database must enforce are added as partial indexes like this one.
+- Kind-specific rules that the database must enforce are added as partial
+  indexes. (The former `appears_in` kind and its one-POV index moved to
+  `scene_participations` in M11.)
 - Indexes on `target_id` (backlinks) and `(workspace_id, kind)`.
 
 What is **not** in the table: which node kinds a kind may join, its wording in
@@ -173,13 +173,13 @@ something in the Trash) are hidden, not deleted, and reappear on restore.
 
 ### Story bible (Milestone 2)
 
-| Table                  | Key columns                                                                                                                                                                          | Notes                                                                                                                                                                                                                                                       |
-| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `characters`           | node id, `pen_name_id`, `series_id?`, `name`, `aliases text[]`, `role` (`PROTAGONIST`/`ANTAGONIST`/`LOVE_INTEREST`/`SUPPORTING`/`MINOR`), `summary`, `profile` (jsonb), `deleted_at` | Every character belongs to one pen name (M3; tenant-safe FK, `NO ACTION`), and optionally to one of its series. Profile fields by id (`modules/characters/profile.ts`). Scene appearances are `appears_in` connections. `series_id` → `ON DELETE SET NULL`. |
-| `relationships`        | node id, `member_key`, `type`, `description`, `deleted_at`                                                                                                                           | A story node, between **two or more** characters (members below). Unique `(workspace_id, member_key)`: one relationship per exact set of members. Deferred constraint triggers check at commit: at least two members, key = sorted member ids.              |
-| `relationship_members` | PK `(relationship_id, character_id)`, `workspace_id`, `position`, `role` (M6)                                                                                                        | Tenant-safe FKs, cascade. Trigger `characters_delete_relationships`: deleting a character forever deletes every relationship they belong to. Migrated from the M2 pair columns (`character_a_id`, `character_b_id`), data kept.                             |
-| `notes`                | node id, `title`, `body` (jsonb), `body_text`, `version`, `deleted_at`                                                                                                               | What a note is about is a set of `about` connections. `version` for conflict detection, like scenes.                                                                                                                                                        |
-| `ideas`                | node id, `title`, `body`, `status` (`OPEN`/`USED`/`ARCHIVED`), `deleted_at`                                                                                                          | Promotion to a book creates the book and an `inspired` connection.                                                                                                                                                                                          |
+| Table                  | Key columns                                                                                                                                                                          | Notes                                                                                                                                                                                                                                                           |
+| ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `characters`           | node id, `pen_name_id`, `series_id?`, `name`, `aliases text[]`, `role` (`PROTAGONIST`/`ANTAGONIST`/`LOVE_INTEREST`/`SUPPORTING`/`MINOR`), `summary`, `profile` (jsonb), `deleted_at` | Every character belongs to one pen name (M3; tenant-safe FK, `NO ACTION`), and optionally to one of its series. Profile fields by id (`modules/characters/profile.ts`). Scene appearances are `scene_participations` (M11). `series_id` → `ON DELETE SET NULL`. |
+| `relationships`        | node id, `member_key`, `type`, `description`, `deleted_at`                                                                                                                           | A story node, between **two or more** characters (members below). Unique `(workspace_id, member_key)`: one relationship per exact set of members. Deferred constraint triggers check at commit: at least two members, key = sorted member ids.                  |
+| `relationship_members` | PK `(relationship_id, character_id)`, `workspace_id`, `position`, `role` (M6)                                                                                                        | Tenant-safe FKs, cascade. Trigger `characters_delete_relationships`: deleting a character forever deletes every relationship they belong to. Migrated from the M2 pair columns (`character_a_id`, `character_b_id`), data kept.                                 |
+| `notes`                | node id, `title`, `body` (jsonb), `body_text`, `version`, `deleted_at`                                                                                                               | What a note is about is a set of `about` connections. `version` for conflict detection, like scenes.                                                                                                                                                            |
+| `ideas`                | node id, `title`, `body`, `status` (`OPEN`/`USED`/`ARCHIVED`), `deleted_at`                                                                                                          | Promotion to a book creates the book and an `inspired` connection.                                                                                                                                                                                              |
 
 All four use the story-node triggers (kind check, node cleanup).
 
@@ -256,6 +256,24 @@ marks text saved before an import replaced it.
   built-in UUIDv7).
 - Migrations: `20261009090000_pen_name_node_kind` (adds the enum value on
   its own: it must be committed before use), `20261009090100_foundations`.
+
+### Scene Participation (Milestone 11)
+
+| Column                                      | Notes                                                                                                        |
+| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------ |
+| `workspace_id`, `scene_id`, `character_id`  | Primary key (`scene_id`, `character_id`). Tenant-safe FKs to `scenes` and `characters`, `ON DELETE CASCADE`. |
+| `presence`                                  | `scene_presence` enum: `PRESENT`, `MENTIONED`.                                                               |
+| `is_pov`                                    | The scene is told from this character. Partial unique index `scene_participations_one_pov` (one per scene).  |
+| `created_by_id`, `created_at`, `updated_at` |                                                                                                              |
+
+- Index on `character_id` (a character's scenes). Same pen name and series
+  rules as before, enforced by the service and checked by the audit.
+- History: changes are kept in `field_revisions` on the scene (field
+  `participation:<character id>`, value `{ "from", "to" }`).
+- Migration `20261012090000_scene_participation`: created the table, moved
+  every `appears_in` connection across (POV → point of view and present;
+  Present; Mentioned) with its dates and author, then removed those
+  connections and the old index. Export format 4.
 
 ### Work Context (Milestone 10)
 
@@ -364,7 +382,6 @@ Recorded so nothing built now blocks them (decisions 87–92, 106):
 
 | Future table(s)                                | Shape                                                                                                                                                                                                                                                          |
 | ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `scene_participation`                          | Scene ← character with a role (`POV`, `PRESENT`, `MENTIONED`), at most one `POV` per scene (partial unique index), tenant-safe foreign keys. Replaces the `appears_in` connection kind (decision 106); migrated with export and import upgrades.               |
 | `editions`, `edition_status`                   | Book → Edition (ebook, paperback, hardcover, audiobook) → publishing status per edition ("Ebook: Published", "Audiobook: Not started"). `books.writing_status` stays about the writing.                                                                        |
 | `tropes` (node kind `TROPE`), `book_tropes`…   | A reusable object: a controlled common list plus custom tropes per workspace, linked to books, series, arcs and relationships (connections or a join table), used by search, marketing and analytics. `books.tropes text[]` is migrated into it, then dropped. |
 | `beats` (node kind `BEAT`), `beat_assignments` | The beat (name, description, purpose, target position, required, structure, template source) separate from where it happens (assignment: structure/arc → book → scene). One scene can satisfy beats of several structures without copies.                      |

@@ -13,13 +13,13 @@ import {
   renameFieldDefinition,
   setFieldValue,
 } from "@/modules/fields";
-import { connect } from "@/modules/connections";
 import { createBook, createSeries } from "@/modules/library";
 import { createChapter, createScene } from "@/modules/manuscript";
 import { getRevision, listRevisions, restoreRevision, saveVersion } from "@/modules/history";
 import { createIdea } from "@/modules/ideas";
 import { createNote, getNote, saveNoteBody } from "@/modules/notes";
 import { createPenName, getDefaultPenName } from "@/modules/pen-names";
+import { addParticipant } from "@/modules/participation";
 import type { AuthorContext } from "@/server/context";
 
 import { createAuthor, resetDatabase } from "../support/db";
@@ -140,7 +140,7 @@ describe("custom fields", () => {
     const other = await createCharacter(ctx, { name: "Other" });
     const chapter = await createChapter(ctx, book1.id);
     const scene = await createScene(ctx, chapter.id);
-    await connect(ctx, { sourceId: hero.id, targetId: scene.id, kind: "appears_in" });
+    await addParticipant(ctx, scene.id, { characterId: hero.id });
 
     const options = await fieldScopeOptions(ctx, await fieldContext(ctx, hero.id));
     expect(options.map((o) => o.label)).toEqual([

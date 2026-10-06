@@ -77,6 +77,7 @@ export type ImportOps = {
   outlines: TableOps;
   outlineBeats: TableOps;
   beatScenes: Row[];
+  sceneParticipations: TableOps;
   connections: TableOps;
   kits: TableOps;
   kitItems: Row[];
@@ -850,16 +851,11 @@ export async function planImport(
     }),
   );
   const connByKey = new Map<string, (typeof wsConnections)[number]>();
-  const povOwner = new Map<string, string>();
-  for (const c of wsConnections) {
-    connByKey.set(connectionKey(c.kind, c.sourceId, c.targetId), c);
-    if (isPov(c)) povOwner.set(c.targetId, c.id);
-  }
+  for (const c of wsConnections) connByKey.set(connectionKey(c.kind, c.sourceId, c.targetId), c);
   const usedConnections = await taken(
     "connections",
     conns.map((c) => c.id),
   );
-  let demoted = 0;
   for (const c of conns) {
     let sourceId = to(c.sourceId);
     let targetId = to(c.targetId);
@@ -869,13 +865,6 @@ export async function planImport(
     const attributes = { ...c.attributes };
     const current = connByKey.get(connectionKey(c.kind, sourceId, targetId));
     const id = current?.id ?? freshId(c.id, usedConnections);
-    if (isPov({ kind: c.kind, attributes })) {
-      const owner = povOwner.get(targetId);
-      if (owner && owner !== id) {
-        attributes.role = "PRESENT";
-        demoted++;
-      } else povOwner.set(targetId, id);
-    }
     const data = { label: c.label, note: c.note, attributes };
     if (current) {
       const action = replace && differs(current, data) ? "update" : "skip";
@@ -898,9 +887,60 @@ export async function planImport(
     count("connections", "Connections", "create");
     decisions.push(["connection", c.id, "create"]);
   }
+
+  // ── Scene Participation ──────────────────────────────────────────────────
+  // A scene keeps the point of view it already has here: the file's
+  // point-of-view character is added without it, and the review says so.
+  const appearances = b.sceneParticipations.filter((p) => ok(p.sceneId) && ok(p.characterId));
+  const wsAppearances = await chunked([...new Set(appearances.map((p) => to(p.sceneId)))], (ids) =>
+    client.sceneParticipation.findMany({
+      where: { workspaceId: ws, sceneId: { in: ids } },
+      select: { sceneId: true, characterId: true, presence: true, isPov: true },
+    }),
+  );
+  const appearanceByKey = new Map(wsAppearances.map((a) => [`${a.sceneId}|${a.characterId}`, a]));
+  const povOwner = new Map(
+    wsAppearances.filter((a) => a.isPov).map((a) => [a.sceneId, a.characterId]),
+  );
+  let demoted = 0;
+  for (const p of appearances) {
+    const sceneId = to(p.sceneId);
+    const characterId = to(p.characterId);
+    let isPov = p.isPov;
+    if (isPov) {
+      const owner = povOwner.get(sceneId);
+      if (owner && owner !== characterId) {
+        isPov = false;
+        demoted++;
+      } else povOwner.set(sceneId, characterId);
+    }
+    const data = { presence: p.presence, isPov };
+    const current = appearanceByKey.get(`${sceneId}|${characterId}`);
+    if (current) {
+      // An existing point of view is never taken away by an import either.
+      const next = { ...data, isPov: data.isPov || current.isPov };
+      const action = replace && differs(current, next) ? "update" : "skip";
+      if (action === "update")
+        ops.sceneParticipations.update.push({ id: `${sceneId}|${characterId}`, data: next });
+      count("sceneParticipations", "Characters in scenes", action);
+      decisions.push(["appearance", p.sceneId, p.characterId, action]);
+      continue;
+    }
+    ops.sceneParticipations.create.push({
+      workspaceId: ws,
+      sceneId,
+      characterId,
+      ...data,
+      createdById: ctx.userId,
+      createdAt: p.createdAt,
+      updatedAt: p.updatedAt,
+    });
+    count("sceneParticipations", "Characters in scenes", "create");
+    decisions.push(["appearance", p.sceneId, p.characterId, "create"]);
+  }
   if (demoted)
     adjustments.push(
-      `${demoted === 1 ? "A scene" : `${demoted} scenes`} already ha${demoted === 1 ? "s" : "ve"} a point-of-view character here; the file’s point-of-view character is added as present.`,
+      `${demoted === 1 ? "A scene" : `${demoted} scenes`} already ha${demoted === 1 ? "s" : "ve"} a point-of-view character here; the file’s point-of-view character is added without it.`,
     );
 
   // ── Template kits ────────────────────────────────────────────────────────
@@ -1202,6 +1242,7 @@ const COUNT_ORDER = [
   "outlines",
   "outlineBeats",
   "beatScenes",
+  "sceneParticipations",
   "connections",
   "templates",
   "kits",
@@ -1250,6 +1291,7 @@ function emptyOps(): ImportOps {
     outlines: t(),
     outlineBeats: t(),
     beatScenes: [],
+    sceneParticipations: t(),
     connections: t(),
     kits: t(),
     kitItems: [],
@@ -1273,15 +1315,6 @@ function connectionKey(kind: string, sourceId: string, targetId: string) {
   return directed
     ? `${kind}|${sourceId}|${targetId}`
     : `${kind}|${[sourceId, targetId].sort().join("|")}`;
-}
-
-function isPov(c: { kind: string; attributes: unknown }) {
-  return (
-    c.kind === "appears_in" &&
-    typeof c.attributes === "object" &&
-    c.attributes !== null &&
-    (c.attributes as Record<string, unknown>).role === "POV"
-  );
 }
 
 async function chunked<T>(ids: string[], load: (ids: string[]) => Promise<T[]>): Promise<T[]> {

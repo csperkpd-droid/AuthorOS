@@ -132,10 +132,30 @@ export function validateBundle(b: WorkspaceBundle): string[] {
       : `${[c.sourceId, c.targetId].sort().join("|")}|${c.kind}`;
     if (pairs.has(key)) problems.push(`connection ${c.id} is listed twice`);
     pairs.add(key);
-    if (c.kind === "appears_in" && c.attributes.role === "POV") {
-      if (pov.has(c.targetId))
-        problems.push(`scene ${c.targetId} has two point-of-view characters`);
-      pov.add(c.targetId);
+  }
+
+  // ── Scene Participation ──
+  const sceneBook = new Map(b.scenes.map((s) => [s.id, s.bookId]));
+  const bookOf = new Map(b.books.map((x) => [x.id, x]));
+  const characterOf = new Map(b.characters.map((c) => [c.id, c]));
+  const participations = new Set<string>();
+  for (const p of b.sceneParticipations) {
+    const book = bookOf.get(sceneBook.get(p.sceneId) ?? "");
+    const character = characterOf.get(p.characterId);
+    if (!book || !character) {
+      problems.push(`a scene appearance refers to a missing scene or character`);
+      continue;
+    }
+    const key = `${p.sceneId}|${p.characterId}`;
+    if (participations.has(key)) problems.push(`${character.name} is listed twice in a scene`);
+    participations.add(key);
+    if (character.penNameId !== book.penNameId)
+      problems.push(`${character.name} appears in a scene of another pen name`);
+    if (character.seriesId && character.seriesId !== book.seriesId)
+      problems.push(`${character.name} appears in a scene outside their series`);
+    if (p.isPov) {
+      if (pov.has(p.sceneId)) problems.push(`scene ${p.sceneId} has two point-of-view characters`);
+      pov.add(p.sceneId);
     }
   }
 

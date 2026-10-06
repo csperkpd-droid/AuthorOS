@@ -278,6 +278,16 @@ const outlineBeat = z.object({
 
 const beatScene = z.object({ beatId: id, sceneId: id, createdAt: stamp });
 
+/** A character in a scene (Scene Participation, version 4). */
+const sceneParticipation = z.object({
+  sceneId: id,
+  characterId: id,
+  presence: z.enum(["PRESENT", "MENTIONED"]).optional().default("PRESENT"),
+  isPov: z.boolean().optional().default(false),
+  createdAt: stamp,
+  updatedAt: stamp,
+});
+
 const structureTemplate = z.object({
   id,
   kind: z.enum(StructureKind),
@@ -375,7 +385,7 @@ const fieldRevision = z.object({
 
 export const workspaceBundle = z.object({
   /** Format version of the file (upgraded to the current one after parsing). */
-  version: z.number().int().min(1).max(3),
+  version: z.number().int().min(1).max(4),
   /** "standard" backups have no version history; "archive" ones do. */
   kind: z.enum(["standard", "archive"]).optional().default("standard"),
   exportedAt: optDate,
@@ -408,6 +418,7 @@ export const workspaceBundle = z.object({
   outlines: list(outline),
   outlineBeats: list(outlineBeat),
   beatScenes: list(beatScene, 1_000_000),
+  sceneParticipations: list(sceneParticipation, 1_000_000),
   structureTemplates: list(structureTemplate, 10_000),
   builtInTemplates: list(builtInTemplate, 10_000),
   templateKits: list(templateKit, 10_000),

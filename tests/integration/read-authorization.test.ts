@@ -14,6 +14,7 @@ import * as imports from "@/modules/imports";
 import * as library from "@/modules/library";
 import * as manuscript from "@/modules/manuscript";
 import * as notes from "@/modules/notes";
+import * as participation from "@/modules/participation";
 import * as penNames from "@/modules/pen-names";
 import * as progress from "@/modules/progress";
 import * as relationships from "@/modules/relationships";
@@ -47,6 +48,7 @@ const MODULES = {
   library,
   manuscript,
   notes,
+  participation,
   penNames,
   progress,
   relationships,
@@ -61,7 +63,7 @@ const MODULES = {
 
 /** Names of services that change data (checked by authorization.test.ts). */
 const WRITES =
-  /^(create|update|trash|restore|delete|set|move|rename|save|apply|assign|unassign|add|dissolve|connect|disconnect|log|promote|archive|empty|run|review|export|keep)(?=[A-Z]|$)/;
+  /^(create|update|trash|restore|delete|set|move|rename|save|apply|assign|unassign|add|dissolve|connect|disconnect|log|promote|archive|empty|run|review|export|keep|remove)(?=[A-Z]|$)/;
 
 /**
  * Exports that return no author data of their own, with the reason. Every
@@ -81,6 +83,8 @@ const NOT_A_READ = new Set([
   "impact.affectsOthers",
   "impact.assertReviewed",
   "impact.buildReport",
+  "participation.describeParticipation",
+  "participation.secondPovMessage",
   "progress.streakFrom",
   "relationships.memberKey",
   "relationships.relationshipTitle",
@@ -95,6 +99,7 @@ const NOT_A_READ = new Set([
   "storyGraph.viewableKinds",
   // Steps inside a checked write's transaction.
   "history.recordFieldHistory",
+  "history.recordParticipationChange",
   "progress.recordEditorWords",
   "storyGraph.purgeStoryNodes",
   // The member's own settings, not author data.

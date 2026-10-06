@@ -51,26 +51,6 @@ function attributesFor(
   return { [def.attribute.key]: chosen };
 }
 
-/** Before setting a scene's point of view, demote any existing POV to "present". */
-async function releaseUniqueAttribute(
-  tx: Prisma.TransactionClient,
-  kind: ConnectionKind,
-  targetId: string,
-  attributes: Prisma.InputJsonObject,
-  exceptId?: string,
-) {
-  if (kind !== "appears_in" || attributes.role !== "POV") return;
-  await tx.connection.updateMany({
-    where: {
-      targetId,
-      kind,
-      attributes: { path: ["role"], equals: "POV" },
-      ...(exceptId ? { id: { not: exceptId } } : {}),
-    },
-    data: { attributes: { role: "PRESENT" } },
-  });
-}
-
 export type ConnectionPlan = {
   kind: ConnectionKind;
   sourceId: string;
@@ -128,9 +108,6 @@ export async function planConnection(
     [sourceId, targetId] = [targetId, sourceId];
     [from, to] = [to, from];
   }
-  if (def.sameSeries && from.seriesId && from.seriesId !== to.seriesId) {
-    throw new RuleError("A series’ characters can only be connected within that series.");
-  }
   if (!def.directed && targetId < sourceId) [sourceId, targetId] = [targetId, sourceId];
 
   return {
@@ -149,7 +126,6 @@ export async function createPlannedConnection(
   ctx: AuthorContext,
   plan: ConnectionPlan,
 ) {
-  await releaseUniqueAttribute(tx, plan.kind, plan.targetId, plan.attributes);
   try {
     return await tx.connection.create({
       data: { workspaceId: ctx.workspaceId, ...plan, createdById: ctx.userId },
@@ -188,8 +164,6 @@ export async function updateConnection(ctx: AuthorContext, id: string, input: Co
     data.attribute !== undefined ? attributesFor(connection.kind, data.attribute) : undefined;
 
   await db.$transaction(async (tx) => {
-    if (attributes)
-      await releaseUniqueAttribute(tx, connection.kind, connection.targetId, attributes, id);
     await tx.connection.update({
       where: { id },
       data: {

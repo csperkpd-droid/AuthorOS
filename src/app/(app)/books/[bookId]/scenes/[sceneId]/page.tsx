@@ -9,16 +9,18 @@ import { FieldHistoryDialog } from "@/modules/history/ui";
 import { getBook } from "@/modules/library";
 import { getSceneForEditor } from "@/modules/manuscript";
 import { BinderNav, SceneDetails, SceneEditor, trashSceneAction } from "@/modules/manuscript/ui";
-import { SceneCast } from "@/modules/characters/ui";
 import { RevisionsDialog } from "@/modules/history/ui";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
 import { NewNoteDialog } from "@/modules/notes/ui";
+import { listParticipants } from "@/modules/participation";
+import { SceneParticipants } from "@/modules/participation/ui";
 import { TaskDialog } from "@/modules/tasks/ui";
 import { beatsForScene } from "@/modules/structure";
 import { SceneBeats } from "@/modules/structure/ui";
 import { draftOwner } from "@/lib/local-drafts";
 import { requireAuthorContext } from "@/server/context";
+import { can } from "@/server/policy";
 import { orNotFound } from "@/server/not-found";
 
 type Props = PageProps<"/books/[bookId]/scenes/[sceneId]">;
@@ -32,20 +34,13 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ScenePage({ params }: Props) {
   const { bookId, sceneId } = await params;
   const ctx = await requireAuthorContext();
-  const [book, editor, connections, beats] = await Promise.all([
+  const [book, editor, connections, beats, participants] = await Promise.all([
     orNotFound(getBook(ctx, bookId)),
     orNotFound(getSceneForEditor(ctx, sceneId)),
     orNotFound(listConnections(ctx, sceneId)),
     beatsForScene(ctx, sceneId),
+    orNotFound(listParticipants(ctx, sceneId)),
   ]);
-  const cast = connections
-    .filter((c) => c.kind === "appears_in")
-    .map((c) => ({
-      connectionId: c.id,
-      characterId: c.other.id,
-      name: c.other.title,
-      role: c.attribute ?? "PRESENT",
-    }));
   const { scene, tree, previous, next } = editor;
   if (scene.bookId !== bookId) notFound();
   const location = [scene.chapter.part?.title, scene.chapter.title].filter(Boolean).join(" › ");
@@ -92,7 +87,17 @@ export default async function ScenePage({ params }: Props) {
           <FieldHistoryDialog nodeId={scene.id} title="Earlier synopses" />
         </div>
         <SceneBeats beats={beats} />
-        <SceneCast sceneId={scene.id} cast={cast} />
+        <SceneParticipants
+          sceneId={scene.id}
+          canEdit={can(ctx, "edit", "manuscript")}
+          participants={participants.map((p) => ({
+            characterId: p.character.id,
+            name: p.character.title,
+            href: p.character.href,
+            presence: p.presence,
+            pov: p.pov,
+          }))}
+        />
         <SceneEditor
           key={scene.id}
           sceneId={scene.id}
@@ -139,7 +144,6 @@ export default async function ScenePage({ params }: Props) {
               nodeKind="SCENE"
               connections={connections}
               heading="Notes & links"
-              hideKinds={["appears_in"]}
               emptyText="Notes, research, relationship moments and other links for this scene."
               actions={
                 <div className="flex flex-wrap gap-2">

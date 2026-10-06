@@ -58,16 +58,21 @@ export async function fieldContext(ctx: AuthorContext, nodeId: string): Promise<
     }
     case "CHARACTER":
     case "RELATIONSHIP": {
-      const scenes = await db.connection.findMany({
-        where: {
-          workspaceId: ctx.workspaceId,
-          sourceId: nodeId,
-          kind: { in: ["appears_in", "develops_in"] },
-        },
-        select: { target: { select: { scene: { select: { bookId: true } } } } },
-      });
+      const [scenes, appearances] = await Promise.all([
+        db.connection.findMany({
+          where: { workspaceId: ctx.workspaceId, sourceId: nodeId, kind: "develops_in" },
+          select: { target: { select: { scene: { select: { bookId: true } } } } },
+        }),
+        db.sceneParticipation.findMany({
+          where: { workspaceId: ctx.workspaceId, characterId: nodeId },
+          select: { scene: { select: { bookId: true } } },
+        }),
+      ]);
       bookIds = [
-        ...new Set(scenes.flatMap((s) => (s.target.scene ? [s.target.scene.bookId] : []))),
+        ...new Set([
+          ...scenes.flatMap((s) => (s.target.scene ? [s.target.scene.bookId] : [])),
+          ...appearances.map((a) => a.scene.bookId),
+        ]),
       ];
       break;
     }

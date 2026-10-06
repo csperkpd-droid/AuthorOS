@@ -158,11 +158,6 @@ the mechanisms. "Not built" marks designed parts with no code yet.
 
 ### Decided designs, not built yet
 
-- **Scene Participation (decision 106).** A character's relationship to a
-  scene is a dedicated domain relationship with roles **POV**, **Present**
-  and **Mentioned**; a scene has at most one POV character. It replaces
-  the `appears_in` Universal Connection kind, which is today's
-  representation and is not permanent. Built after M9.
 - **Comments are metadata (decision 87)**, never in the manuscript text:
   an anchor outside the document (node, version, position, quoted text and
   context). When the text changes the anchor is re-found or the comment is
@@ -481,6 +476,44 @@ Trash lists the topmost trashed item of each branch; restoring brings back
 its contents (except things trashed separately). "Delete forever" removes
 the item, its descendants and their revisions.
 
+## Scene Participation (M11)
+
+A character's relationship to a scene (decisions 106, 108) is a dedicated
+relationship, not a Universal Connection: `scene_participations`, one row
+per scene and character, owned by the `participation` module.
+
+| Part in the scene | Means                                    | Rule                                      |
+| ----------------- | ---------------------------------------- | ----------------------------------------- |
+| **Present**       | in the scene                             | either Present or Mentioned               |
+| **Mentioned**     | talked or thought about, not there       | never implies Present                     |
+| **Point of view** | the scene is told from them (+ presence) | at most one per scene (index and service) |
+
+**Actions** (each checks edit rights on the manuscript first and keeps the
+change in the scene's Story History): `addParticipant`,
+`addNewCharacterToScene` (checks the POV rule before creating anyone),
+`updateParticipant` (presence, taking or giving up the POV; taking it
+while someone else has it is refused), `setPointOfView` (the explicit
+change: names the POV the author saw; the previous holder stays as they
+were), `removeParticipant`. Nothing here reads or writes manuscript text,
+and participation is never inferred from it (future AI suggestions would
+be findings for the author to review).
+
+**Reads** go through the Story Graph funnel: `listParticipants` (a scene's
+characters, POV first) and `listCharacterScenes` (a character's scenes in
+manuscript order, optionally by part). A character or scene in the Trash,
+or not viewable, is left out and never named, history included; it comes
+back when restored. Search takes `participant: { characterId, role }`
+(the search page's `?character=…&role=pov|present|mentioned`), so "scenes
+where Charlie is POV" is the existing search, not a second one.
+
+**Elsewhere:** identity moves follow participation like links; deleting
+forever reports "Characters in scenes"; the integrity audit checks pen
+names, series and one POV per scene; export format 4 carries it and
+imports upgrade `appears_in` connections from older files. The UI is one
+component (`SceneParticipants`) for desktop and phone: the point of view
+on its own line, then chips (dashed for Mentioned) with a menu per
+character, and "Changes" for the history.
+
 ## Work Context (M10)
 
 Work Context is temporary working state, not story data: where the author
@@ -657,18 +690,18 @@ songs, plot threads and locations will use the same table.
 
 **The registry** (`modules/connections/registry.ts`, client-safe) defines each
 kind: allowed source and target node kinds (or any), how it reads from each
-end ("Appears in" / "Characters"), whether it is directed, and an optional
-single-choice attribute (a scene role). The service validates every
+end ("Develops in" / "Relationship moments"), whether it is directed, and
+an optional single-choice attribute. Characters in scenes are not a
+connection kind: they are Scene Participation (M11). The service validates every
 connection against it; the UI builds the "Connect" picker from it.
 
-| Kind          | From → To              | Reads as                           | Attribute                                         |
-| ------------- | ---------------------- | ---------------------------------- | ------------------------------------------------- |
-| `appears_in`  | Character → Scene      | Appears in / Characters            | role: POV, present, mentioned (one POV per scene) |
-| `develops_in` | Relationship → Scene   | Develops in / Relationship moments |                                                   |
-| `about`       | Note → any             | About / Notes                      |                                                   |
-| `inspired`    | Idea → any             | Inspired / Inspired by             |                                                   |
-| `concerns`    | Task/Event → any       | Concerns / Tasks & dates           |                                                   |
-| `related`     | any ↔ any (undirected) | Related to                         |                                                   |
+| Kind          | From → To              | Reads as                           | Attribute |
+| ------------- | ---------------------- | ---------------------------------- | --------- |
+| `develops_in` | Relationship → Scene   | Develops in / Relationship moments |           |
+| `about`       | Note → any             | About / Notes                      |           |
+| `inspired`    | Idea → any             | Inspired / Inspired by             |           |
+| `concerns`    | Task/Event → any       | Concerns / Tasks & dates           |           |
+| `related`     | any ↔ any (undirected) | Related to                         |           |
 
 **Resolution.** `story-graph/resolve.ts` turns node ids into summaries
 (kind, title, context, link) with the registry's adapter per kind, each

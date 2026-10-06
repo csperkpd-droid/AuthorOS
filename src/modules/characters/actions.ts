@@ -1,8 +1,5 @@
 "use server";
 
-import { NotFoundError } from "@/lib/errors";
-import { connect } from "@/modules/connections";
-import { resolveNode } from "@/modules/story-graph";
 import { field, runAction } from "@/server/action";
 import { requireAuthorContext } from "@/server/context";
 
@@ -50,30 +47,5 @@ export async function updateProfileFieldAction(
 export async function trashCharacterAction(id: string) {
   return runAction(async () => trashCharacter(await requireAuthorContext(), id), {
     refresh: false,
-  });
-}
-
-/**
- * Puts a character in a scene: an existing one (`characterId`) or a new one
- * created from `newName`.
- */
-export async function addCharacterToSceneAction(
-  sceneId: string,
-  { characterId, newName, role }: { characterId?: string; newName?: string; role?: string },
-) {
-  return runAction(async () => {
-    const ctx = await requireAuthorContext();
-    let id = characterId;
-    if (!id) {
-      // A new character joins the scene's pen name and series.
-      const scene = await resolveNode(ctx, sceneId);
-      if (!scene) throw new NotFoundError("Scene");
-      const home = scene.seriesId
-        ? { seriesId: scene.seriesId }
-        : { penNameId: scene.penNameId ?? undefined };
-      id = (await createCharacter(ctx, { name: newName ?? "", ...home })).id;
-    }
-    await connect(ctx, { sourceId: id, targetId: sceneId, kind: "appears_in", attribute: role });
-    return { id };
   });
 }

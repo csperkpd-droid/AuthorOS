@@ -14,6 +14,7 @@ export function upgradeBundle(bundle: WorkspaceBundle): WorkspaceBundle {
   let b = bundle;
   if (b.version < 2) b = toVersion2(b);
   if (b.version < 3) b = toVersion3(b);
+  if (b.version < 4) b = toVersion4(b);
   return b;
 }
 
@@ -110,6 +111,31 @@ function toVersion3(b: WorkspaceBundle): WorkspaceBundle {
               updatedAt: book.updatedAt,
             }))
         : []),
+    ],
+  };
+}
+
+/**
+ * Version 4 (M11): a character in a scene is Scene Participation, not an
+ * `appears_in` connection. As the database migration did: point of view →
+ * point of view and present; present → present; mentioned → mentioned.
+ */
+function toVersion4(b: WorkspaceBundle): WorkspaceBundle {
+  const appearances = b.connections.filter((c) => c.kind === "appears_in");
+  return {
+    ...b,
+    version: 4,
+    connections: b.connections.filter((c) => c.kind !== "appears_in"),
+    sceneParticipations: [
+      ...b.sceneParticipations,
+      ...appearances.map((c) => ({
+        sceneId: c.targetId,
+        characterId: c.sourceId,
+        presence: c.attributes.role === "MENTIONED" ? ("MENTIONED" as const) : ("PRESENT" as const),
+        isPov: c.attributes.role === "POV",
+        createdAt: c.createdAt,
+        updatedAt: c.updatedAt,
+      })),
     ],
   };
 }

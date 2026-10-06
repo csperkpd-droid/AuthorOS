@@ -16,6 +16,7 @@ import { createPenName, getDefaultPenName, setActiveIdentity } from "@/modules/p
 import { createRelationship, listRelationships } from "@/modules/relationships";
 import { searchNodes } from "@/modules/story-graph";
 import { findPrimaryMembership } from "@/modules/workspaces";
+import { addParticipant } from "@/modules/participation";
 import type { AuthorContext } from "@/server/context";
 
 import { createAuthor, resetDatabase } from "../support/db";
@@ -82,7 +83,7 @@ describe("characters belong to an identity", () => {
     expect((await getCharacter(ctx, c.id)).penNameId).toBe(rose);
 
     const roseBook = await createBook(ctx, { title: "Rose book", penNameId: rose });
-    await connect(ctx, { sourceId: c.id, targetId: await sceneIn(roseBook), kind: "appears_in" });
+    await addParticipant(ctx, await sceneIn(roseBook), { characterId: c.id });
     await expect(
       updateCharacter(ctx, c.id, { name: "Hero", penNameId: jane }),
     ).rejects.toBeInstanceOf(RuleError);
@@ -94,11 +95,7 @@ describe("nothing crosses identities", () => {
     const roseChar = await createCharacter(ctx, { name: "Mara", penNameId: rose });
     const janeBook = await createBook(ctx, { title: "Jane book" });
     await expect(
-      connect(ctx, {
-        sourceId: roseChar.id,
-        targetId: await sceneIn(janeBook),
-        kind: "appears_in",
-      }),
+      addParticipant(ctx, await sceneIn(janeBook), { characterId: roseChar.id }),
     ).rejects.toBeInstanceOf(RuleError);
     await expect(
       connect(ctx, { sourceId: roseChar.id, targetId: janeBook.id, kind: "related" }),
@@ -110,23 +107,15 @@ describe("nothing crosses identities", () => {
     const book1 = await createBook(ctx, { title: "Saga 1", seriesId: saga.id });
     const standalone = await createBook(ctx, { title: "Standalone" });
     const hero = await createCharacter(ctx, { name: "Hero", seriesId: saga.id });
-    await connect(ctx, { sourceId: hero.id, targetId: await sceneIn(book1), kind: "appears_in" });
+    await addParticipant(ctx, await sceneIn(book1), { characterId: hero.id });
     await expect(
-      connect(ctx, { sourceId: hero.id, targetId: await sceneIn(standalone), kind: "appears_in" }),
+      addParticipant(ctx, await sceneIn(standalone), { characterId: hero.id }),
     ).rejects.toBeInstanceOf(RuleError);
 
     // An identity-level character (no series) can appear in any of that identity's books.
     const drifter = await createCharacter(ctx, { name: "Drifter" });
-    await connect(ctx, {
-      sourceId: drifter.id,
-      targetId: await sceneIn(book1),
-      kind: "appears_in",
-    });
-    await connect(ctx, {
-      sourceId: drifter.id,
-      targetId: await sceneIn(standalone),
-      kind: "appears_in",
-    });
+    await addParticipant(ctx, await sceneIn(book1), { characterId: drifter.id });
+    await addParticipant(ctx, await sceneIn(standalone), { characterId: drifter.id });
   });
 
   it("refuses relationships between characters of different pen names", async () => {

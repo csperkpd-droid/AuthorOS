@@ -10,13 +10,14 @@ import {
   updateCharacter,
   updateProfileField,
 } from "@/modules/characters";
-import { connect, listConnections } from "@/modules/connections";
+import { listConnections } from "@/modules/connections";
 import { createIdea, getIdea, listIdeas, promoteIdeaToBook, updateIdea } from "@/modules/ideas";
 import { createSeries, getBook } from "@/modules/library";
 import { createChapter, createScene } from "@/modules/manuscript";
 import { createNote, getNote, renameNote, saveNoteBody, trashNote } from "@/modules/notes";
 import { createRelationship, listRelationships, updateRelationship } from "@/modules/relationships";
 import { emptyTrash, listTrash, restoreFromTrash } from "@/modules/trash";
+import { addParticipant } from "@/modules/participation";
 import type { AuthorContext } from "@/server/context";
 
 import { createAuthor, resetDatabase } from "../support/db";
@@ -73,7 +74,7 @@ describe("characters", () => {
     const ch = await createChapter(ctx, b.id);
     for (let i = 0; i < 3; i++) {
       const s = await createScene(ctx, ch.id);
-      await connect(ctx, { sourceId: mara, targetId: s.id, kind: "appears_in" });
+      await addParticipant(ctx, s.id, { characterId: mara });
     }
     expect((await listCharacters(ctx))[0]).toMatchObject({ name: "Mara", sceneCount: 3 });
 

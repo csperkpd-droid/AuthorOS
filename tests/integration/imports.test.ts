@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { deadlinesFor, setDeadline } from "@/modules/calendar";
 import { createCharacter } from "@/modules/characters";
-import { connect } from "@/modules/connections";
 import { exportWorkspaceJson } from "@/modules/exports";
 import { createFieldDefinition, setFieldValue } from "@/modules/fields";
 import { reviewImport, runImport, type ImportReview } from "@/modules/imports";
@@ -14,6 +13,7 @@ import { createPenName } from "@/modules/pen-names";
 import { logWriting, setDailyGoal } from "@/modules/progress";
 import { createRelationship, getRelationship, setMemberRole } from "@/modules/relationships";
 import { assignScene, createKit, createOutline, getOutline } from "@/modules/structure";
+import { addParticipant, removeParticipant } from "@/modules/participation";
 import type { AuthorContext } from "@/server/context";
 
 import { createAuthor, resetDatabase } from "../support/db";
@@ -43,7 +43,7 @@ async function seed(author: AuthorContext) {
       async (name) => (await createCharacter(author, { name, seriesId: series.id })).id,
     ),
   );
-  await connect(author, { sourceId: a, targetId: scene.id, kind: "appears_in", attribute: "POV" });
+  await addParticipant(author, scene.id, { characterId: a, pov: true });
   const group = await createRelationship(author, { characterIds: [a, b, c], type: "Romance" });
   await setMemberRole(author, group.id, a, "Heroine");
   await setMemberRole(author, group.id, b, "Love Interest");
@@ -131,7 +131,8 @@ describe("import: restoring a backup into another account", () => {
       scenes: [1, 0, 0],
       characters: [3, 0, 0],
       relationships: [2, 0, 0],
-      connections: [2, 0, 0], // the POV link and the note's "about"
+      connections: [1, 0, 0], // the note's "about"
+      sceneParticipations: [1, 0, 0], // Elara, the point of view
       beatScenes: [1, 0, 0],
     });
     expect(result.created).toBeGreaterThan(10);
@@ -163,8 +164,8 @@ describe("import: restoring a backup into another account", () => {
     const arc = await getOutline(other, s.arc.id);
     expect(arc.relationship?.id).toBe(s.group.id);
     expect(arc.beats[0].scenes.map((x) => x.id)).toEqual([s.scene.id]);
-    const pov = await db.connection.findFirstOrThrow({ where: { targetId: s.scene.id } });
-    expect(pov).toMatchObject({ sourceId: s.a, attributes: { role: "POV" } });
+    const pov = await db.sceneParticipation.findFirstOrThrow({ where: { sceneId: s.scene.id } });
+    expect(pov).toMatchObject({ characterId: s.a, presence: "PRESENT", isPov: true });
     expect(
       await db.nodeFieldValue.findFirstOrThrow({ where: { nodeId: s.a, fieldId: s.field.id } }),
     ).toMatchObject({ value: "Fire" });
@@ -298,21 +299,17 @@ describe("import: restoring into the same workspace", () => {
   it("keeps one point of view per scene", async () => {
     const s = await seed(ctx);
     const bytes = await backup(ctx);
-    // Since the backup, the POV link was removed and Kael became the POV.
-    await db.connection.deleteMany({ where: { targetId: s.scene.id } });
-    await connect(ctx, {
-      sourceId: s.b,
-      targetId: s.scene.id,
-      kind: "appears_in",
-      attribute: "POV",
-    });
+    // Since the backup, Elara left the scene and Kael became the POV.
+    await removeParticipant(ctx, s.scene.id, s.a);
+    await addParticipant(ctx, s.scene.id, { characterId: s.b, pov: true });
 
+    // The import never replaces the scene's point of view; the review says so.
     const { review } = await restore(ctx, bytes);
-    expect(review.adjustments.join(" ")).toMatch(/point-of-view character is added as present/);
-    const links = await db.connection.findMany({ where: { targetId: s.scene.id } });
-    expect(Object.fromEntries(links.map((l) => [l.sourceId, l.attributes]))).toEqual({
-      [s.a]: { role: "PRESENT" },
-      [s.b]: { role: "POV" },
+    expect(review.adjustments.join(" ")).toMatch(/point-of-view character is added without it/);
+    const rows = await db.sceneParticipation.findMany({ where: { sceneId: s.scene.id } });
+    expect(Object.fromEntries(rows.map((r) => [r.characterId, [r.presence, r.isPov]]))).toEqual({
+      [s.a]: ["PRESENT", false],
+      [s.b]: ["PRESENT", true],
     });
   });
 

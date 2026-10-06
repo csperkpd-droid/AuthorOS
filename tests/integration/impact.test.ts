@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { ConflictError, RuleError } from "@/lib/errors";
 import { createCharacter, getCharacter } from "@/modules/characters";
-import { connect } from "@/modules/connections";
 import { createFieldDefinition, getFieldValues, setFieldValue } from "@/modules/fields";
 import { applyIdentityMove, previewIdentityMove, type IdentityMove } from "@/modules/impact";
 import { createBook, createSeries, getBook, getSeries } from "@/modules/library";
@@ -12,6 +11,7 @@ import { createNote } from "@/modules/notes";
 import { createPenName, getDefaultPenName } from "@/modules/pen-names";
 import { createRelationship } from "@/modules/relationships";
 import { createOutline } from "@/modules/structure";
+import { addParticipant } from "@/modules/participation";
 import type { AuthorContext } from "@/server/context";
 
 import { createAuthor, resetDatabase } from "../support/db";
@@ -43,7 +43,7 @@ describe("moving a standalone book to another pen name", () => {
     const mara = await createCharacter(ctx, { name: "Mara" });
     const theo = await createCharacter(ctx, { name: "Theo" });
     // Theo isn't in a scene, but is Mara's love interest: he comes too.
-    await connect(ctx, { sourceId: mara.id, targetId: scene, kind: "appears_in" });
+    await addParticipant(ctx, scene, { characterId: mara.id });
     const rel = await createRelationship(ctx, {
       characterId: mara.id,
       otherCharacterId: theo.id,
@@ -100,12 +100,8 @@ describe("moving a standalone book to another pen name", () => {
     const book = await createBook(ctx, { title: "Book A" });
     const other = await createBook(ctx, { title: "Book B" });
     const mara = await createCharacter(ctx, { name: "Mara" });
-    await connect(ctx, { sourceId: mara.id, targetId: await sceneIn(book.id), kind: "appears_in" });
-    await connect(ctx, {
-      sourceId: mara.id,
-      targetId: await sceneIn(other.id),
-      kind: "appears_in",
-    });
+    await addParticipant(ctx, await sceneIn(book.id), { characterId: mara.id });
+    await addParticipant(ctx, await sceneIn(other.id), { characterId: mara.id });
 
     const move: IdentityMove = { kind: "BOOK", id: book.id, toPenNameId: rose };
     const report = await previewIdentityMove(ctx, move);
@@ -124,7 +120,7 @@ describe("moving a standalone book to another pen name", () => {
     const report = await previewIdentityMove(ctx, move);
     // Someone adds a character to the book after the review.
     const late = await createCharacter(ctx, { name: "Late" });
-    await connect(ctx, { sourceId: late.id, targetId: scene, kind: "appears_in" });
+    await addParticipant(ctx, scene, { characterId: late.id });
     await expect(applyIdentityMove(ctx, move, report.token)).rejects.toBeInstanceOf(ConflictError);
     expect((await getBook(ctx, book.id)).penName.id).toBe(jane);
   });
@@ -149,7 +145,7 @@ describe("moving a series to another pen name", () => {
     const b2 = await createBook(ctx, { title: "Saga 2", seriesId: series.id });
     const hero = await createCharacter(ctx, { name: "Hero", seriesId: series.id });
     const guest = await createCharacter(ctx, { name: "Guest" }); // not tied to the series
-    await connect(ctx, { sourceId: guest.id, targetId: await sceneIn(b2.id), kind: "appears_in" });
+    await addParticipant(ctx, await sceneIn(b2.id), { characterId: guest.id });
     const arc = await createOutline(ctx, { seriesId: series.id, kind: "PLOT" });
 
     const move: IdentityMove = { kind: "SERIES", id: series.id, toPenNameId: rose };

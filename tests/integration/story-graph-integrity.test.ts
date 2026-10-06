@@ -31,6 +31,7 @@ import {
 import { createOutline, trashOutline } from "@/modules/structure";
 import { createTask, trashTask } from "@/modules/tasks";
 import { deleteForever, listTrash, previewDeleteForever, restoreFromTrash } from "@/modules/trash";
+import { addParticipant } from "@/modules/participation";
 import type { AuthorContext } from "@/server/context";
 
 import { createAuthor, resetDatabase } from "../support/db";
@@ -64,12 +65,7 @@ async function world(): Promise<World> {
   const scene = await createScene(ctx, chapter.id, "Scene Harbour");
   const elara = await createCharacter(ctx, { name: "Elara Vane", seriesId: series.id });
   const kael = await createCharacter(ctx, { name: "Kael Orin", seriesId: series.id });
-  await connect(ctx, {
-    sourceId: elara.id,
-    targetId: scene.id,
-    kind: "appears_in",
-    attribute: "POV",
-  });
+  await addParticipant(ctx, scene.id, { characterId: elara.id, pov: true });
   const couple = await createRelationship(ctx, {
     characterIds: [elara.id, kael.id],
     type: "Romance",
@@ -207,7 +203,7 @@ describe("Story Graph integrity, for every kind in the registry", () => {
     const chapter = await createChapter(ctx, book.id);
     const scene = await createScene(ctx, chapter.id, "Opening");
     const mara = await createCharacter(ctx, { name: "Mara" });
-    await connect(ctx, { sourceId: mara.id, targetId: scene.id, kind: "appears_in" });
+    await addParticipant(ctx, scene.id, { characterId: mara.id });
     const move = { kind: "BOOK" as const, id: book.id, toPenNameId: pen.id };
     const report = await previewIdentityMove(ctx, move);
     await applyIdentityMove(ctx, move, report.token);

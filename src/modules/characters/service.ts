@@ -53,18 +53,17 @@ export async function listCharacters(
     orderBy: { name: "asc" },
     select: characterSelect,
   });
-  const appearances = await db.connection.groupBy({
-    by: ["sourceId"],
+  const appearances = await db.sceneParticipation.groupBy({
+    by: ["characterId"],
     where: {
       workspaceId: ctx.workspaceId,
-      kind: "appears_in",
-      sourceId: { in: rows.map((r) => r.id) },
+      characterId: { in: rows.map((r) => r.id) },
       // Scenes in the Trash don't count.
-      target: { scene: liveScene },
+      scene: liveScene,
     },
     _count: true,
   });
-  const counts = new Map(appearances.map((a) => [a.sourceId, a._count]));
+  const counts = new Map(appearances.map((a) => [a.characterId, a._count]));
   return rows.map((r) => ({
     ...r,
     profile: asProfile(r.profile),
@@ -160,14 +159,11 @@ export async function updateCharacter(
   // A series' characters appear only in that series' books: a new series
   // can't strand appearances in books outside it.
   if (home.seriesId && home.seriesId !== (current.series?.id ?? null)) {
-    const outside = await db.connection.count({
+    const outside = await db.sceneParticipation.count({
       where: {
         workspaceId: ctx.workspaceId,
-        sourceId: id,
-        kind: "appears_in",
-        target: {
-          scene: { book: { OR: [{ seriesId: null }, { seriesId: { not: home.seriesId } }] } },
-        },
+        characterId: id,
+        scene: { book: { OR: [{ seriesId: null }, { seriesId: { not: home.seriesId } }] } },
       },
     });
     if (outside > 0)
@@ -197,12 +193,13 @@ export async function updateCharacter(
 }
 
 async function isLinked(id: string) {
-  const [connections, relationships, outlines] = await Promise.all([
+  const [connections, scenes, relationships, outlines] = await Promise.all([
     db.connection.count({ where: { OR: [{ sourceId: id }, { targetId: id }] } }),
+    db.sceneParticipation.count({ where: { characterId: id } }),
     db.relationshipMember.count({ where: { characterId: id } }),
     db.outline.count({ where: { characterId: id } }),
   ]);
-  return connections + relationships + outlines > 0;
+  return connections + scenes + relationships + outlines > 0;
 }
 
 /** Sets one profile field; an empty value removes it. */

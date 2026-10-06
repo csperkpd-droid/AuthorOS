@@ -21,6 +21,12 @@ import {
 import { CustomFields } from "@/modules/fields/ui";
 import { listSeriesOptions } from "@/modules/library";
 import { NewNoteDialog } from "@/modules/notes/ui";
+import {
+  describeParticipation,
+  listCharacterScenes,
+  PARTICIPATION_ROLES,
+  ROLE_FILTER_LABELS,
+} from "@/modules/participation";
 import { getPenNameForNewWork, listPenNames } from "@/modules/pen-names";
 import { listRelationships } from "@/modules/relationships";
 import { RelationshipDialog, relationshipTitle } from "@/modules/relationships/ui";
@@ -55,6 +61,7 @@ export default async function CharacterPage({ params }: Props) {
     structureOptions,
     fieldDefinitions,
     fieldValues,
+    scenes,
   ] = await Promise.all([
     listConnections(ctx, characterId),
     listRelationships(ctx, { characterId }),
@@ -69,7 +76,14 @@ export default async function CharacterPage({ params }: Props) {
       scopes: await fieldScopeOptions(ctx, context),
     })),
     getFieldValues(ctx, characterId),
+    listCharacterScenes(ctx, characterId),
   ]);
+  const sceneCounts = {
+    all: scenes.length,
+    pov: scenes.filter((s) => s.pov).length,
+    present: scenes.filter((s) => s.presence === "PRESENT").length,
+    mentioned: scenes.filter((s) => s.presence === "MENTIONED").length,
+  };
   // Relationships stay within the character's pen name (and series, if any).
   const characterOptions = sameIdentity
     .filter((c) => !character.series || !c.series || c.series.id === character.series.id)
@@ -186,6 +200,57 @@ export default async function CharacterPage({ params }: Props) {
         )}
       </section>
 
+      <section aria-labelledby="scenes-heading" className="space-y-3">
+        <h2 id="scenes-heading" className="font-serif text-xl">
+          Scenes
+        </h2>
+        {scenes.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Not in any scene yet. Add {character.name} from a scene’s “Add character”.
+          </p>
+        ) : (
+          <>
+            <nav aria-label="Find scenes by part" className="flex flex-wrap gap-2">
+              {PARTICIPATION_ROLES.map((r) => (
+                <Link
+                  key={r}
+                  href={`/search?${new URLSearchParams({ character: character.id, ...(r !== "all" ? { role: r } : {}) })}`}
+                  className="rounded-full border border-border px-3 py-1 text-sm hover:bg-muted"
+                >
+                  {ROLE_FILTER_LABELS[r]} ({sceneCounts[r]})
+                </Link>
+              ))}
+            </nav>
+            <ul
+              aria-label={`Scenes with ${character.name}`}
+              className="divide-y divide-border rounded-lg border border-border bg-surface"
+            >
+              {scenes.slice(0, 50).map(({ scene, presence, pov }) => (
+                <li
+                  key={scene.id}
+                  className="flex flex-wrap items-center justify-between gap-2 px-3 py-2"
+                >
+                  <span className="min-w-0">
+                    <Link
+                      href={scene.href}
+                      className="font-medium hover:text-primary hover:underline"
+                    >
+                      {scene.title}
+                    </Link>
+                    {scene.context && (
+                      <span className="ml-2 text-xs text-muted-foreground">{scene.context}</span>
+                    )}
+                  </span>
+                  <Badge className={pov ? "bg-primary/10 text-primary" : undefined}>
+                    {describeParticipation({ presence, pov })}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          </>
+        )}
+      </section>
+
       <section aria-labelledby="arcs-heading" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 id="arcs-heading" className="font-serif text-xl">
@@ -218,7 +283,7 @@ export default async function CharacterPage({ params }: Props) {
         nodeId={character.id}
         nodeKind="CHARACTER"
         connections={connections}
-        heading="Scenes, notes & links"
+        heading="Notes & links"
         actions={
           <NewNoteDialog
             about={{ id: character.id, title: character.name }}

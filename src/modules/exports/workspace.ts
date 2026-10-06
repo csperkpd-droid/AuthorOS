@@ -16,7 +16,8 @@ import type { ExportScopeInput } from "./schemas";
  *   id with its kind), including items in the Trash (`deletedAt` set);
  * - the structural hierarchy (series → books → parts → chapters → scenes,
  *   positions included), scene and note content (ProseMirror JSON);
- * - characters, relationships with their members, connections (with kind,
+ * - characters, the scenes they are in (Scene Participation), relationships
+ *   with their members, connections (with kind,
  *   label, note and attributes), structures, beats and beat → scene
  *   assignments, templates and kits, custom fields and values, tasks,
  *   events, writing sessions; version history when asked for;
@@ -36,9 +37,12 @@ export const EXPORT_FORMAT = "authoros.workspace";
  * Version 3 (M8): books have a `writingStatus` (publication is not a
  * writing status); documents carry their format version; the Complete
  * archive includes earlier values of text fields (`fieldRevisions`).
+ * Version 4 (M11): characters in scenes are Scene Participation
+ * (`sceneParticipations`: presence and point of view), no longer
+ * `appears_in` connections.
  * The importer upgrades older files.
  */
-export const EXPORT_VERSION = 3;
+export const EXPORT_VERSION = 4;
 
 /**
  * "standard": the backup (all story data, no version history).
@@ -134,27 +138,46 @@ export async function exportWorkspaceJson(
   const connections = allConnections.filter((c) => has(c.sourceId) && has(c.targetId));
   const sceneIds = new Set(scenes.map((s) => s.id));
 
-  const [beatScenes, templates, kits, fieldDefinitions, storyNodes, writingSessions, member] =
-    await Promise.all([
-      db.beatScene.findMany({ where: { beat: { outlineId: { in: outlineIds } } } }),
-      db.structureTemplate.findMany({
-        where: { OR: [{ workspaceId: ws }, { workspaceId: null }] },
-        include: { beats: true },
-      }),
-      db.templateKit.findMany({ where: { workspaceId: ws }, include: { items: true } }),
-      db.fieldDefinition.findMany({ where: { workspaceId: ws } }),
-      db.storyNode.findMany({
-        where: { workspaceId: ws, id: { in: [...included] } },
-        select: { id: true, kind: true },
-      }),
-      db.writingSession.findMany({
-        where: { workspaceId: ws, ...(pens ? { bookId: { in: bookIds } } : {}) },
-      }),
-      db.workspaceMember.findUnique({
-        where: { workspaceId_userId: { workspaceId: ws, userId: ctx.userId } },
-        select: { dailyWordGoal: true },
-      }),
-    ]);
+  const [
+    beatScenes,
+    participations,
+    templates,
+    kits,
+    fieldDefinitions,
+    storyNodes,
+    writingSessions,
+    member,
+  ] = await Promise.all([
+    db.beatScene.findMany({ where: { beat: { outlineId: { in: outlineIds } } } }),
+    db.sceneParticipation.findMany({
+      where: { workspaceId: ws, sceneId: { in: [...sceneIds] } },
+      select: {
+        sceneId: true,
+        characterId: true,
+        presence: true,
+        isPov: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+    }),
+    db.structureTemplate.findMany({
+      where: { OR: [{ workspaceId: ws }, { workspaceId: null }] },
+      include: { beats: true },
+    }),
+    db.templateKit.findMany({ where: { workspaceId: ws }, include: { items: true } }),
+    db.fieldDefinition.findMany({ where: { workspaceId: ws } }),
+    db.storyNode.findMany({
+      where: { workspaceId: ws, id: { in: [...included] } },
+      select: { id: true, kind: true },
+    }),
+    db.writingSession.findMany({
+      where: { workspaceId: ws, ...(pens ? { bookId: { in: bookIds } } : {}) },
+    }),
+    db.workspaceMember.findUnique({
+      where: { workspaceId_userId: { workspaceId: ws, userId: ctx.userId } },
+      select: { dailyWordGoal: true },
+    }),
+  ]);
   const fieldsInScope = fieldDefinitions.filter(
     (f) =>
       !pens ||
@@ -212,6 +235,7 @@ export async function exportWorkspaceJson(
     outlines,
     outlineBeats,
     beatScenes: beatScenes.filter((b) => sceneIds.has(b.sceneId)),
+    sceneParticipations: participations.filter((p) => characterIds.has(p.characterId)),
     // The author's templates in full; built-in ones (seeded with fixed ids in
     // every installation) by reference only.
     structureTemplates: templates.filter((t) => t.workspaceId !== null),
@@ -262,6 +286,7 @@ export type IntegrityInput = {
   })[];
   outlineBeats: (Id & { outlineId: string; bookId: Ref })[];
   beatScenes: { beatId: string; sceneId: string }[];
+  sceneParticipations: { sceneId: string; characterId: string }[];
   structureTemplates: Id[];
   builtInTemplates: Id[];
   templateKits: { items: { templateId: string }[] }[];
@@ -347,6 +372,10 @@ export function checkExportIntegrity(data: IntegrityInput): string[] {
   for (const bs of data.beatScenes) {
     need("assignment.beat", bs.beatId, beats);
     need("assignment.scene", bs.sceneId, ids(data.scenes));
+  }
+  for (const p of data.sceneParticipations) {
+    need("appearance.scene", p.sceneId, ids(data.scenes));
+    need("appearance.character", p.characterId, characters);
   }
   for (const v of data.fieldValues) {
     need("fieldValue.field", v.fieldId, fields);

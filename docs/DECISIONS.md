@@ -980,7 +980,7 @@ deleting drafts at sign-out (loses work); encrypting drafts per account
 (keys would have to live on the same device, so it adds machinery without
 real protection against someone with access to the browser profile).
 
-### 106. Scene Participation is a dedicated domain relationship — Accepted (M9, built later)
+### 106. Scene Participation is a dedicated domain relationship — Accepted (M9, built in M11: decision 108)
 
 A character's relationship to a scene is first-class domain data, not a
 Universal Connection. Initial roles: **POV**, **Present**, **Mentioned**.
@@ -998,6 +998,43 @@ cookie the page can set), stops all saving, and tells the author the
 writing is only on this device; the server ends the session on the next
 request (`/sign-out`). Nothing is uploaded on the way out and nothing is
 deleted.
+
+## Milestone 11 (Scene Participation)
+
+### 108. Scene Participation, built — Accepted (M11)
+
+Decision 106 is built as its own table, `scene_participations` (one row per
+scene and character), and the `participation` module. **Shape:** the
+decided single role (POV / Present / Mentioned) became a presence
+(`PRESENT` or `MENTIONED`) plus `is_pov`, because the point of view is
+also in the scene (POV + Present is the usual case) and roles must not
+collapse into a "cast" flag; Mentioned never implies Present. **One point
+of view** is enforced by a partial unique index and by the service:
+asking for a second one is refused with the current holder's name (never
+replaced or removed as a side effect); giving the point of view to
+someone else is an explicit action that names the POV the author saw and
+is refused if it changed meanwhile; the previous holder stays in the
+scene as they were. **Never inferred** from the manuscript, and never
+changes it. **Access:** changes need edit rights on the manuscript; reads
+go through the Story Graph funnel, so a character in the Trash or not
+viewable is not shown or named anywhere (history included), and nobody is
+put in their place; a point of view held by a hidden character still
+holds. **History:** every change (added, removed, presence changed, POV
+given or taken) is kept in the scene's Story History, in the field
+history table (`participation:<character id>`, the change as its value):
+one history store; these entries are a record, so they are left out of
+the text history and can't be "restored". **Change Impact:** deleting a
+scene or character forever reports the scene appearances that go
+("Characters in scenes"); an identity move follows participation like any
+link. **Search:** the existing search takes a character and a part (all,
+point of view, present, mentioned); the character page links to it.
+**Portability:** export format 4 (`sceneParticipations`); older files are
+upgraded (`appears_in` connections become participation, as the database
+migration did); an import never replaces a scene's existing point of view
+(it adds the file's character without it and says so in the review).
+**Rejected:** three separate relationships (one row per character keeps
+the rule simple); keeping `appears_in` alongside (two sources of truth); a
+separate participation history table (decision: one history store).
 
 ## Milestone 10 (Work Context)
 

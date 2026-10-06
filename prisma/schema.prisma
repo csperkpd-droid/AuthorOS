@@ -40,6 +40,7 @@ model User {
   revisions      ContentRevision[]
   fieldRevisions FieldRevision[]
   connections    Connection[]
+  participations SceneParticipation[]
   writing        WritingSession[]
 
   @@map("users")
@@ -410,6 +411,7 @@ model Scene {
   beats   BeatScene[]
 
   writingMembers WorkspaceMember[]
+  participants   SceneParticipation[]
 
   @@unique([id, workspaceId])
   @@index([bookId])
@@ -488,7 +490,7 @@ enum CharacterRole {
 
 /// A character belongs to one author identity (pen name) and optionally to a
 /// series of that identity. Identities are private from each other by
-/// default. Scene appearances are connections (`appears_in`).
+/// default. Scene appearances are Scene Participation (`scene_participations`).
 model Character {
   id          String        @id @db.Uuid
   workspaceId String        @map("workspace_id") @db.Uuid
@@ -510,6 +512,7 @@ model Character {
   series      Series?              @relation(fields: [seriesId], references: [id], onDelete: SetNull)
   memberships RelationshipMember[]
   outlines    Outline[]
+  scenes      SceneParticipation[]
 
   @@unique([id, workspaceId])
   @@index([workspaceId])
@@ -618,7 +621,7 @@ model Idea {
 /// code (modules/connections/registry.ts), so new object types can take part
 /// without schema changes. Both endpoints use tenant-safe FKs and cascade:
 /// a connection disappears with either endpoint.
-/// Hand-written constraints: no self-links; at most one POV per scene.
+/// Hand-written constraints: no self-links.
 model Connection {
   id          String   @id @default(uuid(7)) @db.Uuid
   workspaceId String   @map("workspace_id") @db.Uuid
@@ -643,6 +646,40 @@ model Connection {
   @@index([targetId])
   @@index([workspaceId, kind])
   @@map("connections")
+}
+
+// ─── Scene Participation ────────────────────────────────────────────────────
+
+/// Whether a character is in a scene or only spoken of there.
+enum ScenePresence {
+  PRESENT
+  MENTIONED
+
+  @@map("scene_presence")
+}
+
+/// A character's relationship to a scene (decision 106, M11): present or
+/// mentioned, and whether the scene is told from their point of view. The
+/// point of view combines with either presence (POV + Present is the usual
+/// case). Hand-written constraint: at most one POV per scene (partial unique
+/// index `scene_participations_one_pov`). Never inferred from the text.
+model SceneParticipation {
+  workspaceId String        @map("workspace_id") @db.Uuid
+  sceneId     String        @map("scene_id") @db.Uuid
+  characterId String        @map("character_id") @db.Uuid
+  presence    ScenePresence @default(PRESENT)
+  isPov       Boolean       @default(false) @map("is_pov")
+  createdById String?       @map("created_by_id") @db.Uuid
+  createdAt   DateTime      @default(now()) @map("created_at")
+  updatedAt   DateTime      @updatedAt @map("updated_at")
+
+  scene     Scene     @relation(fields: [sceneId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  character Character @relation(fields: [characterId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@id([sceneId, characterId])
+  @@index([characterId])
+  @@map("scene_participations")
 }
 
 // ─── Story structure ────────────────────────────────────────────────────────

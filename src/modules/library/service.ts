@@ -389,9 +389,7 @@ async function seriesChangePlan(ctx: AuthorContext, id: string, seriesId: string
           where: {
             workspaceId: ctx.workspaceId,
             seriesId: leaving.id,
-            node: {
-              outgoing: { some: { kind: "appears_in", target: { scene: { bookId: id } } } },
-            },
+            scenes: { some: { scene: { bookId: id } } },
           },
           select: { id: true, name: true },
         }),

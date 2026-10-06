@@ -31,6 +31,15 @@ the suggestion boundary).
 | Pen-name branding, links, publishing accounts | v1.1  | Pen names, archive, assignment and identity switching shipped in M1. |
 | More import sources (Scrivener, Plottr, DOCX) | Later | Import Engine (M6): a source parser produces a Workspace Bundle.     |
 
+## Milestone 11 checklist (Scene Participation)
+
+- [x] A dedicated relationship (`scene_participations`): Present or Mentioned, plus point of view; Mentioned never implies Present; POV + Present together
+- [x] At most one point of view per scene (database and service); a second one is refused; changing it is an explicit, confirmed action; nobody's POV is replaced or removed as a side effect
+- [x] Scene page: see, add (existing or new character), change, remove; the point of view at a glance; Present and Mentioned look different; the same on a phone
+- [x] Character page: the scenes they are in, with their part; search by part (all, point of view, present, mentioned)
+- [x] Story History of every change; edit rights required; reads through the Story Graph funnel; Trash and delete never name hidden characters or invent replacements
+- [x] Manuscript text never changed or read for it; `appears_in` connections migrated (database, export format 4, import upgrade)
+
 ## Milestone 10 checklist (Work Context)
 
 - [x] Back stays the browser's history
@@ -120,7 +129,7 @@ the suggestion boundary).
 ## Milestone 2 checklist
 
 - [x] Universal Connections: one `connections` table between story nodes, kinds in a code registry, tenant-safe and cascading
-- [x] Connection kinds: `appears_in` (with role; one POV per scene), `develops_in`, `about`, `inspired`, `related`
+- [x] Connection kinds: `develops_in`, `about`, `inspired`, `related` (characters in scenes were `appears_in`, Scene Participation since M11)
 - [x] Generic Connections panel + picker (cross-kind search) on every story object page; backlinks both ways
 - [x] Characters: list, profile fields (save on leave), role, aliases, series scope, appearances
 - [x] Scene cast in the editor: add existing or new characters, set POV/present/mentioned, remove

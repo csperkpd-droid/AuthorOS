@@ -7,6 +7,8 @@ import { nodeKind, resolveNode, storyObjectType } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 import { assertCan, assertCanView } from "@/server/policy";
 
+import { PARTICIPATION_FIELD } from "./participation";
+
 /**
  * Field history (M8): earlier values of the long-form text that isn't a
  * rich-text document, such as synopses, summaries, character profile
@@ -160,7 +162,12 @@ export async function listFieldHistory(
   assertCanView(ctx, "any", { kind: "NODE", id: nodeId });
   if (!(await resolveNode(ctx, nodeId))) throw new NotFoundError("Item");
   return db.fieldRevision.findMany({
-    where: { workspaceId: ctx.workspaceId, nodeId, ...(field ? { field } : {}) },
+    where: {
+      workspaceId: ctx.workspaceId,
+      nodeId,
+      // Scene participation changes are a record, not earlier text.
+      ...(field ? { field } : { NOT: { field: { startsWith: PARTICIPATION_FIELD } } }),
+    },
     orderBy: { createdAt: "desc" },
     select: { id: true, field: true, value: true, source: true, createdAt: true },
     take: 200,

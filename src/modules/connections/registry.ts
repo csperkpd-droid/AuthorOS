@@ -14,6 +14,10 @@ import { STORY_OBJECT_TYPES } from "@/modules/story-graph/ui";
  * Adding a connection kind, or letting a new object type take part in an
  * existing one, is a change to this file only: the `connections` table stores
  * the kind as text and validates nothing type-specific.
+ *
+ * Relationships the product relies on are not connection kinds: a
+ * character in a scene is Scene Participation (`participation` module,
+ * decision 106), which replaced the former `appears_in` kind.
  */
 export type ConnectionAttribute = {
   key: string;
@@ -23,9 +27,9 @@ export type ConnectionAttribute = {
 };
 
 export type ConnectionKindDef = {
-  /** Read from the source: "Mara — Appears in — Scene 3". */
+  /** Read from the source: "Note — About — Scene 3". */
   label: string;
-  /** Read from the target: "Scene 3 — Characters — Mara". */
+  /** Read from the target: "Scene 3 — Notes — Note". */
   inverseLabel: string;
   /** Undirected kinds read the same both ways and are stored once per pair. */
   directed: boolean;
@@ -33,32 +37,11 @@ export type ConnectionKindDef = {
   from: StoryNodeKind[] | "*";
   to: StoryNodeKind[] | "*";
   attribute?: ConnectionAttribute;
-  /**
-   * If the source belongs to a series, the target must be in the same series
-   * (e.g. a series' characters appear only in that series' books).
-   */
-  sameSeries?: boolean;
   /** One-line explanation shown when choosing a kind. */
   hint: string;
 };
 
-export const SCENE_ROLES = [
-  { value: "POV", label: "Point of view" },
-  { value: "PRESENT", label: "Present" },
-  { value: "MENTIONED", label: "Mentioned" },
-];
-
 export const CONNECTION_KINDS = {
-  appears_in: {
-    label: "Appears in",
-    inverseLabel: "Characters",
-    directed: true,
-    from: ["CHARACTER"],
-    to: ["SCENE"],
-    attribute: { key: "role", label: "Role", options: SCENE_ROLES, defaultValue: "PRESENT" },
-    sameSeries: true,
-    hint: "A character is in a scene: as the point of view, present, or mentioned.",
-  },
   develops_in: {
     label: "Develops in",
     inverseLabel: "Relationship moments",

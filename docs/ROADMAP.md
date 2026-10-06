@@ -17,7 +17,8 @@ Scope details: [MVP.md](MVP.md). Schema: [DATABASE.md](DATABASE.md).
 | 7   | Foundations: Story Object Registry, authorization in services, one model for dates, connectable pen names, Change Impact gaps, Story Graph integrity audit | ✅ Complete                     |
 | 8   | Safety & Readiness: local drafts, large-edit checkpoints, field history, stale-edit protection, document formats, Change Impact levels, writing status     | ✅ Complete                     |
 | 9   | Access Boundary: permission-aware reads, account-owned device drafts, sign-out warning, architecture baseline in the repository                            | ✅ Complete                     |
-| 10  | Work Context: Back, Return to Work and Continue Writing, with version-aware positions                                                                      | ✅ Complete (awaiting approval) |
+| 10  | Work Context: Back, Return to Work and Continue Writing, with version-aware positions                                                                      | ✅ Complete                     |
+| 11  | Scene Participation: point of view, present and mentioned characters as a dedicated relationship                                                           | ✅ Complete (awaiting approval) |
 
 **Why this order:** the editor and binder are used every day, so they come
 first. The story bible needs scenes to link to. Structure maps onto scenes

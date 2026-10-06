@@ -71,12 +71,26 @@ export async function auditGraph(ctx: AuthorContext): Promise<AuditIssue[]> {
           AND ${pen(Prisma.sql`link."source_id"`)} <> ${pen(Prisma.sql`link."target_id"`)}`,
     ],
     [
-      "series character appearing outside the series",
-      Prisma.sql`SELECT c."id" FROM "connections" c
-        JOIN "characters" ch ON ch."id" = c."source_id"
-        JOIN "scenes" sc ON sc."id" = c."target_id"
+      "character in a scene of another pen name",
+      Prisma.sql`SELECT p."character_id" AS id FROM "scene_participations" p
+        JOIN "characters" ch ON ch."id" = p."character_id"
+        JOIN "scenes" sc ON sc."id" = p."scene_id"
         JOIN "books" b ON b."id" = sc."book_id"
-        WHERE c."workspace_id" = ${ws}::uuid AND c."kind" = 'appears_in'
+        WHERE p."workspace_id" = ${ws}::uuid AND ch."pen_name_id" <> b."pen_name_id"`,
+    ],
+    [
+      "scene with more than one point of view",
+      Prisma.sql`SELECT p."scene_id" AS id FROM "scene_participations" p
+        WHERE p."workspace_id" = ${ws}::uuid AND p."is_pov"
+        GROUP BY p."scene_id" HAVING count(*) > 1`,
+    ],
+    [
+      "series character appearing outside the series",
+      Prisma.sql`SELECT p."character_id" AS id FROM "scene_participations" p
+        JOIN "characters" ch ON ch."id" = p."character_id"
+        JOIN "scenes" sc ON sc."id" = p."scene_id"
+        JOIN "books" b ON b."id" = sc."book_id"
+        WHERE p."workspace_id" = ${ws}::uuid
           AND ch."series_id" IS NOT NULL AND b."series_id" IS DISTINCT FROM ch."series_id"`,
     ],
     [

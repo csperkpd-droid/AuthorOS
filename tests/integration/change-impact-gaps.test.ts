@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { ConflictError, RuleError } from "@/lib/errors";
 import { createCharacter, updateCharacter } from "@/modules/characters";
-import { connect } from "@/modules/connections";
 import { createFieldDefinition, setFieldValue } from "@/modules/fields";
 import { createBook, createSeries, previewBookSeries, setBookSeries } from "@/modules/library";
 import {
@@ -14,6 +13,7 @@ import {
   previewDissolvePart,
 } from "@/modules/manuscript";
 import { createNote } from "@/modules/notes";
+import { addParticipant } from "@/modules/participation";
 import {
   createRelationship,
   previewRelationshipMembers,
@@ -100,7 +100,7 @@ describe("a book leaving its series (Change Impact)", () => {
     await setBookSeries(ctx, loose.id, other.id);
 
     const rowan = await createCharacter(ctx, { name: "Rowan", seriesId: s.series.id });
-    await connect(ctx, { sourceId: rowan.id, targetId: s.scene.id, kind: "appears_in" });
+    await addParticipant(ctx, s.scene.id, { characterId: rowan.id });
     const blocked = await previewBookSeries(ctx, s.book2.id, other.id);
     expect(blocked.blockers.map((b) => b.title)).toEqual(["Rowan"]);
     await expect(setBookSeries(ctx, s.book2.id, other.id, blocked.token)).rejects.toThrow(
@@ -159,7 +159,7 @@ describe("other consequential operations are reviewed", () => {
     const s = await seriesWithArc();
     const other = await createSeries(ctx, { title: "Thorns" });
     const rowan = await createCharacter(ctx, { name: "Rowan", seriesId: s.series.id });
-    await connect(ctx, { sourceId: rowan.id, targetId: s.scene.id, kind: "appears_in" });
+    await addParticipant(ctx, s.scene.id, { characterId: rowan.id });
     await expect(
       updateCharacter(ctx, rowan.id, { name: "Rowan", seriesId: other.id }),
     ).rejects.toThrow(/appears in 1 scene outside that series/);

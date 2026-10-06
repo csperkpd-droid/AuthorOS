@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { ConflictError, NotFoundError, RuleError } from "@/lib/errors";
 import { createCharacter, trashCharacter, getCharacter } from "@/modules/characters";
-import { connect } from "@/modules/connections";
 import { applyIdentityMove, previewIdentityMove } from "@/modules/impact";
 import { createBook, createSeries } from "@/modules/library";
 import { createChapter, createScene } from "@/modules/manuscript";
@@ -21,6 +20,7 @@ import {
 import { searchNodes } from "@/modules/story-graph";
 import { createOutline, seriesRomance } from "@/modules/structure";
 import { deleteForever, restoreFromTrash } from "@/modules/trash";
+import { addParticipant } from "@/modules/participation";
 import type { AuthorContext } from "@/server/context";
 
 import { createAuthor, resetDatabase } from "../support/db";
@@ -196,7 +196,7 @@ describe("group relationships", () => {
   it("move every member with a book to another pen name", async () => {
     const book = await createBook(ctx, { title: "Book" });
     const scene = (await createScene(ctx, (await createChapter(ctx, book.id)).id)).id;
-    await connect(ctx, { sourceId: elara, targetId: scene, kind: "appears_in" });
+    await addParticipant(ctx, scene, { characterId: elara });
     await createRelationship(ctx, { characterIds: [elara, kael, rowan], type: "Romance" });
     const rose = await createPenName(ctx, { name: "Rose" });
     const move = { kind: "BOOK" as const, id: book.id, toPenNameId: rose.id };

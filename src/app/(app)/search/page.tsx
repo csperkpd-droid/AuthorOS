@@ -5,9 +5,17 @@ import { PageHeader } from "@/components/shell/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { getCharacter } from "@/modules/characters";
+import {
+  PARTICIPATION_ROLES,
+  ROLE_FILTER_LABELS,
+  type ParticipationRole,
+} from "@/modules/participation";
 import { search } from "@/modules/search";
 import { NODE_KIND_LABELS } from "@/modules/story-graph";
+import { cn } from "@/lib/utils";
 import { requireAuthorContext } from "@/server/context";
+import { orNotFound } from "@/server/not-found";
 
 export const metadata: Metadata = { title: "Search" };
 
@@ -33,9 +41,24 @@ function Snippet({ text }: { text: string }) {
 
 export default async function SearchPage({ searchParams }: PageProps<"/search">) {
   const ctx = await requireAuthorContext();
-  const raw = (await searchParams).q;
-  const q = (typeof raw === "string" ? raw : "").slice(0, 200);
-  const results = q.trim() ? await search(ctx, { query: q, penNameId: ctx.activePenNameId }) : [];
+  const params = await searchParams;
+  const one = (v: unknown) => (typeof v === "string" ? v : "");
+  const q = one(params.q).slice(0, 200);
+  // Scenes a character is in (Scene Participation), optionally by their part.
+  const characterId = /^[0-9a-f-]{36}$/i.test(one(params.character)) ? one(params.character) : null;
+  const role: ParticipationRole = (PARTICIPATION_ROLES as readonly string[]).includes(
+    one(params.role),
+  )
+    ? (one(params.role) as ParticipationRole)
+    : "all";
+  const character = characterId ? await orNotFound(getCharacter(ctx, characterId)) : null;
+  const participant = character ? { characterId: character.id, role } : undefined;
+  const results =
+    q.trim() || participant
+      ? await search(ctx, { query: q, penNameId: ctx.activePenNameId, participant })
+      : [];
+  const filterHref = (r: ParticipationRole) =>
+    `/search?${new URLSearchParams({ ...(q ? { q } : {}), character: characterId!, ...(r !== "all" ? { role: r } : {}) })}`;
 
   return (
     <div className="space-y-6">
@@ -59,11 +82,48 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
           placeholder="Search your story…"
           autoFocus
         />
+        {characterId && <input type="hidden" name="character" value={characterId} />}
+        {characterId && role !== "all" && <input type="hidden" name="role" value={role} />}
         <Button type="submit">Search</Button>
       </form>
-      {q.trim() &&
+      {character && (
+        <div className="space-y-2">
+          <p className="flex flex-wrap items-center gap-2 text-sm">
+            <span>
+              Scenes with <span className="font-medium">{character.name}</span>
+            </span>
+            <Link
+              href={q ? `/search?${new URLSearchParams({ q })}` : "/search"}
+              className="text-xs text-muted-foreground underline"
+            >
+              Show everything
+            </Link>
+          </p>
+          <nav
+            aria-label={`${character.name}’s part in the scene`}
+            className="flex flex-wrap gap-2"
+          >
+            {PARTICIPATION_ROLES.map((r) => (
+              <Link
+                key={r}
+                href={filterHref(r)}
+                aria-current={r === role ? "page" : undefined}
+                className={cn(
+                  "rounded-full border border-border px-3 py-1 text-sm hover:bg-muted",
+                  r === role && "border-primary/50 bg-primary/10 font-medium",
+                )}
+              >
+                {ROLE_FILTER_LABELS[r]}
+              </Link>
+            ))}
+          </nav>
+        </div>
+      )}
+      {(q.trim() || character) &&
         (results.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nothing found for “{q}”.</p>
+          <p className="text-sm text-muted-foreground">
+            {q.trim() ? `Nothing found for “${q}”.` : "No scenes found."}
+          </p>
         ) : (
           <>
             <p className="text-sm text-muted-foreground" role="status">

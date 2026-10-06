@@ -2,4 +2,3 @@
 export { trashCharacterAction } from "./actions";
 export { CharacterDialog } from "./components/character-dialog";
 export { ProfileForm } from "./components/profile-form";
-export { SceneCast } from "./components/scene-cast";

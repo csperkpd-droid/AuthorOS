@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { ConflictError, NotFoundError, RuleError } from "@/lib/errors";
 import { createCharacter, trashCharacter } from "@/modules/characters";
-import { connect, disconnect, listConnections, updateConnection } from "@/modules/connections";
+import { connect, disconnect, listConnections } from "@/modules/connections";
 import { createIdea } from "@/modules/ideas";
 import { createBook, trashBook } from "@/modules/library";
 import { createChapter, createScene, trashChapter } from "@/modules/manuscript";
@@ -21,6 +21,7 @@ let chapterId: string;
 let sceneId: string;
 let mara: string;
 let theo: string;
+let rivals: string;
 
 beforeEach(async () => {
   await resetDatabase();
@@ -30,6 +31,9 @@ beforeEach(async () => {
   sceneId = (await createScene(ctx, chapterId, "Storm")).id;
   mara = (await createCharacter(ctx, { name: "Mara", role: "PROTAGONIST" })).id;
   theo = (await createCharacter(ctx, { name: "Theo" })).id;
+  rivals = (
+    await createRelationship(ctx, { characterId: mara, otherCharacterId: theo, type: "Rivals" })
+  ).id;
 });
 
 const headings = async (nodeId: string) =>
@@ -38,57 +42,50 @@ const headings = async (nodeId: string) =>
   );
 
 describe("universal connections", () => {
-  it("connects a character to a scene with a role, readable from both ends", async () => {
-    await connect(ctx, { sourceId: mara, targetId: sceneId, kind: "appears_in", attribute: "POV" });
-    expect(await headings(mara)).toEqual(["Appears in: Storm (POV)"]);
-    expect(await headings(sceneId)).toEqual(["Characters: Mara (POV)"]);
+  it("connects a relationship to a scene, readable from both ends", async () => {
+    await connect(ctx, { sourceId: rivals, targetId: sceneId, kind: "develops_in" });
+    expect(await headings(rivals)).toEqual(["Develops in: Storm"]);
+    expect(await headings(sceneId)).toEqual(["Relationship moments: Mara & Theo"]);
 
     const [view] = await listConnections(ctx, sceneId);
-    expect(view.other).toMatchObject({ kind: "CHARACTER", href: `/characters/${mara}` });
+    expect(view.other).toMatchObject({ kind: "RELATIONSHIP", href: `/relationships/${rivals}` });
   });
 
   it("accepts a directed kind offered from the target's side and stores it source → target", async () => {
-    await connect(ctx, { sourceId: sceneId, targetId: theo, kind: "appears_in" });
-    const row = await db.connection.findFirstOrThrow({ where: { kind: "appears_in" } });
-    expect([row.sourceId, row.targetId]).toEqual([theo, sceneId]);
-    expect(row.attributes).toEqual({ role: "PRESENT" });
+    await connect(ctx, { sourceId: sceneId, targetId: rivals, kind: "develops_in" });
+    const row = await db.connection.findFirstOrThrow({ where: { kind: "develops_in" } });
+    expect([row.sourceId, row.targetId]).toEqual([rivals, sceneId]);
+    expect(row.attributes).toEqual({});
   });
 
-  it("keeps one point-of-view character per scene, handing POV over", async () => {
-    await connect(ctx, { sourceId: mara, targetId: sceneId, kind: "appears_in", attribute: "POV" });
-    const theoLink = await connect(ctx, { sourceId: theo, targetId: sceneId, kind: "appears_in" });
-    await updateConnection(ctx, theoLink.id, { attribute: "POV" });
-    expect((await headings(sceneId)).sort()).toEqual([
-      "Characters: Mara (PRESENT)",
-      "Characters: Theo (POV)",
-    ]);
-
-    // The database refuses a second POV even if the service were bypassed.
+  it("no longer offers characters in scenes: that is Scene Participation", async () => {
     await expect(
-      db.connection.updateMany({
-        where: { sourceId: mara },
-        data: { attributes: { role: "POV" } },
-      }),
-    ).rejects.toThrow(/unique/i);
+      connect(ctx, { sourceId: mara, targetId: sceneId, kind: "appears_in" }),
+    ).rejects.toBeInstanceOf(RuleError);
   });
 
   it("rejects kinds that don't fit, bad attributes, self-links and duplicates", async () => {
     await expect(
-      connect(ctx, { sourceId: mara, targetId: bookId, kind: "appears_in" }),
+      connect(ctx, { sourceId: rivals, targetId: bookId, kind: "develops_in" }),
     ).rejects.toBeInstanceOf(RuleError);
     await expect(
       connect(ctx, { sourceId: mara, targetId: sceneId, kind: "nope" }),
     ).rejects.toBeInstanceOf(RuleError);
     await expect(
-      connect(ctx, { sourceId: mara, targetId: sceneId, kind: "appears_in", attribute: "VILLAIN" }),
+      connect(ctx, {
+        sourceId: rivals,
+        targetId: sceneId,
+        kind: "develops_in",
+        attribute: "VILLAIN",
+      }),
     ).rejects.toBeInstanceOf(RuleError);
     await expect(
       connect(ctx, { sourceId: mara, targetId: mara, kind: "related" }),
     ).rejects.toBeInstanceOf(RuleError);
 
-    await connect(ctx, { sourceId: mara, targetId: sceneId, kind: "appears_in" });
+    await connect(ctx, { sourceId: rivals, targetId: sceneId, kind: "develops_in" });
     await expect(
-      connect(ctx, { sourceId: mara, targetId: sceneId, kind: "appears_in" }),
+      connect(ctx, { sourceId: rivals, targetId: sceneId, kind: "develops_in" }),
     ).rejects.toBeInstanceOf(ConflictError);
   });
 
@@ -104,11 +101,7 @@ describe("universal connections", () => {
   it("connects any kinds of story object generically", async () => {
     const idea = await createIdea(ctx, { title: "A lighthouse keeper who can't swim" });
     const note = await createNote(ctx, { title: "Research: lighthouses" });
-    const rel = await createRelationship(ctx, {
-      characterId: mara,
-      otherCharacterId: theo,
-      type: "Rivals",
-    });
+    const rel = { id: rivals };
 
     await connect(ctx, { sourceId: note.id, targetId: rel.id, kind: "about" });
     await connect(ctx, { sourceId: note.id, targetId: chapterId, kind: "about" });
@@ -141,18 +134,18 @@ describe("universal connections", () => {
   });
 
   it("hides links to trashed objects and brings them back on restore", async () => {
-    await connect(ctx, { sourceId: mara, targetId: sceneId, kind: "appears_in" });
+    await connect(ctx, { sourceId: rivals, targetId: sceneId, kind: "develops_in" });
     await trashChapter(ctx, chapterId);
-    expect(await listConnections(ctx, mara)).toEqual([]);
+    expect(await listConnections(ctx, rivals)).toEqual([]);
     await restoreFromTrash(ctx, "CHAPTER", chapterId);
-    expect(await headings(mara)).toEqual(["Appears in: Storm (PRESENT)"]);
+    expect(await headings(rivals)).toEqual(["Develops in: Storm"]);
 
     await trashBook(ctx, bookId);
-    expect(await listConnections(ctx, mara)).toEqual([]);
+    expect(await listConnections(ctx, rivals)).toEqual([]);
   });
 
   it("deletes links with either end when it is deleted forever", async () => {
-    const link = await connect(ctx, { sourceId: mara, targetId: sceneId, kind: "appears_in" });
+    const link = await connect(ctx, { sourceId: mara, targetId: sceneId, kind: "related" });
     await trashCharacter(ctx, mara);
     await deleteForever(ctx, "CHARACTER", mara);
     expect(await db.connection.count({ where: { id: link.id } })).toBe(0);
@@ -160,7 +153,7 @@ describe("universal connections", () => {
   });
 
   it("disconnects without touching the connected objects", async () => {
-    const link = await connect(ctx, { sourceId: mara, targetId: sceneId, kind: "appears_in" });
+    const link = await connect(ctx, { sourceId: rivals, targetId: sceneId, kind: "develops_in" });
     await disconnect(ctx, link.id);
     expect(await listConnections(ctx, sceneId)).toEqual([]);
     expect(await db.character.count({ where: { id: mara } })).toBe(1);
@@ -174,7 +167,7 @@ describe("universal connections", () => {
       connect(ctx, { sourceId: mara, targetId: theirs, kind: "related" }),
     ).rejects.toBeInstanceOf(NotFoundError);
     await expect(listConnections(stranger, mara)).rejects.toBeInstanceOf(NotFoundError);
-    const link = await connect(ctx, { sourceId: mara, targetId: sceneId, kind: "appears_in" });
+    const link = await connect(ctx, { sourceId: mara, targetId: sceneId, kind: "related" });
     await expect(disconnect(stranger, link.id)).rejects.toBeInstanceOf(NotFoundError);
 
     await expect(
@@ -188,11 +181,8 @@ describe("universal connections", () => {
 describe("story graph resolution and search", () => {
   it("resolves nodes of every kind to titles and links, skipping trashed and foreign ones", async () => {
     const note = await createNote(ctx, { title: "Lighthouse facts" });
-    const rel = await createRelationship(ctx, {
-      characterId: theo,
-      otherCharacterId: mara,
-      type: "Siblings",
-    });
+    // Hidden with Theo: a relationship is visible while all its members are.
+    const rel = { id: rivals };
     const stranger = await createAuthor("Stranger");
     const foreign = (await createCharacter(stranger, { name: "Spy" })).id;
     await trashCharacter(ctx, theo);

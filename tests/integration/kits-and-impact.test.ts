@@ -3,7 +3,6 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "@/lib/db";
 import { ConflictError, NotFoundError, RuleError } from "@/lib/errors";
 import { createCharacter, trashCharacter } from "@/modules/characters";
-import { connect } from "@/modules/connections";
 import {
   createFieldDefinition,
   deleteFieldDefinition,
@@ -15,6 +14,7 @@ import { createBook, createSeries, trashBook } from "@/modules/library";
 import { createChapter, createScene } from "@/modules/manuscript";
 import { createNote } from "@/modules/notes";
 import { createRelationship } from "@/modules/relationships";
+import { addParticipant } from "@/modules/participation";
 import {
   applyKit,
   assignScene,
@@ -228,7 +228,7 @@ describe("Change Impact before deleting", () => {
     await saveContent(ctx, { nodeId: scene.id, content: doc("one"), baseVersion: 0 });
     await saveContent(ctx, { nodeId: scene.id, content: doc("one two"), baseVersion: 1 });
     const hero = await createCharacter(ctx, { name: "Hero", seriesId: series.id });
-    await connect(ctx, { sourceId: hero.id, targetId: scene.id, kind: "appears_in" });
+    await addParticipant(ctx, scene.id, { characterId: hero.id });
     const note = await createNote(ctx, { title: "Research", aboutId: scene.id });
     const arc = await createOutline(ctx, {
       seriesId: series.id,
@@ -255,18 +255,19 @@ describe("Change Impact before deleting", () => {
       OUTLINE: 1,
       PLACEMENTS: 1,
       FIELDS: 1,
-      LINKS: 2, // Hero's appearance and the note: both stay
+      APPEARANCES: 1, // Hero was in the scene; Hero stays
+      LINKS: 1, // the note stays
       KEPT_CHARACTERS: 1,
     });
     expect(report.summary).toMatch(
       /^This will affect \d+ items: 1 series, 1 book, 1 chapter, 1 scene, 1 structure/,
     );
-    expect(
-      report.groups
-        .find((g) => g.key === "LINKS")
-        ?.items.map((i) => i.title)
-        .sort(),
-    ).toEqual(["Hero", "Research"]);
+    expect(report.groups.find((g) => g.key === "LINKS")?.items.map((i) => i.title)).toEqual([
+      "Research",
+    ]);
+    expect(report.groups.find((g) => g.key === "APPEARANCES")?.items.map((i) => i.title)).toEqual([
+      "Hero",
+    ]);
     expect(report.groups.find((g) => g.key === "KEPT_CHARACTERS")?.affected).toBe(false);
 
     await deleteForever(ctx, "SERIES", series.id, report.token);

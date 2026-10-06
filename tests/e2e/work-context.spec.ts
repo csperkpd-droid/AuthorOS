@@ -3,7 +3,7 @@ import { expect, test, type Page } from "@playwright/test";
 import { signUp } from "./support/auth";
 import { editorText, expectSaved } from "./support/manuscript";
 import { uniqueEmail } from "./support/outbox";
-import { createBookWithScene, createCharacter } from "./support/story-bible";
+import { addToScene, createBookWithScene, createCharacter } from "./support/story-bible";
 
 /** Milestone 10: Back, Return to Work and Continue Writing behave differently. */
 
@@ -40,15 +40,7 @@ const returnToWork = (page: Page) => page.getByRole("button", { name: /Return to
 async function sceneWithMara(page: Page) {
   await createCharacter(page, "Mara Quinn");
   const sceneUrl = await createBookWithScene(page, "Harbour Lights");
-  const cast = page.getByRole("region", { name: "Characters in this scene" });
-  await cast.getByRole("button", { name: "Add character" }).click();
-  const dialog = page.getByRole("dialog", { name: "Add a character to this scene" });
-  await dialog.getByLabel("Character name").fill("Mara");
-  await dialog
-    .getByRole("list", { name: "Characters" })
-    .getByRole("button", { name: "Mara Quinn" })
-    .click();
-  await expect(cast.getByLabel("Role of Mara Quinn")).toBeVisible();
+  await addToScene(page, "Mara Quinn", { search: "Mara" });
   return sceneUrl;
 }
 

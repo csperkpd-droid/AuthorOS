@@ -14,6 +14,7 @@ import * as imports from "@/modules/imports";
 import * as library from "@/modules/library";
 import * as manuscript from "@/modules/manuscript";
 import * as notes from "@/modules/notes";
+import * as participation from "@/modules/participation";
 import * as penNames from "@/modules/pen-names";
 import * as progress from "@/modules/progress";
 import * as relationships from "@/modules/relationships";
@@ -42,6 +43,7 @@ const MODULES = {
   library,
   manuscript,
   notes,
+  participation,
   penNames,
   progress,
   relationships,
@@ -56,7 +58,7 @@ const MODULES = {
 
 /** Names of services that change data. */
 const WRITES =
-  /^(create|update|trash|restore|delete|set|move|rename|save|apply|assign|unassign|add|dissolve|connect|disconnect|log|promote|archive|empty|run|review|export|keep)(?=[A-Z]|$)/;
+  /^(create|update|trash|restore|delete|set|move|rename|save|apply|assign|unassign|add|dissolve|connect|disconnect|log|promote|archive|empty|run|review|export|keep|remove)(?=[A-Z]|$)/;
 
 /**
  * Writes that need no role: personal preferences of the member, and

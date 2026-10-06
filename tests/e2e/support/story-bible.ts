@@ -54,4 +54,54 @@ export async function connectTo(
   await expect(dialog).toBeHidden();
 }
 
+/** The "Characters in this scene" panel of the scene page. */
+export const sceneCast = (page: Page) =>
+  page.getByRole("region", { name: "Characters in this scene" });
+
+/** One character in the scene panel; its name says their part ("Mara: Present"). */
+export const castMember = (page: Page, name: string) =>
+  sceneCast(page).getByRole("listitem", { name: new RegExp(`^${name}:`) });
+
+/** Expects a character's part in the scene, e.g. "Point of view, present" or "Mentioned". */
+export async function expectPart(page: Page, name: string, part: string) {
+  await expect(castMember(page, name)).toHaveAccessibleName(`${name}: ${part}`);
+}
+
+/**
+ * Adds a character to the current scene with "Add character": an existing
+ * one (found by `search`) or a new one (`create`).
+ */
+export async function addToScene(
+  page: Page,
+  name: string,
+  {
+    search,
+    create = false,
+    presence,
+    pov,
+  }: { search?: string; create?: boolean; presence?: "Present" | "Mentioned"; pov?: boolean } = {},
+) {
+  await sceneCast(page).getByRole("button", { name: "Add character" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add a character to this scene" });
+  await dialog.getByLabel("Character name").fill(search ?? name);
+  if (presence) await dialog.getByLabel("In this scene").selectOption(presence.toUpperCase());
+  if (pov !== undefined) await dialog.getByLabel("Point of view").setChecked(pov);
+  if (create) await dialog.getByRole("button", { name: `Create “${name}”` }).click();
+  else
+    await dialog
+      .getByRole("list", { name: "Characters" })
+      .getByRole("button", { name, exact: true })
+      .click();
+  await expect(dialog).toBeHidden();
+  await expect(castMember(page, name)).toBeVisible();
+}
+
+/** Opens a character's menu in the scene panel and chooses an item. */
+export async function changePart(page: Page, name: string, item: string | RegExp) {
+  await sceneCast(page)
+    .getByRole("button", { name: `Change ${name}’s part in this scene` })
+    .click();
+  await page.getByRole("menuitem", { name: item }).click();
+}
+
 export { expectSaved };

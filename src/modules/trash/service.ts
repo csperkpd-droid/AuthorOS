@@ -245,12 +245,16 @@ async function deletionReport(
   const doomed = await deletionSet(ctx, roots);
   const all = [...doomed.values()].flat().map((r) => r.id);
   const ws = ctx.workspaceId;
-  const [revisions, links, placements, fieldValues, keptCharacters, scopedFields] =
+  const [revisions, links, appearances, placements, fieldValues, keptCharacters, scopedFields] =
     await Promise.all([
       db.contentRevision.count({ where: { workspaceId: ws, nodeId: { in: all } } }),
       db.connection.findMany({
         where: { workspaceId: ws, OR: [{ sourceId: { in: all } }, { targetId: { in: all } }] },
         select: { id: true, sourceId: true, targetId: true },
+      }),
+      db.sceneParticipation.findMany({
+        where: { workspaceId: ws, OR: [{ sceneId: { in: all } }, { characterId: { in: all } }] },
+        select: { sceneId: true, characterId: true },
       }),
       db.beatScene.count({
         where: {
@@ -286,6 +290,16 @@ async function deletionReport(
     links.flatMap((l) => [l.sourceId, l.targetId]).filter((id) => !doomedSet.has(id)),
   );
   const rootIds = new Set(roots.map((r) => r.id));
+  // Scene appearances whose other end stays: a character keeps existing
+  // without this scene, a scene without this character. Named only when the
+  // reader can view them (Story Graph funnel).
+  const keptAppearances = appearances.filter(
+    (a) => !doomedSet.has(a.sceneId) || !doomedSet.has(a.characterId),
+  );
+  const appearanceOthers = await resolveNodes(
+    ctx,
+    keptAppearances.map((a) => (doomedSet.has(a.sceneId) ? a.characterId : a.sceneId)),
+  );
 
   return buildReport({
     title,
@@ -311,6 +325,18 @@ async function deletionReport(
         effect: "Deleted",
         count: revisions,
         items: [],
+      },
+      {
+        key: "APPEARANCES",
+        label: "Characters in scenes",
+        noun: { one: "scene appearance", many: "scene appearances" },
+        effect: "Removed; the other characters and scenes stay, their text unchanged",
+        count: keptAppearances.length,
+        items: [...appearanceOthers.values()].map((n) => ({
+          id: n.id,
+          title: n.title,
+          href: n.href,
+        })),
       },
       {
         key: "PLACEMENTS",

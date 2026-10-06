@@ -17,3 +17,5 @@ export { VERSIONED_KINDS, isVersionedKind } from "./versioned";
 export type { VersionedKind } from "./versioned";
 export { listFieldHistory, recordFieldHistory, restoreFieldValue } from "./fields";
 export type { FieldRevisionView, FieldValues } from "./fields";
+export { listParticipationHistory, recordParticipationChange } from "./participation";
+export type { ParticipationChangeView, ParticipationSnapshot } from "./participation";

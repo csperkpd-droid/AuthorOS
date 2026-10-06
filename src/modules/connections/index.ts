@@ -10,7 +10,6 @@ export type { ConnectionPlan, ConnectionView } from "./service";
 export {
   CONNECTION_KINDS,
   CONNECTION_KIND_KEYS,
-  SCENE_ROLES,
   canConnect,
   connectionOptionsFor,
   getKind,
