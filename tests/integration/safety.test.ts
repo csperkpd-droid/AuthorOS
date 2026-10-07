@@ -137,12 +137,11 @@ describe("field history: long-form text is never lost to an edit", () => {
     await updateBeat(ctx, beat.id, { title: "Midpoint", targetPercent: 50, description: "" });
     expect((await listFieldHistory(ctx, s.id)).map((h) => h.value)).toEqual(["They meet."]);
     expect((await listFieldHistory(ctx, book.id)).map((h) => h.value)).toEqual(["First."]);
-    expect(await listFieldHistory(ctx, outline.id)).toEqual([
-      expect.objectContaining({
-        field: `beat:${beat.id}.description`,
-        value: "Everything changes.",
-      }),
+    // A beat keeps its description history on itself (M14).
+    expect(await listFieldHistory(ctx, beat.id)).toEqual([
+      expect.objectContaining({ field: "description", value: "Everything changes." }),
     ]);
+    expect(await listFieldHistory(ctx, outline.id)).toEqual([]);
   });
 });
 

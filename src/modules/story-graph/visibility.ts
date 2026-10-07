@@ -77,3 +77,6 @@ export const liveTimelineEvent = {
   deletedAt: null,
   OR: [{ book: liveBook }, { series: liveSeries }],
 } satisfies Prisma.TimelineEventWhereInput;
+
+/** A beat is visible while its structure is. */
+export const liveBeat = { outline: liveOutline } satisfies Prisma.BeatWhereInput;

@@ -7,6 +7,7 @@ export {
   previewDeleteBeat,
   deleteTemplate,
   getOutline,
+  keepPlacement,
   listOutlines,
   listTemplates,
   moveBeat,
@@ -21,7 +22,7 @@ export {
   unassignScene,
   updateBeat,
 } from "./service";
-export type { RomanceCell } from "./service";
+export type { PlacementObservation, RomanceCell } from "./service";
 export {
   applyKit,
   createKit,

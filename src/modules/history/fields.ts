@@ -18,9 +18,10 @@ import { STORY_TIME_FIELD } from "./story-time";
  * value first (in the same transaction), so no long-form text is lost to an
  * edit, an import or a restore. Restoring keeps the current value too.
  *
- * Field names: a column ("synopsis"), a character profile field
- * ("profile.goal"), or a beat's description ("beat:<id>.description", kept on
- * the beat's structure).
+ * Field names: a column ("synopsis") or a character profile field
+ * ("profile.goal"). Beats keep their own description history since M14
+ * (before, it was "beat:<id>.description" on the structure; the migration
+ * moved it onto each beat).
  */
 
 type Tx = Prisma.TransactionClient;
@@ -28,7 +29,6 @@ type Client = Tx | typeof db;
 export type FieldValues = Record<string, string | null | undefined>;
 
 const PROFILE = /^profile\.([a-zA-Z0-9_-]{1,60})$/;
-const BEAT = /^beat:([0-9a-f-]{36})\.description$/;
 
 /** The text fields with history, per kind: table and column. */
 const COLUMNS: Partial<Record<StoryNodeKind, Record<string, { table: string; column: string }>>> = {
@@ -44,6 +44,7 @@ const COLUMNS: Partial<Record<StoryNodeKind, Record<string, { table: string; col
   TIMELINE_EVENT: { description: { table: "timeline_events", column: "description" } },
   // Descriptions only: trope names have no history (decision 110).
   TROPE: { description: { table: "tropes", column: "description" } },
+  BEAT: { description: { table: "beats", column: "description" } },
 };
 
 function fieldOf(kind: StoryNodeKind, field: string) {
@@ -51,8 +52,6 @@ function fieldOf(kind: StoryNodeKind, field: string) {
   if (column) return { type: "column" as const, ...column };
   const profile = kind === "CHARACTER" ? PROFILE.exec(field) : null;
   if (profile) return { type: "profile" as const, key: profile[1] };
-  const beat = kind === "OUTLINE" ? BEAT.exec(field) : null;
-  if (beat) return { type: "beat" as const, beatId: beat[1] };
   return null;
 }
 
@@ -103,20 +102,12 @@ async function readField(client: Client, kind: StoryNodeKind, nodeId: string, fi
     );
     return rows[0]?.value ?? null;
   }
-  if (spec.type === "profile") {
-    const c = await client.character.findUniqueOrThrow({
-      where: { id: nodeId },
-      select: { profile: true },
-    });
-    const value = (c.profile as Record<string, unknown> | null)?.[spec.key];
-    return typeof value === "string" ? value : null;
-  }
-  const beat = await client.outlineBeat.findFirst({
-    where: { id: spec.beatId, outlineId: nodeId },
-    select: { description: true },
+  const c = await client.character.findUniqueOrThrow({
+    where: { id: nodeId },
+    select: { profile: true },
   });
-  if (!beat) throw new NotFoundError("Beat");
-  return beat.description;
+  const value = (c.profile as Record<string, unknown> | null)?.[spec.key];
+  return typeof value === "string" ? value : null;
 }
 
 async function writeField(
@@ -135,18 +126,14 @@ async function writeField(
     );
     return;
   }
-  if (spec.type === "profile") {
-    const c = await tx.character.findUniqueOrThrow({
-      where: { id: nodeId },
-      select: { profile: true },
-    });
-    const profile = { ...((c.profile as Record<string, string> | null) ?? {}) };
-    if (empty(value)) delete profile[spec.key];
-    else profile[spec.key] = value!;
-    await tx.character.update({ where: { id: nodeId }, data: { profile } });
-    return;
-  }
-  await tx.outlineBeat.update({ where: { id: spec.beatId }, data: { description: value } });
+  const c = await tx.character.findUniqueOrThrow({
+    where: { id: nodeId },
+    select: { profile: true },
+  });
+  const profile = { ...((c.profile as Record<string, string> | null) ?? {}) };
+  if (empty(value)) delete profile[spec.key];
+  else profile[spec.key] = value!;
+  await tx.character.update({ where: { id: nodeId }, data: { profile } });
 }
 
 export type FieldRevisionView = {

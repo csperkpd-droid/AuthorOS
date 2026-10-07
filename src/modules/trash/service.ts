@@ -190,6 +190,15 @@ async function deletionSet(ctx: AuthorContext, roots: { kind: StoryNodeKind; id:
       select: { id: true, title: true },
     }),
   );
+  // A structure's beats are story objects too (M14): they go with it, and
+  // so do their links.
+  add(
+    "BEAT",
+    await db.beat.findMany({
+      where: { workspaceId: ws, outlineId: { in: ids("OUTLINE") } },
+      select: { id: true, title: true },
+    }),
+  );
   add(
     "TROPE",
     (
@@ -287,7 +296,7 @@ async function deletionReport(
       where: { workspaceId: ws, OR: [{ sceneId: { in: all } }, { characterId: { in: all } }] },
       select: { sceneId: true, characterId: true },
     }),
-    db.beatScene.count({
+    db.beatAssignment.count({
       where: {
         workspaceId: ws,
         OR: [{ sceneId: { in: all } }, { beat: { outlineId: { in: all } } }],

@@ -28,7 +28,14 @@ import {
   STORY_KINDS,
   storyObjectType,
 } from "@/modules/story-graph";
-import { createOutline, trashOutline } from "@/modules/structure";
+import {
+  addBeat,
+  assignScene,
+  createOutline,
+  deleteBeat,
+  previewDeleteBeat,
+  trashOutline,
+} from "@/modules/structure";
 import { createTask, trashTask } from "@/modules/tasks";
 import { deleteForever, listTrash, previewDeleteForever, restoreFromTrash } from "@/modules/trash";
 import { addParticipant } from "@/modules/participation";
@@ -77,6 +84,8 @@ async function world(): Promise<World> {
     kind: "PLOT",
     title: "Plot Lattice",
   });
+  const beat = await addBeat(ctx, outline.id, { title: "Beat Turning point", targetPercent: null });
+  await assignScene(ctx, beat.id, scene.id);
   const note = await createNote(ctx, { title: "Note Lighthouse" });
   const idea = await createIdea(ctx, { title: "Idea Tidewater" });
   const task = await createTask(ctx, { title: "Task Outline revisions" });
@@ -101,6 +110,7 @@ async function world(): Promise<World> {
     EVENT: { id: event.id, title: "Event Writers retreat" },
     TIMELINE_EVENT: { id: happening.id, title: "Shipwreck" },
     TROPE: { id: trope.id, title: "Trope Slowburn" },
+    BEAT: { id: beat.id, title: "Beat Turning point" },
   };
 }
 
@@ -120,6 +130,7 @@ const TRASH: Record<StoryNodeKind, ((ctx: AuthorContext, id: string) => Promise<
   EVENT: trashEvent,
   TIMELINE_EVENT: trashTimelineEvent,
   TROPE: trashTrope,
+  BEAT: null, // removed from its structure with Change Impact, never trashed
 };
 
 describe("Story Graph integrity, for every kind in the registry", () => {
@@ -174,6 +185,10 @@ describe("Story Graph integrity, for every kind in the registry", () => {
     for (const kind of STORY_KINDS) {
       const { id } = w[kind];
       const trash = TRASH[kind];
+      if (storyObjectType(kind).lifecycle === "remove") {
+        expect(trash).toBeNull();
+        continue;
+      }
       if (storyObjectType(kind).lifecycle === "archive") {
         expect(trash).toBeNull();
         await archivePenName(ctx, id);
@@ -207,6 +222,32 @@ describe("Story Graph integrity, for every kind in the registry", () => {
     },
   );
 
+  it("a beat (no Trash of its own) is removed through Change Impact, leaving no orphans", async () => {
+    const w = await world();
+    await connect(ctx, { sourceId: w.NOTE.id, targetId: w.BEAT.id, kind: "about" });
+    const report = await previewDeleteBeat(ctx, w.BEAT.id);
+    expect(report.groups.find((g) => g.key === "PLACEMENTS")?.count).toBe(1);
+    expect(report.groups.find((g) => g.key === "LINKS")?.count).toBe(1);
+    await deleteBeat(ctx, w.BEAT.id, report.token);
+    expect(await db.storyNode.count({ where: { id: w.BEAT.id } })).toBe(0);
+    expect(await db.beatAssignment.count({ where: { beatId: w.BEAT.id } })).toBe(0);
+    expect(await resolveNode(ctx, w.SCENE.id)).not.toBeNull();
+    expect(await resolveNode(ctx, w.NOTE.id)).not.toBeNull();
+    expect(await auditGraph(ctx)).toEqual([]);
+  });
+
+  it("deleting a structure forever names its beats, which go with it", async () => {
+    const w = await world();
+    await trashOutline(ctx, w.OUTLINE.id);
+    const report = await previewDeleteForever(ctx, "OUTLINE", w.OUTLINE.id);
+    expect(report.groups.find((g) => g.key === "BEAT")?.items.map((i) => i.id)).toEqual([
+      w.BEAT.id,
+    ]);
+    await deleteForever(ctx, "OUTLINE", w.OUTLINE.id, report.token);
+    expect(await db.storyNode.count({ where: { id: w.BEAT.id } })).toBe(0);
+    expect(await auditGraph(ctx)).toEqual([]);
+  });
+
   it("moving a book's identity moves what belongs to it and keeps the graph consistent", async () => {
     const pen = await createPenName(ctx, { name: "Rose Hart" });
     const book = await createBook(ctx, { title: "Standalone" });
@@ -231,15 +272,9 @@ describe("Story Graph integrity, for every kind in the registry", () => {
       relationshipId: w.RELATIONSHIP.id,
       title: "Arc",
     });
-    const beat = await db.outlineBeat.findFirst({ where: { outlineId: arc.id } });
-    const beatId =
-      beat?.id ??
-      (
-        await db.outlineBeat.create({
-          data: { workspaceId: ctx.workspaceId, outlineId: arc.id, title: "b", position: "a0" },
-        })
-      ).id;
-    await db.outlineBeat.update({ where: { id: beatId }, data: { bookId: other.id } });
+    const beat = await db.beat.findFirst({ where: { outlineId: arc.id } });
+    const beatId = beat?.id ?? (await addBeat(ctx, arc.id, { title: "b", targetPercent: null })).id;
+    await db.beat.update({ where: { id: beatId }, data: { bookId: other.id } });
     expect((await auditGraph(ctx)).map((i) => i.check)).toEqual([
       "series beat planned for a book outside the series",
     ]);

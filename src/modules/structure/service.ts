@@ -2,7 +2,12 @@ import "server-only";
 
 import { generateNKeysBetween } from "fractional-indexing";
 
-import { Prisma, type ArcRole, type StructureKind } from "@/generated/prisma/client";
+import {
+  Prisma,
+  type ArcRole,
+  type StructureKind,
+  type ValidityState,
+} from "@/generated/prisma/client";
 import { db } from "@/lib/db";
 import { assertNotStale, staleError, type EditGuard } from "@/lib/concurrency";
 import { ConflictError, NotFoundError, RuleError } from "@/lib/errors";
@@ -12,8 +17,15 @@ import { getBook, getSeries, listLibrary } from "@/modules/library";
 import { createNote, saveNoteBody } from "@/modules/notes";
 import { getBookTree } from "@/modules/manuscript";
 import { getRelationship, listRelationships, relationshipTitle } from "@/modules/relationships";
-import { assertReviewed, buildReport } from "@/modules/impact";
-import { createStoryNode, liveOutline, liveScene } from "@/modules/story-graph";
+import { assertReviewed, attachmentsOf, buildReport } from "@/modules/impact";
+import {
+  createStoryNode,
+  createStoryNodes,
+  liveOutline,
+  liveScene,
+  purgeStoryNodes,
+  viewableKinds,
+} from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 import { recordFieldHistory } from "@/modules/history";
 import { assertCan, assertCanView } from "@/server/policy";
@@ -21,10 +33,12 @@ import { assertCan, assertCanView } from "@/server/policy";
 import { STRUCTURE_KIND_LABELS } from "./labels";
 import {
   beatInput,
+  keepPlacementInput,
   newOutlineInput,
   outlineTitle,
   templateInput,
   type BeatInput,
+  type KeepPlacementInput,
   type NewOutlineInput,
   type TemplateInput,
 } from "./schemas";
@@ -33,10 +47,21 @@ import {
  * Story structures. An outline is a structure applied to one book or to a
  * whole series (plot, romance arc, character arc, subplot, custom); its beats
  * are assigned to real scenes (of that book, or of any book in the series).
- * Assignments are structural (beat_scenes), many-to-many: one beat may span
- * scenes (and books), one scene may carry beats of many structures, and
- * scenes are never copied.
+ * Beats are Story Graph objects (M14). Beat Assignments are structural
+ * (beat_assignments), many-to-many: one beat may span scenes (and books), one
+ * scene may carry beats of many structures, and scenes are never copied.
+ *
+ * Validity (M14, decision 112): an assignment follows its scene. While the
+ * scene is in the Trash it is Potentially Stale; when the scene no longer
+ * belongs to the structure's book or series it is Conflicted, unless the
+ * author keeps it (Intentionally Excepted). The database re-evaluates it
+ * whenever a scene (or what contains it) is trashed, restored or moved
+ * (`evaluate_beat_assignments`). Nothing is ever removed or re-placed for
+ * the author; the board shows these as calm observations.
  */
+
+/** Placements that count as placed: current, or kept by the author. */
+const COUNTS_AS_PLACED: ValidityState[] = ["CURRENT", "INTENTIONALLY_EXCEPTED"];
 
 // ─── Templates ──────────────────────────────────────────────────────────────
 
@@ -92,7 +117,7 @@ export async function prepareTemplate(ctx: AuthorContext, outlineId: string, inp
   const data = templateInput.parse(input);
   const outline = await requireOutline(ctx, outlineId);
   const [beats, seriesBooks] = await Promise.all([
-    db.outlineBeat.findMany({
+    db.beat.findMany({
       where: { outlineId },
       select: {
         id: true,
@@ -381,8 +406,11 @@ export async function prepareOutline(ctx: AuthorContext, input: NewOutlineInput)
       },
     });
     if (beats.length) {
-      await tx.outlineBeat.createMany({
+      // Every beat is a story object of its own (decision 112).
+      const beatIds = await createStoryNodes(tx, ctx.workspaceId, "BEAT", beats.length);
+      await tx.beat.createMany({
         data: beats.map((b, i) => ({
+          id: beatIds[i],
           workspaceId: ctx.workspaceId,
           outlineId: id,
           templateBeatId: b.id,
@@ -442,14 +470,22 @@ export async function listOutlines(
       title: true,
       arcRole: true,
       ...outlineRefs,
-      beats: { select: { _count: { select: { scenes: { where: { scene: liveScene } } } } } },
+      beats: {
+        select: {
+          _count: {
+            select: {
+              assignments: { where: { scene: liveScene, validity: { in: COUNTS_AS_PLACED } } },
+            },
+          },
+        },
+      },
     },
   });
   return rows.map(({ beats, relationship, ...o }) => ({
     ...o,
     relationship: relationshipRef(relationship),
     beatCount: beats.length,
-    placedCount: beats.filter((b) => b._count.scenes > 0).length,
+    placedCount: beats.filter((b) => b._count.assignments > 0).length,
   }));
 }
 
@@ -466,16 +502,31 @@ type SceneRef = {
 };
 
 /**
+ * A placement that is not simply current: its scene is in the Trash
+ * (Potentially Stale), or no longer in the structure's book or series
+ * (Conflicted), or kept there by the author (Intentionally Excepted).
+ */
+export type PlacementObservation = {
+  sceneId: string;
+  /** Null when the reader may not view scenes (manuscript access). */
+  sceneTitle: string | null;
+  bookTitle: string | null;
+  validity: ValidityState;
+  note: string | null;
+};
+
+/**
  * An outline with its beats in order, each with the scenes it is placed in
- * (in reading order, with where each falls in its book) and the scenes that
- * can be assigned: the book's, or every book's in a series structure.
+ * (in reading order, with where each falls in its book), the placements to
+ * look at (validity) and the scenes that can be assigned: the book's, or
+ * every book's in a series structure.
  */
 export async function getOutline(ctx: AuthorContext, id: string) {
   assertCanView(ctx, "structure", { kind: "OUTLINE", id: id });
   const outline = await requireOutline(ctx, id);
   const bookIds = outline.bookId ? [outline.bookId] : await seriesBookIds(ctx, outline.seriesId!);
   const [beats, trees, books] = await Promise.all([
-    db.outlineBeat.findMany({
+    db.beat.findMany({
       where: { outlineId: id },
       select: {
         id: true,
@@ -485,7 +536,15 @@ export async function getOutline(ctx: AuthorContext, id: string) {
         targetPercent: true,
         position: true,
         bookId: true,
-        scenes: { where: { scene: liveScene }, select: { sceneId: true } },
+        assignments: {
+          orderBy: { createdAt: "asc" },
+          select: {
+            sceneId: true,
+            validity: true,
+            note: true,
+            scene: { select: { title: true, book: { select: { title: true } } } },
+          },
+        },
       },
     }),
     Promise.all(bookIds.map((b) => getBookTree(ctx, b))),
@@ -505,19 +564,34 @@ export async function getOutline(ctx: AuthorContext, id: string) {
     })),
   );
   const order = new Map(sceneOrder.map((s, i) => [s.id, i]));
+  // Scene titles are shown only to readers who may view the manuscript.
+  const showScenes = viewableKinds(ctx, ["SCENE"]).length > 0;
 
   return {
     ...outline,
     relationship: relationshipRef(outline.relationship),
     books: bookIds.map((b, i) => ({ id: b, title: titles.get(b) ?? "", number: i + 1 })),
-    beats: sortByPosition(beats).map(({ scenes, ...b }) => ({
-      ...b,
-      scenes: scenes
-        .map((s) => s.sceneId)
-        .filter((sceneId) => order.has(sceneId))
-        .sort((x, y) => order.get(x)! - order.get(y)!)
-        .map((sceneId) => sceneOrder[order.get(sceneId)!]),
-    })),
+    beats: sortByPosition(beats).map(({ assignments, ...b }) => {
+      // Current = a live scene of the structure's book(s), so in `order`.
+      const current = assignments.filter((a) => a.validity === "CURRENT" && order.has(a.sceneId));
+      const observations: PlacementObservation[] = assignments
+        .filter((a) => a.validity !== "CURRENT")
+        .map((a) => ({
+          sceneId: a.sceneId,
+          sceneTitle: showScenes ? a.scene.title : null,
+          bookTitle: showScenes ? a.scene.book.title : null,
+          validity: a.validity,
+          note: a.note,
+        }));
+      return {
+        ...b,
+        scenes: current
+          .map((a) => a.sceneId)
+          .sort((x, y) => order.get(x)! - order.get(y)!)
+          .map((sceneId) => sceneOrder[order.get(sceneId)!]),
+        observations,
+      };
+    }),
     bookScenes: sceneOrder,
   };
 }
@@ -545,7 +619,7 @@ export async function trashOutline(ctx: AuthorContext, id: string) {
 // ─── Beats ──────────────────────────────────────────────────────────────────
 
 async function requireBeat(ctx: AuthorContext, beatId: string) {
-  const beat = await db.outlineBeat.findFirst({
+  const beat = await db.beat.findFirst({
     where: { id: beatId, workspaceId: ctx.workspaceId },
     select: { id: true, outlineId: true },
   });
@@ -555,7 +629,7 @@ async function requireBeat(ctx: AuthorContext, beatId: string) {
 }
 
 const beatSiblings = (outlineId: string, exclude?: string) =>
-  db.outlineBeat.findMany({
+  db.beat.findMany({
     where: { outlineId, ...(exclude ? { id: { not: exclude } } : {}) },
     select: { id: true, position: true },
   });
@@ -582,12 +656,14 @@ export async function addBeat(ctx: AuthorContext, outlineId: string, input: Beat
   return db.$transaction(async (tx) => {
     // Serialize appends to one outline.
     await tx.$queryRaw`SELECT 1 FROM "outlines" WHERE "id" = ${outlineId}::uuid FOR UPDATE`;
-    const siblings = await tx.outlineBeat.findMany({
+    const siblings = await tx.beat.findMany({
       where: { outlineId },
       select: { id: true, position: true },
     });
-    return tx.outlineBeat.create({
+    const id = await createStoryNode(tx, ctx.workspaceId, "BEAT");
+    return tx.beat.create({
       data: {
+        id,
         workspaceId: ctx.workspaceId,
         outlineId,
         title: data.title,
@@ -613,20 +689,14 @@ export async function updateBeat(
   const bookId =
     data.bookId === undefined ? undefined : await plannedBook(ctx, beat.outline, data.bookId);
   await db.$transaction(async (tx) => {
-    const row = await tx.outlineBeat.findUniqueOrThrow({
+    const row = await tx.beat.findUniqueOrThrow({
       where: { id: beatId },
       select: { description: true, updatedAt: true },
     });
     assertNotStale(row.updatedAt, guard.expectedUpdatedAt, "beat");
-    // A beat's description is kept on its structure's history.
-    await recordFieldHistory(
-      tx,
-      ctx,
-      beat.outlineId,
-      { [`beat:${beatId}.description`]: row.description },
-      { [`beat:${beatId}.description`]: data.description ?? null },
-    );
-    const { count } = await tx.outlineBeat.updateMany({
+    // A beat's description history is kept on the beat itself (M14).
+    await recordFieldHistory(tx, ctx, beatId, row, { description: data.description ?? null });
+    const { count } = await tx.beat.updateMany({
       where: { id: beatId, updatedAt: row.updatedAt },
       data: {
         title: data.title,
@@ -646,26 +716,29 @@ export async function moveBeat(ctx: AuthorContext, beatId: string, afterBeatId: 
   const plan = planInsertAfter(await beatSiblings(beat.outlineId, beatId), afterBeatId);
   await db.$transaction([
     ...plan.rebalanced.map((r) =>
-      db.outlineBeat.update({ where: { id: r.id }, data: { position: r.position } }),
+      db.beat.update({ where: { id: r.id }, data: { position: r.position } }),
     ),
-    db.outlineBeat.update({ where: { id: beatId }, data: { position: plan.position } }),
+    db.beat.update({ where: { id: beatId }, data: { position: plan.position } }),
   ]);
 }
 
-/** Removes a beat from the outline (its scene placements go with it; scenes are untouched). */
-/** "What will this affect?" for removing a beat: its scene placements go; the scenes stay. */
+/**
+ * "What will this affect?" for removing a beat: its scene placements and its
+ * links go; the scenes and the linked items stay.
+ */
 export async function previewDeleteBeat(ctx: AuthorContext, beatId: string) {
   assertCanView(ctx, "structure", { kind: "BEAT", id: beatId });
   const beat = await requireBeat(ctx, beatId);
-  const [row, placements] = await Promise.all([
-    db.outlineBeat.findUniqueOrThrow({
+  const [row, placements, attached] = await Promise.all([
+    db.beat.findUniqueOrThrow({
       where: { id: beatId },
       select: { title: true, description: true },
     }),
-    db.beatScene.findMany({
+    db.beatAssignment.findMany({
       where: { workspaceId: ctx.workspaceId, beatId },
       select: { scene: { select: { id: true, title: true, bookId: true } } },
     }),
+    attachmentsOf(ctx, [beatId]),
   ]);
   return buildReport({
     title: `Remove the beat “${row.title}”?`,
@@ -694,6 +767,7 @@ export async function previewDeleteBeat(ctx: AuthorContext, beatId: string) {
           ? [{ id: beatId, title: row.description.slice(0, 120), href: null }]
           : [],
       },
+      ...attached,
     ],
     extra: [beatId, row.description],
   });
@@ -709,7 +783,7 @@ export async function deleteBeat(
   assertCan(ctx, "edit", "structure");
   const chosen = assertReviewed(await previewDeleteBeat(ctx, beatId), token, accepted);
   if (chosen.has("KEEP_DESCRIPTION")) {
-    const beat = await db.outlineBeat.findUniqueOrThrow({
+    const beat = await db.beat.findUniqueOrThrow({
       where: { id: beatId },
       select: { title: true, description: true, outlineId: true },
     });
@@ -725,7 +799,8 @@ export async function deleteBeat(
       baseVersion: 0,
     });
   }
-  await db.outlineBeat.delete({ where: { id: beatId } });
+  // Deleting the beat's node removes the beat, its placements and its links.
+  await db.$transaction((tx) => purgeStoryNodes(tx, ctx.workspaceId, [beatId]));
 }
 
 // ─── Beat → scene placements ────────────────────────────────────────────────
@@ -753,7 +828,7 @@ export async function assignScene(ctx: AuthorContext, beatId: string, sceneId: s
     );
   }
   try {
-    await db.beatScene.create({ data: { workspaceId: ctx.workspaceId, beatId, sceneId } });
+    await db.beatAssignment.create({ data: { workspaceId: ctx.workspaceId, beatId, sceneId } });
   } catch (error) {
     if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === "P2002") {
       throw new ConflictError("This beat is already placed in that scene.");
@@ -765,15 +840,46 @@ export async function assignScene(ctx: AuthorContext, beatId: string, sceneId: s
 export async function unassignScene(ctx: AuthorContext, beatId: string, sceneId: string) {
   assertCan(ctx, "edit", "structure");
   await requireBeat(ctx, beatId);
-  await db.beatScene.deleteMany({ where: { beatId, sceneId, workspaceId: ctx.workspaceId } });
+  await db.beatAssignment.deleteMany({ where: { beatId, sceneId, workspaceId: ctx.workspaceId } });
+}
+
+/**
+ * The author keeps a placement that no longer fits its structure
+ * (Conflicted → Intentionally Excepted), optionally saying why. An author
+ * decision, not a fix: it lasts while the scene stays where it is, and the
+ * placement simply becomes Current again if the scene comes back into the
+ * structure's book or series.
+ */
+export async function keepPlacement(
+  ctx: AuthorContext,
+  beatId: string,
+  sceneId: string,
+  input: KeepPlacementInput = {},
+) {
+  assertCan(ctx, "edit", "structure");
+  const data = keepPlacementInput.parse(input);
+  await requireBeat(ctx, beatId);
+  const { count } = await db.beatAssignment.updateMany({
+    where: { workspaceId: ctx.workspaceId, beatId, sceneId, validity: "CONFLICTED" },
+    data: { validity: "INTENTIONALLY_EXCEPTED", exceptedAt: new Date(), note: data.note ?? null },
+  });
+  if (count === 0) {
+    const exists = await db.beatAssignment.findFirst({
+      where: { workspaceId: ctx.workspaceId, beatId, sceneId },
+      select: { validity: true },
+    });
+    if (!exists) throw new NotFoundError("Placement");
+    throw new RuleError("Only a placement that no longer fits its structure can be kept this way.");
+  }
 }
 
 /** Every beat, across all structures, that happens in a scene. */
 export async function beatsForScene(ctx: AuthorContext, sceneId: string) {
   assertCanView(ctx, "structure", { kind: "SCENE", id: sceneId });
-  const rows = await db.beatScene.findMany({
+  const rows = await db.beatAssignment.findMany({
     where: { sceneId, workspaceId: ctx.workspaceId, beat: { outline: liveOutline } },
     select: {
+      validity: true,
       beat: {
         select: {
           id: true,
@@ -791,6 +897,7 @@ export async function beatsForScene(ctx: AuthorContext, sceneId: string) {
     outlineTitle: r.beat.outline.title,
     kind: r.beat.outline.kind,
     seriesWide: r.beat.outline.seriesId !== null,
+    validity: r.validity,
   }));
 }
 
@@ -844,7 +951,10 @@ export async function seriesRomance(ctx: AuthorContext, seriesId: string) {
           title: true,
           position: true,
           bookId: true,
-          scenes: { where: { scene: liveScene }, select: { scene: { select: { bookId: true } } } },
+          assignments: {
+            where: { scene: liveScene },
+            select: { validity: true, scene: { select: { bookId: true, title: true } } },
+          },
         },
       },
     },
@@ -859,6 +969,8 @@ export async function seriesRomance(ctx: AuthorContext, seriesId: string) {
       /** Beats per book id, in arc then beat order. */
       books: Map<string, RomanceCell[]>;
       unplanned: RomanceCell[];
+      /** Beats with a placement that no longer fits its structure (validity). */
+      toLookAt: { beatId: string; title: string; outlineId: string }[];
     }
   >();
 
@@ -870,6 +982,7 @@ export async function seriesRomance(ctx: AuthorContext, seriesId: string) {
       arcs: [],
       books: new Map(bookIds.map((b) => [b, [] as RomanceCell[]])),
       unplanned: [],
+      toLookAt: [],
     };
     if (arc.arcRole === "MAIN") entry.arcRole = "MAIN";
     entry.arcs.push({
@@ -879,7 +992,13 @@ export async function seriesRomance(ctx: AuthorContext, seriesId: string) {
       bookId: arc.bookId,
     });
     for (const beat of sortByPosition(arc.beats)) {
-      const placedIn = new Set(beat.scenes.map((s) => s.scene.bookId));
+      const placedIn = new Set(
+        beat.assignments
+          .filter((a) => COUNTS_AS_PLACED.includes(a.validity))
+          .map((a) => a.scene.bookId),
+      );
+      if (beat.assignments.some((a) => a.validity === "CONFLICTED"))
+        entry.toLookAt.push({ beatId: beat.id, title: beat.title, outlineId: arc.id });
       // A beat shows under every book it is placed in; otherwise under its
       // planned book (or, for a single-book arc, that book).
       const targets = placedIn.size

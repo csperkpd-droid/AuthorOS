@@ -217,7 +217,7 @@ describe("import: conflicts and copies", () => {
     expect(relationships.map((r) => r.members.length).sort()).toEqual([2, 3]);
     const arc = await db.outline.findFirstOrThrow({ where: { workspaceId: other.workspaceId } });
     expect(relationships.map((r) => r.id)).toContain(arc.relationshipId);
-    const assignment = await db.beatScene.findFirstOrThrow({
+    const assignment = await db.beatAssignment.findFirstOrThrow({
       where: { workspaceId: other.workspaceId },
     });
     expect(assignment.sceneId).toBe(copy.id);

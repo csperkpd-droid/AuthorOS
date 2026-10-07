@@ -35,7 +35,11 @@ export default async function OutlinePage({ params }: Props) {
     orNotFound(getOutline(ctx, outlineId)),
     listConnections(ctx, outlineId),
   ]);
-  const placed = outline.beats.filter((b) => b.scenes.length > 0).length;
+  // Placed: in a scene of the structure, or kept there by the author (M14).
+  const placed = outline.beats.filter(
+    (b) =>
+      b.scenes.length > 0 || b.observations.some((o) => o.validity === "INTENTIONALLY_EXCEPTED"),
+  ).length;
 
   return (
     <div className="space-y-8">

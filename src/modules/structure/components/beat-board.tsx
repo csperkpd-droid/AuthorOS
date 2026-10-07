@@ -1,6 +1,6 @@
 "use client";
 
-import { MoreHorizontal, Pencil, Plus, Trash2, X } from "lucide-react";
+import { Info, MoreHorizontal, Pencil, Plus, Trash2, X } from "lucide-react";
 import Link from "next/link";
 import { useState } from "react";
 
@@ -19,6 +19,7 @@ import { Select } from "@/components/ui/select";
 import { SortableList } from "@/components/ui/sortable-list";
 import { Textarea } from "@/components/ui/textarea";
 import { useAction } from "@/hooks/use-action";
+import { FieldHistoryDialog } from "@/modules/history/ui";
 import { ImpactDialog } from "@/modules/impact/ui";
 import { cn } from "@/lib/utils";
 
@@ -26,6 +27,7 @@ import {
   addBeatAction,
   assignSceneAction,
   deleteBeatAction,
+  keepPlacementAction,
   previewDeleteBeatAction,
   moveBeatAction,
   unassignSceneAction,
@@ -41,6 +43,14 @@ type SceneRef = {
   bookNumber: number;
   percent: number;
 };
+/** A placement that isn't simply current (validity, M14). */
+type Observation = {
+  sceneId: string;
+  sceneTitle: string | null;
+  bookTitle: string | null;
+  validity: "POTENTIALLY_STALE" | "CONFLICTED" | "INTENTIONALLY_EXCEPTED" | string;
+  note: string | null;
+};
 type Beat = {
   id: string;
   title: string;
@@ -48,6 +58,7 @@ type Beat = {
   targetPercent: number | null;
   bookId: string | null;
   scenes: SceneRef[];
+  observations: Observation[];
   /** When the beat was loaded (stale-edit protection). */
   updatedAt?: Date | string;
 };
@@ -188,15 +199,21 @@ function BeatCard({
   // Removing a beat is reviewed first: its scene placements go (Change Impact).
   const [removing, setRemoving] = useState(false);
   const series = books.length > 1;
-  const available = bookScenes.filter((s) => !beat.scenes.some((p) => p.id === s.id));
-  const placed = beat.scenes.length > 0;
+  const available = bookScenes.filter(
+    (s) =>
+      !beat.scenes.some((p) => p.id === s.id) && !beat.observations.some((o) => o.sceneId === s.id),
+  );
+  const placed =
+    beat.scenes.length > 0 ||
+    beat.observations.some((o) => o.validity === "INTENTIONALLY_EXCEPTED");
   const planned = books.find((b) => b.id === beat.bookId);
 
   return (
     <article
+      id={`beat-${beat.id}`}
       aria-label={beat.title}
       className={cn(
-        "rounded-lg border bg-surface p-3",
+        "scroll-mt-20 rounded-lg border bg-surface p-3",
         placed ? "border-border" : "border-dashed border-border",
       )}
     >
@@ -270,6 +287,18 @@ function BeatCard({
               </li>
             )}
           </ul>
+          {beat.observations.length > 0 && (
+            <ul aria-label={`Placements to look at for ${beat.title}`} className="mt-2 space-y-1.5">
+              {beat.observations.map((o) => (
+                <PlacementNote
+                  key={o.sceneId}
+                  beat={beat}
+                  observation={o}
+                  onRemove={() => unassign.run(beat.id, o.sceneId)}
+                />
+              ))}
+            </ul>
+          )}
           <FormError message={assign.error ?? unassign.error} />
         </div>
         <DropdownMenu>
@@ -304,6 +333,112 @@ function BeatCard({
         />
       </div>
     </article>
+  );
+}
+
+/** What a placement's validity means, said plainly (never as an error). */
+function observationText(o: Observation) {
+  const scene = o.sceneTitle ? `“${o.sceneTitle}”` : "This scene";
+  if (o.validity === "POTENTIALLY_STALE")
+    return {
+      label: "Scene in the Trash",
+      text: `${scene} is in the Trash. The placement is kept and returns to normal if you restore the scene.`,
+    };
+  if (o.validity === "INTENTIONALLY_EXCEPTED")
+    return {
+      label: "Kept intentionally",
+      text: `${scene}${o.bookTitle ? ` (in “${o.bookTitle}”)` : ""} is outside this structure’s book or series. You chose to keep it here.`,
+    };
+  return {
+    label: "No longer fits",
+    text: `${scene} is now${o.bookTitle ? ` in “${o.bookTitle}”,` : ""} outside this structure’s book or series. Nothing was removed: keep the placement, or remove it.`,
+  };
+}
+
+/**
+ * A calm observation about one placement: what changed, that nothing was
+ * removed, and what the author can do (keep it intentionally, or remove it).
+ */
+function PlacementNote({
+  beat,
+  observation,
+  onRemove,
+}: {
+  beat: Beat;
+  observation: Observation;
+  onRemove: () => void;
+}) {
+  const [keeping, setKeeping] = useState(false);
+  const keep = useAction(keepPlacementAction);
+  const { label, text } = observationText(observation);
+  const scene = observation.sceneTitle ?? "this scene";
+  return (
+    <li className="rounded-md border border-dashed border-border px-3 py-2 text-sm">
+      <div className="flex flex-wrap items-start gap-2">
+        <Info className="mt-0.5 size-4 shrink-0 text-muted-foreground" aria-hidden />
+        <div className="min-w-0 flex-1 space-y-1">
+          <p>
+            <span className="font-medium">{label}.</span>{" "}
+            <span className="text-muted-foreground">{text}</span>
+          </p>
+          {observation.note && (
+            <p className="text-muted-foreground">
+              <span className="font-medium">Why:</span> {observation.note}
+            </p>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {observation.validity === "CONFLICTED" && (
+              <Button variant="outline" size="sm" onClick={() => setKeeping(true)}>
+                Keep intentionally
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              size="sm"
+              aria-label={`Remove ${scene} from ${beat.title}`}
+              onClick={onRemove}
+            >
+              Remove placement
+            </Button>
+          </div>
+        </div>
+      </div>
+      <Dialog open={keeping} onOpenChange={setKeeping}>
+        {keeping && (
+          <DialogContent
+            title="Keep this placement?"
+            description={`“${beat.title}” stays placed in ${observation.sceneTitle ? `“${observation.sceneTitle}”` : "this scene"}, even though the scene is outside this structure’s book or series.`}
+          >
+            <form
+              className="space-y-4"
+              action={async (formData) => {
+                const note = String(formData.get("note") ?? "").trim();
+                const result = await keep.run(beat.id, observation.sceneId, note || undefined);
+                if (result.ok) setKeeping(false);
+              }}
+            >
+              <Field label="Why (optional)" htmlFor={`keep-${beat.id}-${observation.sceneId}`}>
+                <Textarea
+                  id={`keep-${beat.id}-${observation.sceneId}`}
+                  name="note"
+                  rows={2}
+                  maxLength={2000}
+                />
+              </Field>
+              <FormError message={keep.error} />
+              <div className="flex justify-end gap-2">
+                <Button type="button" variant="outline" onClick={() => setKeeping(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={keep.pending}>
+                  Keep intentionally
+                </Button>
+              </div>
+            </form>
+          </DialogContent>
+        )}
+      </Dialog>
+    </li>
   );
 }
 
@@ -401,7 +536,12 @@ function BeatDialog({
               </Field>
             </div>
             <FormError message={add.error ?? update.error} />
-            <div className="flex justify-end">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              {existing ? (
+                <FieldHistoryDialog nodeId={existing.id} title="Earlier descriptions" />
+              ) : (
+                <span />
+              )}
               <Button type="submit" disabled={add.pending || update.pending}>
                 {existing ? "Save" : "Add beat"}
               </Button>

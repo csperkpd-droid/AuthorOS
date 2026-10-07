@@ -291,7 +291,7 @@ describe("Tropes: backups (format 6)", () => {
     const t = await createTrope(ctx, { name: "Slow burn", description: "Mine is very slow." });
     await addTrope(ctx, bookId, { tropeId: t.id });
     const { data } = await exportWorkspaceJson(ctx, { scope: { kind: "all" } });
-    expect(data.version).toBe(6);
+    expect(data.version).toBe(7);
     expect(data.tropes).toEqual([expect.objectContaining({ id: t.id, name: "Slow burn" })]);
     expect(data.books[0]).not.toHaveProperty("tropes");
     expect(data.connections.filter((c) => c.kind === "uses_trope")).toHaveLength(1);

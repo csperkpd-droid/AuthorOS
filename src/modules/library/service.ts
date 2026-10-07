@@ -368,11 +368,11 @@ async function seriesChangePlan(ctx: AuthorContext, id: string, seriesId: string
   const leaving = from && from.id !== seriesId ? from : null;
   const [plannedBeats, placements, strandedCharacters] = leaving
     ? await Promise.all([
-        db.outlineBeat.findMany({
+        db.beat.findMany({
           where: { workspaceId: ctx.workspaceId, bookId: id, outline: { seriesId: leaving.id } },
           select: { id: true, title: true, outline: { select: { id: true, title: true } } },
         }),
-        db.beatScene.findMany({
+        db.beatAssignment.findMany({
           where: {
             workspaceId: ctx.workspaceId,
             scene: { bookId: id },
@@ -435,7 +435,9 @@ async function seriesChangePlan(ctx: AuthorContext, id: string, seriesId: string
         key: "PLACEMENTS",
         label: "Scenes placed on the series’ beats",
         noun: { one: "beat placement", many: "beat placements" },
-        effect: "Removed; the scenes stay in the book",
+        // Validity (M14): kept and marked as no longer fitting, never removed.
+        effect:
+          "Kept, marked as no longer fitting the series’ structures; the scenes stay in the book",
         items: placements.map((p) => ({
           id: `${p.beatId}|${p.sceneId}`,
           title: `${p.scene.title} on ${p.beat.outline.title} › ${p.beat.title}`,
@@ -474,20 +476,18 @@ export async function setBookSeries(
   token?: string,
 ): Promise<boolean> {
   assertCan(ctx, "edit", "manuscript");
-  const { book, report, plannedBeats, placements } = await seriesChangePlan(ctx, id, seriesId);
+  const { book, report, plannedBeats } = await seriesChangePlan(ctx, id, seriesId);
   if (book.seriesId === seriesId) return false;
   assertReviewed(report, token);
   await db.$transaction(async (tx) => {
     await moveBookStoryTime(ctx, id, seriesId, tx);
     if (plannedBeats.length)
-      await tx.outlineBeat.updateMany({
+      await tx.beat.updateMany({
         where: { id: { in: plannedBeats.map((b) => b.id) } },
         data: { bookId: null },
       });
-    for (const p of placements)
-      await tx.beatScene.delete({
-        where: { beatId_sceneId: { beatId: p.beatId, sceneId: p.sceneId } },
-      });
+    // Placements on the series' beats stay; the database marks them
+    // Conflicted when the book leaves (Current again if it comes back).
     await tx.book.update({
       where: { id },
       data: seriesId

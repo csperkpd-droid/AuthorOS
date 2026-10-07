@@ -70,6 +70,7 @@ const WRITES =
  */
 const NOT_ROLE_CHECKED = new Set([
   "storyGraph.createStoryNode", // inside a checked service's transaction
+  "storyGraph.createStoryNodes", // likewise (a new structure's beats)
   "connections.createPlannedConnection", // applies a plan made by a checked service
   "penNames.setActiveIdentity", // the member's own "Writing as"
   "progress.setDailyGoal", // the member's own goal

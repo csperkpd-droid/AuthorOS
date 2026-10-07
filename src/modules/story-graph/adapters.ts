@@ -21,6 +21,7 @@ import {
   liveTask,
   liveTimelineEvent,
   liveTrope,
+  liveBeat,
 } from "./visibility";
 
 /**
@@ -835,6 +836,46 @@ export const KIND_ADAPTERS = {
         await db.trope.update({ where: { id }, ...restore });
       },
     },
+  },
+  BEAT: {
+    // A beat of a visible structure; it opens on its structure, at the beat.
+    async load(ctx, { ids, query, take, penNameId }) {
+      const rows = await db.beat.findMany({
+        where: {
+          ...scope(ctx, ids),
+          ...liveBeat,
+          ...(penNameId
+            ? { outline: { OR: [{ book: { penNameId } }, { series: { penNameId } }] } }
+            : {}),
+          title: contains(query),
+        },
+        select: {
+          id: true,
+          title: true,
+          outline: {
+            select: {
+              id: true,
+              title: true,
+              seriesId: true,
+              book: bookScope,
+              series: { select: { penNameId: true } },
+            },
+          },
+        },
+        ...page(take),
+      });
+      return rows.map((r) => ({
+        id: r.id,
+        kind: "BEAT" as const,
+        title: r.title,
+        context: r.outline.title,
+        href: `/structure/${r.outline.id}#beat-${r.id}`,
+        penNameId: r.outline.book?.penNameId ?? r.outline.series!.penNameId,
+        seriesId: r.outline.book ? r.outline.book.seriesId : r.outline.seriesId,
+      }));
+    },
+    // No Trash of its own (lifecycle "remove").
+    trash: null,
   },
 } satisfies Record<StoryNodeKind, KindAdapter>;
 

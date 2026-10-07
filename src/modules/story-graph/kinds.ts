@@ -28,7 +28,7 @@ export type StoryArea = "identity" | "manuscript" | "storyBible" | "structure" |
  * - `column`: its own `pen_name_id`;
  * - `book`: its book's pen name (parts, chapters, scenes);
  * - `members`: its members' (relationships; members share one pen name);
- * - `owner`: its book's or series' (structures, timeline events);
+ * - `owner`: its book's or series' (structures, their beats, timeline events);
  * - `shared`: none; shared by every identity of the workspace.
  */
 export type IdentityRule = "self" | "column" | "book" | "members" | "owner" | "shared";
@@ -49,7 +49,8 @@ export type BundleKey =
   | "calendarEvents"
   | "outlines"
   | "timelineEvents"
-  | "tropes";
+  | "tropes"
+  | "outlineBeats";
 
 export type StoryObjectType = {
   kind: StoryNodeKind;
@@ -84,9 +85,11 @@ export type StoryObjectType = {
   versioned: boolean;
   /**
    * What removing it means: `trash` (soft delete, restore, delete forever
-   * with Change Impact) or `archive` (hidden from choices, never deleted).
+   * with Change Impact), `archive` (hidden from choices, never deleted) or
+   * `remove` (no Trash of its own: removed by its owner's action, after a
+   * Change Impact review; beats, decision 112).
    */
-  lifecycle: "trash" | "archive";
+  lifecycle: "trash" | "archive" | "remove";
   /** Moves with its identity when a book or series changes pen name (Change Impact). */
   movesWithIdentity: boolean;
   /** Can have dates of its own on the calendar (deadlines). */
@@ -353,6 +356,25 @@ const DEFINITIONS = {
     dated: false,
     bundle: "tropes",
     table: "tropes",
+  },
+  BEAT: {
+    label: { one: "Beat", many: "Beats" },
+    noun: { one: "beat", many: "beats" },
+    area: "structure",
+    identity: "owner",
+    hierarchy: null,
+    structure: { owner: false, placedOnBeats: false },
+    connectable: true,
+    fieldable: false,
+    search: "title",
+    versioned: false,
+    // Removed from its structure with Change Impact (or with the structure).
+    lifecycle: "remove",
+    // Goes wherever its structure goes.
+    movesWithIdentity: false,
+    dated: false,
+    bundle: "outlineBeats",
+    table: "beats",
   },
 } as const satisfies Record<StoryNodeKind, Entry>;
 

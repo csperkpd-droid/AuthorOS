@@ -16,8 +16,8 @@ import { STORY_KINDS, STORY_OBJECT_TYPES } from "./kinds";
  * - story objects: every node has its typed row (and vice versa, by FK);
  * - structural hierarchy: books and characters stay in their series' pen
  *   name, scenes and chapters in their book;
- * - structure: beats and placements stay inside their structure's book or
- *   series and identity;
+ * - structure: beats stay inside their structure's book or series and
+ *   identity; a placement outside them is never shown as current (validity);
  * - connections: never across pen names; a series' characters appear only
  *   in that series' books.
  *
@@ -58,7 +58,11 @@ export async function auditGraph(ctx: AuthorContext): Promise<AuditIssue[]> {
          WHERE m."relationship_id" = ${id} LIMIT 1),
       (SELECT coalesce(b."pen_name_id", s."pen_name_id") FROM "outlines" o
          LEFT JOIN "books" b ON b."id" = o."book_id" LEFT JOIN "series" s ON s."id" = o."series_id"
-         WHERE o."id" = ${id})
+         WHERE o."id" = ${id}),
+      (SELECT coalesce(b."pen_name_id", s."pen_name_id") FROM "beats" bt
+         JOIN "outlines" o ON o."id" = bt."outline_id"
+         LEFT JOIN "books" b ON b."id" = o."book_id" LEFT JOIN "series" s ON s."id" = o."series_id"
+         WHERE bt."id" = ${id})
     ))`;
 
   checks.push(
@@ -120,7 +124,7 @@ export async function auditGraph(ctx: AuthorContext): Promise<AuditIssue[]> {
     ],
     [
       "series beat planned for a book outside the series",
-      Prisma.sql`SELECT ob."id" FROM "outline_beats" ob
+      Prisma.sql`SELECT ob."id" FROM "beats" ob
         JOIN "outlines" o ON o."id" = ob."outline_id"
         JOIN "books" b ON b."id" = ob."book_id"
         WHERE ob."workspace_id" = ${ws}::uuid
@@ -128,15 +132,24 @@ export async function auditGraph(ctx: AuthorContext): Promise<AuditIssue[]> {
             OR (o."book_id" IS NOT NULL AND ob."book_id" <> o."book_id"))`,
     ],
     [
-      "scene placed on a beat outside its structure",
-      Prisma.sql`SELECT bs."scene_id" AS id FROM "beat_scenes" bs
-        JOIN "outline_beats" ob ON ob."id" = bs."beat_id"
+      // Validity (M14): a placement outside its structure is kept, but never
+      // as if it were current.
+      "scene outside its structure placed as current",
+      Prisma.sql`SELECT bs."scene_id" AS id FROM "beat_assignments" bs
+        JOIN "beats" ob ON ob."id" = bs."beat_id"
         JOIN "outlines" o ON o."id" = ob."outline_id"
         JOIN "scenes" sc ON sc."id" = bs."scene_id"
         JOIN "books" b ON b."id" = sc."book_id"
-        WHERE bs."workspace_id" = ${ws}::uuid
+        WHERE bs."workspace_id" = ${ws}::uuid AND bs."validity" = 'CURRENT'
           AND ((o."series_id" IS NOT NULL AND b."series_id" IS DISTINCT FROM o."series_id")
             OR (o."book_id" IS NOT NULL AND sc."book_id" <> o."book_id"))`,
+    ],
+    [
+      "placement in the Trash shown as current",
+      Prisma.sql`SELECT bs."scene_id" AS id FROM "beat_assignments" bs
+        JOIN "scenes" sc ON sc."id" = bs."scene_id"
+        WHERE bs."workspace_id" = ${ws}::uuid AND bs."validity" <> 'POTENTIALLY_STALE'
+          AND sc."deleted_at" IS NOT NULL`,
     ],
     [
       "field value on the wrong kind of object",

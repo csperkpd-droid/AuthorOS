@@ -22,6 +22,21 @@ export async function createStoryNode(
   return node.id;
 }
 
+/** Creates `count` nodes of one kind at once (e.g. the beats of a new structure). */
+export async function createStoryNodes(
+  tx: Prisma.TransactionClient,
+  workspaceId: string,
+  kind: StoryNodeKind,
+  count: number,
+): Promise<string[]> {
+  if (count === 0) return [];
+  const nodes = await tx.storyNode.createManyAndReturn({
+    data: Array.from({ length: count }, () => ({ workspaceId, kind })),
+    select: { id: true },
+  });
+  return nodes.map((n) => n.id);
+}
+
 /**
  * Permanently deletes story objects. Deleting the node cascades to its typed
  * row and that row's children; triggers remove the children's nodes.

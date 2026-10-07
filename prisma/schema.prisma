@@ -198,6 +198,7 @@ enum StoryNodeKind {
   PEN_NAME
   TIMELINE_EVENT
   TROPE
+  BEAT
 
   @@map("story_node_kind")
 }
@@ -224,6 +225,7 @@ model StoryNode {
   idea           Idea?
   trope          Trope?
   outline        Outline?
+  beat           Beat?
   timelineEvent  TimelineEvent?
   task           Task?
   event          CalendarEvent?    @relation("EventNode")
@@ -310,7 +312,7 @@ model Book {
   scenes         Scene[]
   outlines       Outline[]
   timelineEvents TimelineEvent[]
-  plannedBeats   OutlineBeat[]
+  plannedBeats   Beat[]
   fields         FieldDefinition[]
   writing        WritingSession[]
 
@@ -414,7 +416,7 @@ model Scene {
   node    StoryNode   @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   book    Book        @relation(fields: [bookId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   chapter Chapter     @relation(fields: [chapterId, bookId], references: [id, bookId], onDelete: Cascade)
-  beats   BeatScene[]
+  beats   BeatAssignment[]
 
   writingMembers WorkspaceMember[]
   participants   SceneParticipation[]
@@ -808,7 +810,7 @@ model TemplateBeat {
   bookIndex     Int?    @map("book_index")
 
   template     StructureTemplate @relation(fields: [templateId], references: [id], onDelete: Cascade)
-  outlineBeats OutlineBeat[]
+  outlineBeats Beat[]
 
   @@index([templateId])
   @@map("template_beats")
@@ -849,7 +851,7 @@ model Outline {
   template     StructureTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
   relationship Relationship?      @relation(fields: [relationshipId], references: [id], onDelete: Cascade)
   character    Character?         @relation(fields: [characterId], references: [id], onDelete: Cascade)
-  beats        OutlineBeat[]
+  beats        Beat[]
 
   @@unique([id, workspaceId])
   @@index([bookId])
@@ -859,9 +861,12 @@ model Outline {
   @@map("outlines")
 }
 
-/// One beat of an outline (copied from the template, then the author's own).
-model OutlineBeat {
-  id             String   @id @default(uuid(7)) @db.Uuid
+/// One beat of a structure (copied from the template, then the author's own).
+/// A Story Graph object since M14 (decision 112): searchable, connectable,
+/// with its description's history on itself. Where it happens is a separate
+/// Beat Assignment (decision 90).
+model Beat {
+  id             String   @id @db.Uuid
   workspaceId    String   @map("workspace_id") @db.Uuid
   outlineId      String   @map("outline_id") @db.Uuid
   templateBeatId String?  @map("template_beat_id") @db.Uuid
@@ -875,31 +880,54 @@ model OutlineBeat {
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 
-  outline      Outline       @relation(fields: [outlineId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  templateBeat TemplateBeat? @relation(fields: [templateBeatId], references: [id], onDelete: SetNull)
-  scenes       BeatScene[]
-  book         Book?         @relation(fields: [bookId], references: [id], onDelete: SetNull)
+  node         StoryNode        @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  outline      Outline          @relation(fields: [outlineId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  templateBeat TemplateBeat?    @relation(fields: [templateBeatId], references: [id], onDelete: SetNull)
+  assignments  BeatAssignment[]
+  book         Book?            @relation(fields: [bookId], references: [id], onDelete: SetNull)
 
   @@unique([id, workspaceId])
   @@index([outlineId])
-  @@map("outline_beats")
+  @@map("beats")
 }
 
-/// Structural beat assignment: this beat happens in this scene. Many-to-many,
-/// so a beat can span several scenes and one scene can carry beats of many
-/// structures. The scene itself is never copied.
-model BeatScene {
-  workspaceId String   @map("workspace_id") @db.Uuid
-  beatId      String   @map("beat_id") @db.Uuid
-  sceneId     String   @map("scene_id") @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at")
+/// The shared validity vocabulary (decision 112). Observations shown to the
+/// author, never automatic fixes or errors. M14 uses it for Beat Assignments
+/// only (Current, Potentially Stale, Conflicted, Intentionally Excepted).
+enum ValidityState {
+  CURRENT
+  POTENTIALLY_STALE
+  CONFLICTED
+  INVALID
+  SUPERSEDED
+  UNKNOWN
+  INTENTIONALLY_EXCEPTED
 
-  beat  OutlineBeat @relation(fields: [beatId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  scene Scene       @relation(fields: [sceneId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  @@map("validity_state")
+}
+
+/// Beat Assignment: this beat happens in this scene. Many-to-many, so a beat
+/// can span several scenes and one scene can carry beats of many structures.
+/// The scene itself is never copied. `validity` follows the scene (trigger
+/// `beat_assignments_follow`): Potentially Stale while it is in the Trash,
+/// Conflicted when it no longer belongs to the structure's book or series,
+/// unless the author keeps it (Intentionally Excepted, `exceptedAt`).
+model BeatAssignment {
+  workspaceId String        @map("workspace_id") @db.Uuid
+  beatId      String        @map("beat_id") @db.Uuid
+  sceneId     String        @map("scene_id") @db.Uuid
+  validity    ValidityState @default(CURRENT)
+  /// When the author chose to keep a placement that no longer fits.
+  exceptedAt  DateTime?     @map("excepted_at")
+  note        String?
+  createdAt   DateTime      @default(now()) @map("created_at")
+
+  beat  Beat  @relation(fields: [beatId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  scene Scene @relation(fields: [sceneId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
 
   @@id([beatId, sceneId])
   @@index([sceneId])
-  @@map("beat_scenes")
+  @@map("beat_assignments")
 }
 
 // ─── Custom fields ──────────────────────────────────────────────────────────

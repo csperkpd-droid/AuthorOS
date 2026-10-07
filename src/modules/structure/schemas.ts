@@ -84,3 +84,7 @@ export const applyKitInput = z
     message: "Choose a book or a series.",
   });
 export type ApplyKitInput = z.input<typeof applyKitInput>;
+
+/** Keeping a placement that no longer fits its structure: why, optionally. */
+export const keepPlacementInput = z.object({ note: optionalText(2000) });
+export type KeepPlacementInput = z.input<typeof keepPlacementInput>;

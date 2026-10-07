@@ -15,6 +15,7 @@ import {
   StructureKind,
   TaskPriority,
   TaskStatus,
+  ValidityState,
   WritingSource,
 } from "@/generated/prisma/enums";
 import { docSchema } from "@/lib/text";
@@ -277,7 +278,15 @@ const outlineBeat = z.object({
   updatedAt: stamp,
 });
 
-const beatScene = z.object({ beatId: id, sceneId: id, createdAt: stamp });
+/** A beat assignment; validity, the author's exception and note since version 7. */
+const beatScene = z.object({
+  beatId: id,
+  sceneId: id,
+  validity: z.enum(ValidityState).optional().default("CURRENT"),
+  exceptedAt: optDate,
+  note: optStr(2000),
+  createdAt: stamp,
+});
 
 /** Something that happens in the story world (Story Time, version 5). */
 const timelineEvent = z.object({
@@ -415,7 +424,7 @@ const fieldRevision = z.object({
 
 export const workspaceBundle = z.object({
   /** Format version of the file (upgraded to the current one after parsing). */
-  version: z.number().int().min(1).max(6),
+  version: z.number().int().min(1).max(7),
   /** "standard" backups have no version history; "archive" ones do. */
   kind: z.enum(["standard", "archive"]).optional().default("standard"),
   exportedAt: optDate,

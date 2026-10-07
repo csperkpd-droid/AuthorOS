@@ -18,6 +18,7 @@ export function upgradeBundle(bundle: WorkspaceBundle): WorkspaceBundle {
   // Version 5 (M12) only added Story Time (`timelineEvents`, `sceneStoryTimes`).
   if (b.version < 5) b = { ...b, version: 5 };
   if (b.version < 6) b = toVersion6(b);
+  if (b.version < 7) b = toVersion7(b);
   return b;
 }
 
@@ -204,6 +205,40 @@ function toVersion6(b: WorkspaceBundle): WorkspaceBundle {
         updatedAt: u.at,
       })),
     ],
+  };
+}
+
+/**
+ * Version 7 (M14): beats are story objects, as the database migration did:
+ * each beat gets a story node with its own id, its description history moves
+ * from the structure ("beat:<id>.description") onto the beat. Assignments
+ * get their validity from the imported state when applied (no exception).
+ */
+function toVersion7(b: WorkspaceBundle): WorkspaceBundle {
+  const nodes = new Set(b.storyNodes.map((n) => n.id));
+  const beats = new Map(b.outlineBeats.map((x) => [x.id, x.outlineId]));
+  const BEAT_FIELD = /^beat:([0-9a-f-]{36})\.description$/;
+  return {
+    ...b,
+    version: 7,
+    storyNodes: [
+      ...b.storyNodes,
+      ...b.outlineBeats
+        .filter((x) => !nodes.has(x.id))
+        .map((x) => ({ id: x.id, kind: "BEAT" as const })),
+    ],
+    fieldRevisions: b.fieldRevisions.map((r) => {
+      const beatId = BEAT_FIELD.exec(r.field)?.[1];
+      return beatId && beats.get(beatId) === r.nodeId
+        ? { ...r, nodeId: beatId, field: "description" }
+        : r;
+    }),
+    beatScenes: b.beatScenes.map((a) => ({
+      ...a,
+      validity: "CURRENT" as const,
+      exceptedAt: null,
+      note: null,
+    })),
   };
 }
 

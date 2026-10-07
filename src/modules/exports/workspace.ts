@@ -43,9 +43,13 @@ export const EXPORT_FORMAT = "authoros.workspace";
  * Version 5 (M12): Story Time (`timelineEvents`, `sceneStoryTimes`).
  * Version 6 (M13): tropes are objects (`tropes`) linked by `uses_trope`
  * connections; books no longer have `tropes`.
+ * Version 7 (M14): beats are story objects (`storyNodes` of kind BEAT, so
+ * they can be linked and keep their own description history), and each
+ * beat assignment (`beatScenes`) has its `validity`, `exceptedAt` (kept by
+ * the author) and `note`.
  * The importer upgrades older files.
  */
-export const EXPORT_VERSION = 6;
+export const EXPORT_VERSION = 7;
 
 /**
  * "standard": the backup (all story data, no version history).
@@ -95,7 +99,7 @@ export async function exportWorkspaceJson(
     where: { workspaceId: ws, OR: [{ bookId: { in: bookIds } }, { seriesId: { in: seriesIds } }] },
   });
   const [outlineBeats, notes, ideas, tasks, events, tropes] = await Promise.all([
-    db.outlineBeat.findMany({ where: { outlineId: { in: outlineIds } } }),
+    db.beat.findMany({ where: { outlineId: { in: outlineIds } } }),
     db.note.findMany({ where: { workspaceId: ws } }),
     db.idea.findMany({ where: { workspaceId: ws } }),
     db.task.findMany({ where: { workspaceId: ws } }),
@@ -114,6 +118,7 @@ export async function exportWorkspaceJson(
     ...characterIds,
     ...relationshipIds,
     ...outlineIds,
+    ...outlineBeats.map((b) => b.id),
     ...timelineEvents.map((e) => e.id),
   ]);
   // A date that belongs to an object (a deadline) goes where its object goes.
@@ -157,7 +162,7 @@ export async function exportWorkspaceJson(
     writingSessions,
     member,
   ] = await Promise.all([
-    db.beatScene.findMany({ where: { beat: { outlineId: { in: outlineIds } } } }),
+    db.beatAssignment.findMany({ where: { beat: { outlineId: { in: outlineIds } } } }),
     db.sceneStoryTime.findMany({
       where: { workspaceId: ws, sceneId: { in: [...sceneIds] } },
       select: { sceneId: true, position: true, label: true, createdAt: true, updatedAt: true },

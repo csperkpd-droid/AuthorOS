@@ -136,9 +136,9 @@ export async function applyPlan(tx: Tx, ctx: AuthorContext, ops: ImportOps) {
 
   await insert(ops.outlines.create, (data) => tx.outline.createMany({ data }));
   await update(ops.outlines, ({ id, data }) => tx.outline.update({ where: { id }, data }));
-  await insert(ops.outlineBeats.create, (data) => tx.outlineBeat.createMany({ data }));
-  await update(ops.outlineBeats, ({ id, data }) => tx.outlineBeat.update({ where: { id }, data }));
-  await insert(ops.beatScenes, (data) => tx.beatScene.createMany({ data }));
+  await insert(ops.outlineBeats.create, (data) => tx.beat.createMany({ data }));
+  await update(ops.outlineBeats, ({ id, data }) => tx.beat.update({ where: { id }, data }));
+  await insert(ops.beatScenes, (data) => tx.beatAssignment.createMany({ data }));
 
   await insert(ops.tropes.create, (data) => tx.trope.createMany({ data }));
   await update(ops.tropes, ({ id, data }) => tx.trope.update({ where: { id }, data }));
@@ -190,6 +190,13 @@ export async function applyPlan(tx: Tx, ctx: AuthorContext, ops: ImportOps) {
     (data) => tx.contentRevision.createMany({ data }),
   );
   await insert(ops.fieldRevisions, (data) => tx.fieldRevision.createMany({ data }));
+
+  // Validity of the imported placements from the imported state, by the
+  // database's own rules (M14): older files carry none, and the author's
+  // exceptions (excepted_at) are kept.
+  const placedScenes = [...new Set(ops.beatScenes.map((a) => a.sceneId as string))];
+  if (placedScenes.length)
+    await tx.$executeRaw`SELECT "evaluate_beat_assignments"(${placedScenes}::uuid[])`;
 
   if (ops.dailyWordGoal !== null)
     await tx.workspaceMember.updateMany({
@@ -254,21 +261,13 @@ async function keepTextHistory(tx: Tx, ctx: AuthorContext, ops: ImportOps) {
       };
     },
   );
-  await keep(
-    ops.outlineBeats,
-    (l) => tx.outlineBeat.findMany(ids(l)),
-    (row, data) =>
-      "description" in data
-        ? { [`beat:${row.id as string}.description`]: (data.description as string | null) ?? null }
-        : {},
-    (row) => row.outlineId as string,
-  );
+  // A beat keeps its description history on itself (M14).
+  await keep(ops.outlineBeats, (l) => tx.beat.findMany(ids(l)), column("description"));
 }
 
-/** A row's current value of a history field name (column, profile field or beat description). */
+/** A row's current value of a history field name (column or profile field). */
 function beforeValue(row: Record<string, unknown>, field: string) {
   if (field.startsWith("profile."))
     return ((row.profile as Record<string, string> | null) ?? {})[field.slice(8)] ?? null;
-  if (field.startsWith("beat:")) return (row.description as string | null) ?? null;
   return (row[field] as string | null) ?? null;
 }

@@ -273,8 +273,8 @@ describe("structures as story objects", () => {
 
     await trashOutline(ctx, plot.id);
     await deleteForever(ctx, "OUTLINE", plot.id);
-    expect(await db.outlineBeat.count()).toBe(0);
-    expect(await db.beatScene.count()).toBe(0);
+    expect(await db.beat.count()).toBe(0);
+    expect(await db.beatAssignment.count()).toBe(0);
     expect(await db.storyNode.count({ where: { id: plot.id } })).toBe(0);
     expect(await db.scene.count({ where: { id: scenes[0] } })).toBe(1);
   });

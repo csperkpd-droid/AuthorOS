@@ -12,6 +12,8 @@ type SceneBeat = {
   outlineTitle: string;
   kind: StructureKind;
   seriesWide?: boolean;
+  /** Validity of the placement (M14); absent = current. */
+  validity?: string;
 };
 
 /** The beats a scene carries, across every structure (plot, romance, arcs). */
@@ -34,6 +36,12 @@ export function SceneBeats({ beats }: { beats: SceneBeat[] }) {
               :
             </span>
             {b.beatTitle}
+            {b.validity === "CONFLICTED" && (
+              <span className="text-muted-foreground"> · no longer fits</span>
+            )}
+            {b.validity === "INTENTIONALLY_EXCEPTED" && (
+              <span className="text-muted-foreground"> · kept intentionally</span>
+            )}
           </Link>
         </li>
       ))}

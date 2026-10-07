@@ -204,6 +204,7 @@ export async function planImport(
     exOutlines,
     exTimelineEvents,
     exTropes,
+    exBeats,
   ] = await Promise.all([
     byId(
       chunked(existingIds(b.series), (ids) =>
@@ -276,6 +277,11 @@ export async function planImport(
     byId(
       chunked(existingIds(b.tropes), (ids) =>
         client.trope.findMany({ where: { workspaceId: ws, id: { in: ids } } }),
+      ),
+    ),
+    byId(
+      chunked(existingIds(b.outlineBeats), (ids) =>
+        client.beat.findMany({ where: { workspaceId: ws, id: { in: ids } } }),
       ),
     ),
   ]);
@@ -872,21 +878,19 @@ export async function planImport(
     decisions.push(["storyTime", t.sceneId, "create"]);
   }
 
-  const usedBeats = await taken(
-    "outline_beats",
-    b.outlineBeats.map((x) => x.id),
-  );
-  const ownBeats = new Map(
-    (
-      await chunked(
-        b.outlineBeats.filter((x) => keep && usedBeats.get(x.id) === ws).map((x) => x.id),
-        (ids) => client.outlineBeat.findMany({ where: { workspaceId: ws, id: { in: ids } } }),
-      )
-    ).map((x) => [x.id, x]),
-  );
-  for (const beat of b.outlineBeats) {
-    if (nodeAction.get(beat.outlineId) === "conflict") continue;
-    const data = {
+  // Beats are story objects (M14): created, matched or in conflict like any.
+  nodes(
+    "outlineBeats",
+    "Beats",
+    b.outlineBeats.filter((beat) => {
+      if (nodeAction.get(beat.outlineId) === "conflict") {
+        nodeAction.set(beat.id, "conflict");
+        return false;
+      }
+      return true;
+    }),
+    exBeats,
+    (beat) => ({
       outlineId: to(beat.outlineId),
       templateBeatId: knownTemplateBeat(beat.templateBeatId),
       title: beat.title,
@@ -894,29 +898,11 @@ export async function planImport(
       targetPercent: beat.targetPercent,
       position: beat.position,
       bookId: toRef(beat.bookId),
-    };
-    const current = ownBeats.get(beat.id);
-    if (current) {
-      if (current.outlineId === data.outlineId) {
-        const action = replace && differs(current, data) ? "update" : "skip";
-        if (action === "update")
-          ops.outlineBeats.update.push({ id: beat.id, data: withoutKeys(data, ["outlineId"]) });
-        count("outlineBeats", "Beats", action);
-        decisions.push(["beat", beat.id, action]);
-        continue;
-      }
-    }
-    map.set(beat.id, freshId(beat.id, usedBeats));
-    ops.outlineBeats.create.push({
-      id: to(beat.id),
-      workspaceId: ws,
-      ...data,
       createdAt: beat.createdAt,
       updatedAt: beat.updatedAt,
-    });
-    count("outlineBeats", "Beats", "create");
-    decisions.push(["beat", beat.id, "create"]);
-  }
+    }),
+    { fixed: ["outlineId"] },
+  );
 
   const ok = (id: string) => nodeAction.get(id) !== "conflict";
   const beatOutline = new Map(b.outlineBeats.map((x) => [x.id, x.outlineId]));
@@ -926,7 +912,7 @@ export async function planImport(
       await chunked(
         assignments.map((a) => to(a.beatId)),
         (ids) =>
-          client.beatScene.findMany({
+          client.beatAssignment.findMany({
             where: { workspaceId: ws, beatId: { in: ids } },
             select: { beatId: true, sceneId: true },
           }),
@@ -940,7 +926,15 @@ export async function planImport(
       count("beatScenes", "Beat assignments", "skip");
       continue;
     }
-    ops.beatScenes.push({ workspaceId: ws, beatId, sceneId, createdAt: a.createdAt });
+    ops.beatScenes.push({
+      workspaceId: ws,
+      beatId,
+      sceneId,
+      validity: a.validity,
+      exceptedAt: a.exceptedAt,
+      note: a.note,
+      createdAt: a.createdAt,
+    });
     count("beatScenes", "Beat assignments", "create");
     decisions.push(["assignment", a.beatId, a.sceneId]);
   }
@@ -1319,6 +1313,7 @@ export async function planImport(
     ...created(ops.outlines.create, "OUTLINE"),
     ...created(ops.timelineEvents.create, "TIMELINE_EVENT"),
     ...created(ops.tropes.create, "TROPE"),
+    ...created(ops.outlineBeats.create, "BEAT"),
   ];
 
   const order = COUNT_ORDER;
@@ -1367,7 +1362,6 @@ const TAKEN_SQL: Record<string, string> = {
   structure_templates: `SELECT "id", "workspace_id" AS ws FROM "structure_templates" WHERE "id" = ANY($1::uuid[])`,
   // For template beats, the template they belong to.
   template_beats: `SELECT "id", "template_id" AS ws FROM "template_beats" WHERE "id" = ANY($1::uuid[])`,
-  outline_beats: `SELECT "id", "workspace_id" AS ws FROM "outline_beats" WHERE "id" = ANY($1::uuid[])`,
   connections: `SELECT "id", "workspace_id" AS ws FROM "connections" WHERE "id" = ANY($1::uuid[])`,
   template_kits: `SELECT "id", "workspace_id" AS ws FROM "template_kits" WHERE "id" = ANY($1::uuid[])`,
   field_definitions: `SELECT "id", "workspace_id" AS ws FROM "field_definitions" WHERE "id" = ANY($1::uuid[])`,
@@ -1479,6 +1473,7 @@ function nodeTitles(b: WorkspaceBundle) {
     b.tasks,
     b.calendarEvents,
     b.outlines,
+    b.outlineBeats,
     b.timelineEvents,
   ])
     for (const r of rows) titles.set(r.id, r.title);

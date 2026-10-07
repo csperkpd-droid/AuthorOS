@@ -999,6 +999,59 @@ writing is only on this device; the server ends the session on the next
 request (`/sign-out`). Nothing is uploaded on the way out and nothing is
 deleted.
 
+## Milestone 14 (Beats, Beat Assignments and Validity)
+
+### 112. Beats are story objects; beat assignments carry validity — Accepted (M14)
+
+Builds decision 90 and starts the validity system (invariant 11) with its
+first real use.
+
+- **Beats** (`outline_beats` → `beats`) are Story Graph objects (`BEAT`),
+  each keeping its id: searchable by name, connectable, visible while their
+  structure is, opened at their structure. A beat's description history
+  moved from its structure (`beat:<id>.description`) onto the beat
+  (`description`); nothing was lost. Beats have no Trash (registry
+  lifecycle `remove`): removing one keeps its Change Impact review (now
+  also listing its links), and deleting a structure forever names its beats.
+- **Beat Assignments** (`beat_scenes` → `beat_assignments`) keep their
+  identity (beat, scene) and gain `validity`, `excepted_at` and `note`.
+  Each existing placement's validity is derived from the data at migration
+  time by the same rules (scene or its container in the Trash → Potentially
+  Stale; scene's book outside the structure's series → Conflicted;
+  otherwise Current). Every placement's state can be established from its
+  scene, book, series and structure, so none is Unknown; no exception is
+  invented, no scene restored, no placement removed; running it again
+  changes nothing.
+- **Validity rules (exactly these):** the scene, or anything containing it,
+  in the Trash → **Potentially Stale** (kept); restored and fitting →
+  **Current**; the scene no longer in the structure's book or series →
+  **Conflicted** (kept, nothing removed); the author may keep a Conflicted
+  placement → **Intentionally Excepted** (author decision, optional note).
+  The exception lasts while the scene stays outside, survives the scene
+  going to the Trash and back, and gives way to Current when the scene
+  fits again. No other states or reset triggers are used yet.
+- **Where it is computed:** in the database, by `evaluate_beat_assignments`
+  and row triggers on scenes, chapters, parts, books and series, in the
+  same transaction as the change, so every path (binder, Trash, Change
+  Impact, import) agrees and no code path can forget it. It only records an
+  observation (Green: factual propagation); it never removes, moves or
+  re-places anything.
+- **Series moves:** scenes can't change books, so a placement stops fitting
+  only when its book leaves or switches series. That review's placements
+  group changed from "Removed" to "Kept, marked as no longer fitting"; the
+  rest of the review is unchanged. Moving the book back makes them Current.
+- **Progress** counts current and intentionally kept placements in live
+  scenes (unchanged for migrated data).
+- **Export format 7:** beat story nodes, and `validity`, `exceptedAt` and
+  `note` on each assignment; formats 1–6 upgrade (nodes added, history
+  moved), and imported placements get their validity from the imported
+  state by the same database rules.
+- **Not here:** findings, a review page, validity for anything else (Story
+  Time, participation, tropes, connections, editions, text), automatic
+  fixes, inference from text. **Rejected:** computing validity only at read
+  time (the author's exception and its reset need a stored state);
+  re-evaluating in each service (a missed path would leave a stale state).
+
 ## Rebrand Milestone 1 (Spellbound Draft)
 
 ### 111. AuthorOS becomes Spellbound Draft; compatibility identifiers keep their name — Accepted (Rebrand 1)

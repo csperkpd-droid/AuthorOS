@@ -18,6 +18,8 @@ type Row = {
   arcs: { id: string; title: string; seriesWide: boolean; bookId: string | null }[];
   books: { bookId: string; beats: Cell[] }[];
   unplanned: Cell[];
+  /** Beats with a placement that no longer fits its structure (validity). */
+  toLookAt: { beatId: string; title: string; outlineId: string }[];
 };
 
 /**
@@ -129,6 +131,22 @@ export function RomanceProgression({
             {r.unplanned.length > 0 && (
               <p className="text-xs text-muted-foreground">
                 Not yet planned for a book: {r.unplanned.map((b) => b.title).join(", ")}
+              </p>
+            )}
+            {r.toLookAt.length > 0 && (
+              <p className="text-xs text-muted-foreground">
+                A placement no longer fits its structure (nothing was removed):{" "}
+                {r.toLookAt.map((b, i) => (
+                  <span key={b.beatId}>
+                    {i > 0 && ", "}
+                    <Link
+                      href={`/structure/${b.outlineId}#beat-${b.beatId}`}
+                      className="hover:text-foreground hover:underline"
+                    >
+                      {b.title}
+                    </Link>
+                  </span>
+                ))}
               </p>
             )}
           </section>

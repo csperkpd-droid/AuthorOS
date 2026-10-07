@@ -1,4 +1,4 @@
-export { createStoryNode, purgeStoryNodes } from "./service";
+export { createStoryNode, createStoryNodes, purgeStoryNodes } from "./service";
 export type { NodeRef } from "./service";
 export {
   nodeKind,

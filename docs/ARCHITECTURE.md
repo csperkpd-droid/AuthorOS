@@ -71,12 +71,14 @@ the mechanisms. "Not built" marks designed parts with no code yet.
     states of the same object (built). Provenance = where something came
     from and what it was derived from (only a revision's `source` today).
     Validity = whether something still holds against what it depends on
-    (not built). Change Impact = what a proposed change would affect,
+    (built for beat assignments, M14). Change Impact = what a proposed change would affect,
     before it happens (built).
 11. **Validity states**, one vocabulary everywhere: **Current, Potentially
     Stale, Conflicted, Invalid, Superseded, Unknown, Intentionally
     Excepted.** A state is an observation shown to the author, never an
-    automatic fix. Not built; first use: beat assignments.
+    automatic fix. Built for beat assignments only (M14, decision 112):
+    Current, Potentially Stale, Conflicted, Intentionally Excepted; later
+    milestones extend it. Findings and review are not built.
 12. **Change Impact is universal.** Every system that can move, delete,
     detach or affect connected data produces a report through the shared
     builder (Green automatic, Yellow suggested, Red approval required),
@@ -165,9 +167,9 @@ the mechanisms. "Not built" marks designed parts with no code yet.
 - **Workspace membership is not access to everything (decision 89).**
   Co-authoring adds per-book, series and pen-name grants through the read
   and write funnel of invariant 14.
-- **Beats and Beat Assignments (decision 90).** The beat (definition) is
-  separate from where it happens, so one scene can satisfy several
-  structures without duplication.
+- **Beats and Beat Assignments (decision 90, built in M14: decision 112).**
+  The beat (definition) is separate from where it happens, so one scene can
+  satisfy several structures without duplication.
 
 ### Temporary compatibility architecture
 
@@ -821,8 +823,8 @@ audit after each.
 
 **Four separate concepts.** (1) _Story objects_ are nodes. (2) _Structural
 objects_ are the manuscript tree (Book → Part → Chapter → Scene, explicit
-FKs). (3) _Structure/beat assignments_ place outline beats in scenes
-(`beat_scenes`, below). (4) _Universal connections_ are flexible links. They
+FKs). (3) _Structure/beat assignments_ place beats in scenes
+(`beat_assignments`, below). (4) _Universal connections_ are flexible links. They
 are never merged: a beat is not a connection, and a scene is never copied.
 
 ## Story structure
@@ -834,7 +836,15 @@ Trash like anything else. Creating one from a **template** (five built-ins,
 seeded; workspace templates use the same table) copies its beats, which are
 then the author's to rename, reorder, add or remove.
 
-**Beat assignments are structure, not connections.** `beat_scenes` is a
+**Beats are story objects (M14, decision 112).** Each beat (`beats`, node
+kind `BEAT`) has its own story node: it is found by search (title), opens
+at its structure (`/structure/<id>#beat-<id>`), can be linked to notes and
+other objects, and keeps its own description history. Its visibility
+follows its structure. It has no Trash of its own (registry lifecycle
+`remove`): a beat is removed from its structure through Change Impact, or
+goes with its structure.
+
+**Beat assignments are structure, not connections.** `beat_assignments` is a
 dedicated many-to-many table: one beat may span several scenes, and one
 scene may carry beats of the plot, a romance arc, a character arc and a
 subplot at once. The scene is the single underlying row in every case. The
@@ -842,10 +852,31 @@ beat board shows each beat's scenes in reading order with where they fall
 in the book (%), against the beat's target %, and flags unplaced beats. The
 scene editor shows every beat the scene carries, across structures.
 
+**Validity of beat assignments (M14, decision 112).** Each assignment has
+a `validity` from the shared vocabulary and follows its scene. While the
+scene (or the chapter, part, book or series containing it) is in the Trash
+it is **Potentially Stale**; when the scene no longer belongs to the
+structure's book or series (its book left the series) it is
+**Conflicted**; otherwise **Current**. The author may keep a Conflicted
+placement (**Intentionally Excepted**, `excepted_at`, with an optional
+note); that choice lasts while the scene stays outside, and the placement
+simply becomes Current again when the scene fits again. The database
+re-evaluates the assignments of the affected scenes in the same
+transaction whenever a scene, chapter, part, book or series is trashed,
+restored or moved (`evaluate_beat_assignments`, row triggers), so every
+path (binder, Trash, Change Impact, import) agrees; existing placements
+were backfilled from their actual state by the same rules when M14 was
+installed, and imported ones are evaluated on import. Nothing is removed,
+re-placed or inferred from the text. The board shows placements that
+aren't current as calm notes ("No longer fits", "Scene in the Trash",
+"Kept intentionally") with "Keep intentionally" and "Remove placement";
+progress counts current and kept placements. Validity is limited to beat
+assignments; Findings and Review are a later milestone.
+
 **Series structures (M4).** An outline belongs to exactly one book _or_ one
 series (database CHECK). A series structure, such as a series-long romance
 arc, spans every book of the series: each beat may be **planned for a book**
-(`outline_beats.book_id`, grouping only) and placed in scenes of any of the
+(`beats.book_id`, grouping only) and placed in scenes of any of the
 series' books. The beat board shows the whole series or one book at a time;
 every book page lists its own structures and its series' structures. This is
 the same structure/beat architecture, not a separate romance system.
@@ -928,14 +959,14 @@ Uses so far:
   are listed as unchanged (applied templates are independent copies).
 - **A book leaving or changing series (M7):** beats of the old series'
   structures planned for the book (they stay in the arc, unplanned) and
-  placements of the book's scenes on those beats (removed; the scenes
-  stay). Series characters appearing in the book's scenes block it. Joining
+  placements of the book's scenes on those beats (since M14 kept and
+  marked Conflicted, never removed; the scenes stay). Series characters appearing in the book's scenes block it. Joining
   a series affects nothing and needs no review.
 - **Removing relationship members (M7):** the members removed, with the
   roles that go, and the relationship's structures, which continue as the
   arc of the remaining members. Adding members needs no review.
 - **Removing a beat (M7):** the scenes placed on it (placements go, scenes
-  stay).
+  stay) and, since beats are story objects (M14), its links.
 - **Removing a part, keeping its chapters (M7):** the chapters (moved to
   the book's top level) and what is attached to the part itself (links,
   field values, dates), via the shared `attachmentsOf()`.
@@ -1082,8 +1113,9 @@ or the entire workspace**, then a format:
 "standard"`): the structured backup. Every story object with its original
   id and story-node kind; the hierarchy with positions; scene and note
   content as ProseMirror JSON with its format version; characters, relationships with members and
-  roles, connections (kind, label, note, attributes), structures, beats and
-  beat → scene assignments, templates, kits, custom fields and values,
+  roles, connections (kind, label, note, attributes), structures, beats
+  (story nodes since format 7) and beat → scene assignments (with validity,
+  exception and note since format 7), templates, kits, custom fields and values,
   tasks, events, writing sessions, pen names (with language). Items in the
   Trash are included (with `deletedAt`). Built-in templates are referenced
   by their fixed ids. `checkExportIntegrity()` verifies every reference

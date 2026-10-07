@@ -210,8 +210,8 @@ async function fingerprint() {
     "relationship_members",
     "connections",
     "outlines",
-    "outline_beats",
-    "beat_scenes",
+    "beats",
+    "beat_assignments",
     "notes",
     "content_revisions",
     "node_field_values",
@@ -271,7 +271,7 @@ describe("workspace JSON export", () => {
     expect(filename).toMatch(/^spellbound-draft-workspace-archive-\d{4}-\d{2}-\d{2}\.json$/);
     expect(data).toMatchObject({
       format: "authoros.workspace",
-      version: 6,
+      version: 7,
       scope: { kind: "workspace" },
     });
     expect(checkExportIntegrity(data)).toEqual([]);
@@ -304,7 +304,9 @@ describe("workspace JSON export", () => {
         data.ideas.length +
         data.tasks.length +
         data.calendarEvents.length +
-        data.outlines.length,
+        data.outlines.length +
+        // Beats are story objects since M14.
+        data.outlineBeats.length,
     );
     // Survives a round trip through JSON text.
     const text = JSON.stringify(data);

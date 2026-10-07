@@ -11,6 +11,7 @@ import {
   assignScene,
   createOutline,
   deleteBeat,
+  keepPlacement,
   previewDeleteBeat,
   deleteTemplate,
   moveBeat,
@@ -112,4 +113,8 @@ export async function assignSceneAction(beatId: string, sceneId: string) {
 
 export async function unassignSceneAction(beatId: string, sceneId: string) {
   return runAction(async () => unassignScene(await ctx(), beatId, sceneId));
+}
+
+export async function keepPlacementAction(beatId: string, sceneId: string, note?: string) {
+  return runAction(async () => keepPlacement(await ctx(), beatId, sceneId, { note }));
 }
