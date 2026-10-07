@@ -153,3 +153,62 @@ for (const scheme of ["light", "dark"] as const) {
     await noOverflow(page);
   });
 }
+
+/**
+ * The app follows the device theme as it changes (manual-test regression,
+ * Rebrand 1): dark on, then off, then on again in the same tab, live and
+ * after a reload, including the manuscript. Proves the response to the
+ * preference, not just that both palettes exist.
+ */
+test("follows the device theme when it changes", async ({ page }) => {
+  test.setTimeout(120_000);
+  const body = page.locator("body");
+  const expectTheme = async (scheme: "light" | "dark") => {
+    expect(await page.evaluate(() => matchMedia("(prefers-color-scheme: dark)").matches)).toBe(
+      scheme === "dark",
+    );
+    expect(await css(body, "background-color")).toBe(THEMES[scheme].background);
+  };
+
+  await page.emulateMedia({ colorScheme: "dark" });
+  await page.goto("/");
+  await expectTheme("dark");
+  await page.emulateMedia({ colorScheme: "light" }); // device dark mode turned off
+  await expectTheme("light");
+  await page.reload();
+  await expectTheme("light");
+  await page.emulateMedia({ colorScheme: "dark" }); // and on again
+  await expectTheme("dark");
+
+  // The manuscript switches with it: page text, caret and selection.
+  await signUp(page);
+  await createBookWithScene(page, "Night and day");
+  await editorText(page).click();
+  await page.keyboard.type("The lamp was lit.");
+  await expectSaved(page);
+  const manuscript = page.locator(".manuscript");
+  const look = () =>
+    manuscript.evaluate((el) => ({
+      font: getComputedStyle(el).fontFamily,
+      color: getComputedStyle(el).color,
+      caret: getComputedStyle(el).caretColor,
+      selection: getComputedStyle(el.querySelector("p")!, "::selection").backgroundColor,
+    }));
+  const dark = await look();
+  expect(dark).toMatchObject({
+    color: THEMES.dark.manuscript,
+    caret: "rgb(201, 163, 218)",
+    selection: "rgb(78, 59, 96)",
+  });
+  await page.emulateMedia({ colorScheme: "light" });
+  await expectTheme("light");
+  const light = await look();
+  expect(light).toMatchObject({
+    color: THEMES.light.manuscript,
+    caret: "rgb(90, 46, 110)",
+    selection: "rgb(227, 211, 234)",
+  });
+  expect(dark.font).toMatch(/Literata/);
+  expect(light.font).toMatch(/Literata/);
+  expect(await contrast(manuscript)).toBeGreaterThanOrEqual(7);
+});
