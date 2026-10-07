@@ -77,16 +77,27 @@ test.describe("Milestone 13: Tropes (desktop)", () => {
     });
 
     // Describe it; the earlier description is kept.
-    await page.getByLabel("What it means in your books").fill("They start as rivals.");
-    await page.getByRole("button", { name: "Save", exact: true }).click();
-    await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
-    await page.getByLabel("What it means in your books").fill("They start as bitter rivals.");
-    await page.getByRole("button", { name: "Save", exact: true }).click();
+    // Each save is waited for (its response also refreshes the form's version).
+    for (const text of ["They start as rivals.", "They start as bitter rivals."]) {
+      await page.getByLabel("What it means in your books").fill(text);
+      const saved = page.waitForResponse((r) => r.request().method() === "POST");
+      await page.getByRole("button", { name: "Save", exact: true }).click();
+      await saved;
+      await expect(page.getByRole("status").filter({ hasText: "Saved" })).toBeVisible();
+    }
     await page.getByRole("button", { name: "Earlier versions" }).click();
-    await expect(page.getByRole("list", { name: "Earlier values" })).toContainText(
+    const earlier = page.getByRole("list", { name: "Earlier values" });
+    await expect(earlier).toContainText("They start as rivals.");
+    // Restore it: the description becomes the earlier text (and stays after a reload).
+    await earlier.getByRole("button", { name: "Restore this description" }).click();
+    await expect(earlier).toBeHidden();
+    await expect(page.getByLabel("What it means in your books")).toHaveValue(
       "They start as rivals.",
     );
-    await page.keyboard.press("Escape");
+    await page.reload();
+    await expect(page.getByLabel("What it means in your books")).toHaveValue(
+      "They start as rivals.",
+    );
 
     // Search finds it.
     await page.goto("/search?q=lighthouse");

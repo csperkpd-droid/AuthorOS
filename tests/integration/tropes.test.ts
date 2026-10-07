@@ -6,7 +6,7 @@ import { ConflictError, ForbiddenError, NotFoundError, RuleError } from "@/lib/e
 import { createCharacter, trashCharacter } from "@/modules/characters";
 import { connect } from "@/modules/connections";
 import { exportWorkspaceJson } from "@/modules/exports";
-import { listFieldHistory } from "@/modules/history";
+import { listFieldHistory, restoreFieldValue } from "@/modules/history";
 import { reviewImport, runImport } from "@/modules/imports";
 import { createBook, createSeries } from "@/modules/library";
 import { createNote } from "@/modules/notes";
@@ -58,6 +58,37 @@ describe("Tropes: objects", () => {
     expect(b).toEqual({ id: a.id, created: false });
     expect((await listTropes(ctx)).map((t) => t.name)).toEqual(["Enemies to lovers"]);
     await expect(createTrope(ctx, { name: "   " })).rejects.toThrow(/name/);
+  });
+
+  it("restores an earlier description from its history (M13 manual-test regression)", async () => {
+    const t = await createTrope(ctx, { name: "Slow burn" });
+    await updateTrope(ctx, t.id, { name: "Slow burn", description: "First take." });
+    await updateTrope(ctx, t.id, { name: "Slow burn", description: "Second take." });
+
+    // The earlier version the "Earlier versions" dialog lists…
+    const [earlier] = await listFieldHistory(ctx, t.id);
+    expect(earlier).toMatchObject({ field: "description", value: "First take." });
+
+    // …is restored, exactly.
+    await restoreFieldValue(ctx, earlier.id);
+    const restored = await getTrope(ctx, t.id);
+    expect(restored.description).toBe("First take.");
+    expect(restored.name).toBe("Slow burn");
+
+    // The restore is in the existing history: the replaced value is kept as
+    // "before restore", newest first, so the restore can be undone too.
+    const history = await listFieldHistory(ctx, t.id);
+    expect(history.map((h) => [h.field, h.value, h.source])).toEqual([
+      ["description", "Second take.", "BEFORE_RESTORE"],
+      ["description", "First take.", "BEFORE_EDIT"],
+    ]);
+    await restoreFieldValue(ctx, history[0].id);
+    expect((await getTrope(ctx, t.id)).description).toBe("Second take.");
+
+    // Restoring needs story-bible edit rights, as before.
+    await expect(
+      restoreFieldValue({ ...ctx, role: "VIEWER" }, history[1].id),
+    ).rejects.toBeInstanceOf(ForbiddenError);
   });
 
   it("renames and describes (description history), refusing a taken name and stale forms", async () => {

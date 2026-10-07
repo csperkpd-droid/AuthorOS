@@ -42,6 +42,8 @@ const COLUMNS: Partial<Record<StoryNodeKind, Record<string, { table: string; col
   EVENT: { description: { table: "calendar_events", column: "description" } },
   PEN_NAME: { bio: { table: "pen_names", column: "bio" } },
   TIMELINE_EVENT: { description: { table: "timeline_events", column: "description" } },
+  // Descriptions only: trope names have no history (decision 110).
+  TROPE: { description: { table: "tropes", column: "description" } },
 };
 
 function fieldOf(kind: StoryNodeKind, field: string) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogTrigger } from "@/components/ui/dialog";
@@ -22,6 +22,13 @@ export function TropeForm({
 }) {
   const save = useAction(updateTropeAction);
   const [saved, setSaved] = useState(false);
+  // When the stored description changes from elsewhere (restoring an earlier
+  // version), show it; after the author's own save the field already matches.
+  const description = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => {
+    const field = description.current;
+    if (field && field.value !== (trope.description ?? "")) field.value = trope.description ?? "";
+  }, [trope.description]);
   return (
     <form
       className="max-w-prose space-y-3"
@@ -40,6 +47,7 @@ export function TropeForm({
       <label className="block space-y-1 text-sm">
         <span className="font-medium">What it means in your books</span>
         <Textarea
+          ref={description}
           name="description"
           defaultValue={trope.description ?? ""}
           rows={6}
