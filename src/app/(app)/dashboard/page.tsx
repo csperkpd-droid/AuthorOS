@@ -168,7 +168,7 @@ export default async function DashboardPage() {
       <div className="grid gap-10 lg:grid-cols-2">
         <section aria-labelledby="upcoming-heading" className="space-y-4">
           <div className="flex items-center justify-between gap-2">
-            <h2 id="upcoming-heading" className="font-serif text-xl">
+            <h2 id="upcoming-heading" className="text-lg font-semibold">
               Next 7 days
             </h2>
             <Link href="/calendar" className="text-sm text-primary hover:underline">
@@ -209,7 +209,7 @@ export default async function DashboardPage() {
         </section>
 
         <section aria-labelledby="pace-heading" className="space-y-4">
-          <h2 id="pace-heading" className="font-serif text-xl">
+          <h2 id="pace-heading" className="text-lg font-semibold">
             Books in progress
           </h2>
           {pace.length === 0 ? (
@@ -223,7 +223,7 @@ export default async function DashboardPage() {
       </div>
 
       <section aria-labelledby="continue-heading" className="space-y-4">
-        <h2 id="continue-heading" className="font-serif text-xl">
+        <h2 id="continue-heading" className="text-lg font-semibold">
           Recent scenes
         </h2>
         {recent.length === 0 ? (
@@ -240,7 +240,7 @@ export default async function DashboardPage() {
               <li key={scene.id}>
                 <Link
                   href={`/books/${scene.book.id}/scenes/${scene.id}`}
-                  className="flex flex-wrap items-center gap-3 p-4 hover:bg-muted/50"
+                  className="flex flex-wrap items-center gap-3 p-4 hover:bg-surface-hover"
                 >
                   <PenLine className="size-4 shrink-0 text-primary" aria-hidden />
                   <div className="min-w-0 flex-1">
@@ -261,7 +261,7 @@ export default async function DashboardPage() {
 
       {later.length > 0 && (
         <section aria-labelledby="sections-heading" className="space-y-4">
-          <h2 id="sections-heading" className="font-serif text-xl">
+          <h2 id="sections-heading" className="text-lg font-semibold">
             Coming later
           </h2>
           <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

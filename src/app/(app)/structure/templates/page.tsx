@@ -30,7 +30,7 @@ export default async function TemplatesPage() {
       />
       <section aria-labelledby="kits-heading" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="kits-heading" className="font-serif text-xl">
+          <h2 id="kits-heading" className="text-lg font-semibold">
             Template kits
           </h2>
           <KitDialog
@@ -53,7 +53,7 @@ export default async function TemplatesPage() {
         )}
       </section>
       <section aria-labelledby="yours-heading" className="space-y-3">
-        <h2 id="yours-heading" className="font-serif text-xl">
+        <h2 id="yours-heading" className="text-lg font-semibold">
           Your templates
         </h2>
         {yours.length === 0 ? (
@@ -65,7 +65,7 @@ export default async function TemplatesPage() {
         )}
       </section>
       <section aria-labelledby="builtin-heading" className="space-y-3">
-        <h2 id="builtin-heading" className="font-serif text-xl">
+        <h2 id="builtin-heading" className="text-lg font-semibold">
           Built in
         </h2>
         <TemplateList templates={builtIn} />

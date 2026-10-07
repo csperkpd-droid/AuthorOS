@@ -72,7 +72,7 @@ export default async function TropePage({ params }: Props) {
         }}
       />
       <section aria-labelledby="used-in" className="space-y-3">
-        <h2 id="used-in" className="font-serif text-xl">
+        <h2 id="used-in" className="text-lg font-semibold">
           Used in
         </h2>
         {trope.usedIn.length === 0 ? (

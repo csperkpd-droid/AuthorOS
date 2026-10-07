@@ -150,7 +150,8 @@ export const navigation: NavGroup[] = [
         label: "Import",
         href: "/import",
         icon: Upload,
-        description: "Restore an AuthorOS backup, or bring a workspace from another account.",
+        description:
+          "Restore a Spellbound Draft backup (AuthorOS backups work too), or bring a workspace from another account.",
         availability: { status: "available" },
       },
       {

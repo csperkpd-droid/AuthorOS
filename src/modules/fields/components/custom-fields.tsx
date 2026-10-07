@@ -59,7 +59,7 @@ export function CustomFields({
   return (
     <section aria-labelledby="custom-fields-heading" className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="custom-fields-heading" className="font-serif text-xl">
+        <h2 id="custom-fields-heading" className="text-lg font-semibold">
           Your fields
         </h2>
         {!adding && (
@@ -102,7 +102,7 @@ export function CustomFields({
                       <button
                         type="button"
                         aria-label={`Remove the ${d.label} field`}
-                        className="rounded p-0.5 text-muted-foreground hover:bg-muted"
+                        className="rounded p-0.5 text-muted-foreground hover:bg-surface-hover"
                       >
                         <X className="size-3.5" aria-hidden />
                       </button>

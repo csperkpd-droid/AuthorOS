@@ -1,6 +1,6 @@
 # Architecture
 
-AuthorOS is a **modular monolith**: one Next.js application, one PostgreSQL
+Spellbound Draft (formerly AuthorOS) is a **modular monolith**: one Next.js application, one PostgreSQL
 database, with the code split into domain modules that have strict boundaries.
 
 > Status: Milestone 9 (Access Boundary: permission-aware reads, account-owned device drafts, the architecture baseline below). Sections marked
@@ -18,7 +18,7 @@ database, with the code split into domain modules that have strict boundaries.
 
 ## Architecture baseline
 
-The finalized AuthorOS architecture: 29 invariants every change must
+The finalized architecture (built as AuthorOS, now Spellbound Draft): 29 invariants every change must
 preserve. **This section is the authoritative definition.** `AGENTS.md`
 turns it into implementation rules and `DECISIONS.md` records why
 (decisions 103 to 106 adopted it); the sections after this one describe
@@ -142,7 +142,7 @@ the mechanisms. "Not built" marks designed parts with no code yet.
     event information crosses into the Life Planner. Connecting the
     systems grants no access to manuscripts, the Story Graph, private
     notes, research, business or legal information, and personal or
-    household data never appears in AuthorOS. Enforced in the data and
+    household data never appears in Spellbound Draft. Enforced in the data and
     permission layers, not by hiding UI. Not built.
 27. **Progressive complexity, not a Beginner Mode.** Complexity is revealed
     by context and need (the Romance Center appears for romance arcs).
@@ -474,6 +474,36 @@ node; a new versioned kind adds one accessor in `history/versioned.ts`.
 Trash lists the topmost trashed item of each branch; restoring brings back
 its contents (except things trashed separately). "Delete forever" removes
 the item, its descendants and their revisions.
+
+## Brand and theme (Rebrand 1)
+
+The product is **Spellbound Draft, by Scrollkeep Studio** (Brand
+Specification v1.1; DECISIONS 111). Presentation only: no route, schema,
+permission or behaviour changed.
+
+- **One token layer.** `src/app/globals.css` defines the role tokens
+  (surfaces, text, borders, brand, states, interaction, manuscript) in
+  `:root`, their dark values under `@media (prefers-color-scheme: dark)`,
+  and exposes them to Tailwind in `@theme inline` (`bg-surface`,
+  `text-muted-foreground`, `border-border-strong`, `bg-secondary`,
+  `text-success`…). The theme follows the device; there is no switch and
+  no component tests which theme is active.
+- **Type.** `next/font` loads Inter (`font-sans`, all UI), Cormorant
+  Garamond (`font-display`, the wordmark and titles 22px and up) and
+  Literata (`font-manuscript` and `.manuscript`, 19/32, 17/30 on phones).
+- **Shape and depth.** Radii 4 / 10 / 14px; cards are flat with hairlines;
+  menus and dialogs use `shadow-float` over the `scrim`. Controls have
+  3:1 `border-strong` outlines and a 2px focus outline (`focus-ring` adds
+  the halo).
+- **Name.** `src/config/brand.ts` holds the product, company, tagline and
+  description. The tagline appears only on the public home page.
+- **Compatibility identifiers keep `authoros`:** the backup format
+  `authoros.workspace`, the drafts store `authoros-drafts`, the
+  `authoros-signed-out` cookie and the import source `authoros-json`
+  (`tests/integration/branding.test.ts` pins them).
+- **Pending artwork.** The Feather icon in `components/shell/brand.tsx`
+  holds the Open Page mark's place, and `app/favicon.ico` stays, until the
+  production vector marks exist.
 
 ## Tropes (M13)
 
@@ -1084,7 +1114,8 @@ file → source parser → Workspace Bundle → validate → plan → review
   a **Workspace Bundle** (`bundle.ts`): the export's shape, validated
   column by column (only known columns are read; derived values such as
   plain text, word counts and member keys are recomputed, never trusted).
-  AuthorOS JSON is implemented. Scrivener, Plottr, DOCX and EPUB are listed
+  Spellbound Draft JSON (source id `authoros-json`; AuthorOS backups read
+  the same) is implemented. Scrivener, Plottr, DOCX and EPUB are listed
   as coming later; each will be one parser producing a bundle (with fresh
   ids) and reuse everything downstream.
 - **Validate** (`validate.ts`) checks the whole file before anything else:

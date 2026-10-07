@@ -50,7 +50,9 @@ export function ConfirmDialog({
           </Button>
           <Button
             className={
-              destructive ? "bg-destructive text-white hover:bg-destructive/90" : undefined
+              destructive
+                ? "bg-destructive text-primary-foreground hover:bg-destructive/90"
+                : undefined
             }
             disabled={pending}
             onClick={async () => {

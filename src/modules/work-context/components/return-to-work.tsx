@@ -77,7 +77,7 @@ export function ReturnToWork({ owner, compact = false }: { owner: string; compac
         type="button"
         onClick={go}
         title={resolved.title}
-        className="flex items-center gap-1.5 rounded-md border border-primary/30 bg-primary/10 px-2.5 py-1.5 text-xs font-medium text-primary"
+        className="flex items-center gap-1.5 rounded-md border border-primary/30 bg-secondary px-2.5 py-1.5 text-xs font-medium text-primary"
       >
         <CornerUpLeft className="size-3.5" aria-hidden />
         Return to work
@@ -89,7 +89,7 @@ export function ReturnToWork({ owner, compact = false }: { owner: string; compac
       type="button"
       onClick={go}
       className={cn(
-        "flex w-full items-start gap-3 rounded-lg border border-primary/30 bg-primary/10 px-3 py-2 text-left text-sm text-primary hover:bg-primary/15",
+        "flex w-full items-start gap-3 rounded-lg border border-primary/30 bg-secondary px-3 py-2 text-left text-sm text-primary hover:bg-primary/15",
       )}
     >
       <CornerUpLeft className="mt-0.5 size-4 shrink-0" aria-hidden />

@@ -50,7 +50,7 @@ export default async function CharactersPage() {
       {characters.length === 0 ? (
         <div className="flex flex-col items-center rounded-xl border border-dashed border-border px-6 py-16 text-center">
           <Users className="size-10 text-muted-foreground" aria-hidden />
-          <p className="mt-4 font-serif text-xl">No characters yet</p>
+          <p className="mt-4 font-display text-2xl font-semibold">No characters yet</p>
           <p className="mt-2 max-w-md text-sm text-muted-foreground">
             Create characters here, or add them straight from a scene while you write.
           </p>
@@ -63,12 +63,12 @@ export default async function CharactersPage() {
                 href={`/characters/${c.id}`}
                 className="flex h-full flex-col gap-2 rounded-xl border border-border bg-surface p-4 shadow-sm transition-colors hover:border-primary/40"
               >
-                <p className="font-serif text-lg leading-snug">{c.name}</p>
+                <p className="font-display text-2xl leading-snug font-semibold">{c.name}</p>
                 <div className="flex flex-wrap gap-2">
                   <Badge>{CHARACTER_ROLE_LABELS[c.role]}</Badge>
                   {showPenName && <Badge>{c.penName.name}</Badge>}
                   {c.series && (
-                    <Badge className="bg-primary/10 text-primary">{c.series.title}</Badge>
+                    <Badge className="bg-secondary text-primary">{c.series.title}</Badge>
                   )}
                 </div>
                 {c.summary && (

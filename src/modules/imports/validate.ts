@@ -207,7 +207,7 @@ export function validateBundle(b: WorkspaceBundle): string[] {
   ].filter((f) => f > CURRENT_DOC_FORMAT);
   if (newer.length)
     problems.push(
-      `${newer.length} documents were written by a newer version of AuthorOS (format ${Math.max(...newer)}).`,
+      `${newer.length} documents were written by a newer version of Spellbound Draft (format ${Math.max(...newer)}).`,
     );
 
   // ── Calendar: dates of their own, or dates that belong to an object ──

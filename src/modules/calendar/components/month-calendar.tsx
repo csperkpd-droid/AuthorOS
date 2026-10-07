@@ -29,7 +29,7 @@ function Entry({ entry }: { entry: CalendarEntry }) {
     <Link
       href={entry.href}
       className={cn(
-        "flex min-w-0 items-center gap-1 rounded px-1 py-0.5 text-xs hover:bg-muted",
+        "flex min-w-0 items-center gap-1 rounded px-1 py-0.5 text-xs hover:bg-surface-hover",
         entry.type === "task" && entry.done && "text-muted-foreground line-through",
       )}
     >

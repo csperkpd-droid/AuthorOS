@@ -63,7 +63,7 @@ test.describe("Milestone 6", () => {
     await page.getByRole("button", { name: "Review import" }).click();
     const review = page.getByRole("region", { name: "Import review" });
     await expect(review).toContainText("can’t be imported");
-    await expect(review).toContainText("isn’t an AuthorOS backup");
+    await expect(review).toContainText("isn’t a Spellbound Draft backup");
   });
 
   test("members have optional roles in a relationship", async ({ page }) => {

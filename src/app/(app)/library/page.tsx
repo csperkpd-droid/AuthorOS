@@ -65,7 +65,7 @@ export default async function LibraryPage() {
       {isEmpty ? (
         <div className="flex flex-col items-center rounded-xl border border-dashed border-border px-6 py-16 text-center">
           <Library className="size-10 text-muted-foreground" aria-hidden />
-          <p className="mt-4 font-serif text-xl">No books yet</p>
+          <p className="mt-4 font-display text-2xl font-semibold">No books yet</p>
           <p className="mt-2 max-w-md text-sm text-muted-foreground">
             Create a book to start writing, or a series to hold several books.
             {active && ` New work will be published as ${active.name}.`}
@@ -75,12 +75,14 @@ export default async function LibraryPage() {
         groups.map((group) => (
           <section key={group.key} aria-label={group.heading ?? "Your books"} className="space-y-6">
             {group.heading && (
-              <h2 className="border-b border-border pb-2 font-serif text-2xl">{group.heading}</h2>
+              <h2 className="border-b border-border pb-2 font-display text-2xl font-semibold">
+                {group.heading}
+              </h2>
             )}
             {group.library.series.map((series) => (
               <div key={series.id} className="space-y-3">
                 <div className="flex items-baseline justify-between gap-3">
-                  <h3 className="font-serif text-xl">
+                  <h3 className="text-lg font-semibold">
                     <Link href={`/library/series/${series.id}`} className="hover:text-primary">
                       {series.title}
                     </Link>
@@ -103,7 +105,7 @@ export default async function LibraryPage() {
             {group.library.standalone.length > 0 && (
               <div className="space-y-3">
                 {group.library.series.length > 0 && (
-                  <h3 className="font-serif text-xl">Standalone books</h3>
+                  <h3 className="text-lg font-semibold">Standalone books</h3>
                 )}
                 <ul className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
                   {group.library.standalone.map((book) => (

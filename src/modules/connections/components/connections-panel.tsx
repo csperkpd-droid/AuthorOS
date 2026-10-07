@@ -49,7 +49,7 @@ export function ConnectionsPanel({
   return (
     <section aria-label={heading} className="space-y-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 className="font-serif text-xl">{heading}</h2>
+        <h2 className="text-lg font-semibold">{heading}</h2>
         <div className="flex flex-wrap gap-2">
           {actions}
           <AddConnectionDialog

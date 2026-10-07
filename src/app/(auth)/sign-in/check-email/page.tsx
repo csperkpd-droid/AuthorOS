@@ -11,7 +11,7 @@ export default function CheckEmailPage() {
     <Card>
       <CardContent className="space-y-3 text-center">
         <MailCheck className="mx-auto size-10 text-primary" aria-hidden />
-        <h1 className="font-serif text-2xl">Check your email</h1>
+        <h1 className="font-display text-2xl font-semibold">Check your email</h1>
         <p className="text-sm text-muted-foreground">
           We sent you a sign-in link. It expires in 24 hours and works once.
         </p>

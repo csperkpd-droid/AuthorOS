@@ -485,7 +485,7 @@ export function RichTextEditor({
         <div
           role="status"
           data-testid="draft-recovery"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/50 p-3 text-sm"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted p-3 text-sm"
         >
           <span>
             {recovered.kind === "restored" &&
@@ -505,7 +505,7 @@ export function RichTextEditor({
         <div
           role="status"
           data-testid="place-notice"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted/50 p-3 text-sm"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-muted p-3 text-sm"
         >
           <span>
             {placeLost === "lost"
@@ -521,7 +521,7 @@ export function RichTextEditor({
       {state === "conflict" && (
         <div
           role="alert"
-          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive"
+          className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-destructive/30 bg-destructive-bg p-3 text-sm text-destructive"
         >
           <span>
             This {thing} was changed somewhere else (another tab or device), so your latest edits
@@ -596,7 +596,7 @@ function SaveStatus({
       data-testid="save-status"
       data-state={state}
       data-device={device}
-      className={cn(warn && "font-medium text-destructive")}
+      className={cn(warn && "font-medium text-destructive", state === "saved" && "text-success")}
     >
       {text}
     </span>
@@ -678,8 +678,8 @@ function Toolbar({ editor }: { editor: Editor }) {
           disabled={disabled}
           onClick={run}
           className={cn(
-            "flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-muted hover:text-foreground disabled:opacity-40",
-            pressed && "bg-primary/10 text-primary",
+            "flex size-8 items-center justify-center rounded-md text-muted-foreground hover:bg-surface-hover hover:text-foreground disabled:opacity-40",
+            pressed && "bg-secondary text-primary",
           )}
         >
           <Icon className="size-4" aria-hidden />

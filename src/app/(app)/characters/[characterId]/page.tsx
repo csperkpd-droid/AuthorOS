@@ -136,7 +136,7 @@ export default async function CharacterPage({ params }: Props) {
         <Badge>{CHARACTER_ROLE_LABELS[character.role]}</Badge>
         {penNames.length > 1 && <Badge>{character.penName.name}</Badge>}
         {character.series && (
-          <Badge className="bg-primary/10 text-primary">{character.series.title}</Badge>
+          <Badge className="bg-secondary text-primary">{character.series.title}</Badge>
         )}
       </div>
       {character.summary && (
@@ -144,7 +144,7 @@ export default async function CharacterPage({ params }: Props) {
       )}
 
       <section aria-labelledby="profile-heading" className="space-y-3">
-        <h2 id="profile-heading" className="font-serif text-xl">
+        <h2 id="profile-heading" className="text-lg font-semibold">
           Profile
         </h2>
         <ProfileForm characterId={character.id} profile={character.profile} />
@@ -160,7 +160,7 @@ export default async function CharacterPage({ params }: Props) {
 
       <section aria-label="Relationships" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 className="font-serif text-xl">Relationships</h2>
+          <h2 className="text-lg font-semibold">Relationships</h2>
           {characterOptions.length > 1 && (
             <RelationshipDialog
               characters={characterOptions}
@@ -201,7 +201,7 @@ export default async function CharacterPage({ params }: Props) {
       </section>
 
       <section aria-labelledby="scenes-heading" className="space-y-3">
-        <h2 id="scenes-heading" className="font-serif text-xl">
+        <h2 id="scenes-heading" className="text-lg font-semibold">
           Scenes
         </h2>
         {scenes.length === 0 ? (
@@ -215,7 +215,7 @@ export default async function CharacterPage({ params }: Props) {
                 <Link
                   key={r}
                   href={`/search?${new URLSearchParams({ character: character.id, ...(r !== "all" ? { role: r } : {}) })}`}
-                  className="rounded-full border border-border px-3 py-1 text-sm hover:bg-muted"
+                  className="rounded-full border border-border px-3 py-1 text-sm hover:bg-surface-hover"
                 >
                   {ROLE_FILTER_LABELS[r]} ({sceneCounts[r]})
                 </Link>
@@ -241,7 +241,7 @@ export default async function CharacterPage({ params }: Props) {
                       <span className="ml-2 text-xs text-muted-foreground">{scene.context}</span>
                     )}
                   </span>
-                  <Badge className={pov ? "bg-primary/10 text-primary" : undefined}>
+                  <Badge className={pov ? "bg-secondary text-primary" : undefined}>
                     {describeParticipation({ presence, pov })}
                   </Badge>
                 </li>
@@ -253,7 +253,7 @@ export default async function CharacterPage({ params }: Props) {
 
       <section aria-labelledby="arcs-heading" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="arcs-heading" className="font-serif text-xl">
+          <h2 id="arcs-heading" className="text-lg font-semibold">
             Character arcs
           </h2>
           {structureOptions.books.length > 0 && (

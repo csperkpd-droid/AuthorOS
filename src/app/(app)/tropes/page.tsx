@@ -33,7 +33,7 @@ export default async function TropesPage() {
             <li key={t.id}>
               <Link
                 href={`/tropes/${t.id}`}
-                className="flex flex-wrap items-baseline justify-between gap-2 p-4 hover:bg-muted/50"
+                className="flex flex-wrap items-baseline justify-between gap-2 p-4 hover:bg-surface-hover"
               >
                 <span className="font-medium">{t.name}</span>
                 <span className="text-xs text-muted-foreground">

@@ -45,12 +45,12 @@ export function RomanceProgression({
           >
             <div className="flex flex-wrap items-center gap-2">
               <Heart className="size-4 text-primary" aria-hidden />
-              <h2 className="font-serif text-lg">
+              <h2 className="text-lg font-semibold">
                 <Link href={`/relationships/${r.relationship.id}`} className="hover:underline">
                   {couple}
                 </Link>
               </h2>
-              <Badge className={r.arcRole === "MAIN" ? "bg-primary/10 text-primary" : undefined}>
+              <Badge className={r.arcRole === "MAIN" ? "bg-secondary text-primary" : undefined}>
                 {ARC_ROLE_LABELS[r.arcRole]}
               </Badge>
             </div>

@@ -128,7 +128,7 @@ export function TimelineBoard({
     <div className="space-y-8">
       <section aria-labelledby="story-order" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="story-order" className="font-serif text-xl">
+          <h2 id="story-order" className="text-lg font-semibold">
             In story order
           </h2>
           {canEditEvents && !filtered && <AddEvent ownerId={ownerId} entries={entries} />}
@@ -163,7 +163,7 @@ export function TimelineBoard({
       </section>
 
       <section aria-labelledby="not-placed" className="space-y-3">
-        <h2 id="not-placed" className="font-serif text-xl">
+        <h2 id="not-placed" className="text-lg font-semibold">
           Not placed yet
         </h2>
         {unplaced.length === 0 ? (

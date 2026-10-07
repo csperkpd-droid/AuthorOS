@@ -9,7 +9,7 @@ const schema = z.object({
   AUTH_GOOGLE_ID: z.string().optional(),
   AUTH_GOOGLE_SECRET: z.string().optional(),
   AUTH_RESEND_KEY: z.string().optional(),
-  EMAIL_FROM: z.string().default("AuthorOS <onboarding@resend.dev>"),
+  EMAIL_FROM: z.string().default("Spellbound Draft <onboarding@resend.dev>"),
   // "resend" sends real email. "outbox" writes sign-in links to .dev-mail/
   // for local development and end-to-end tests. Defaults to resend when a
   // Resend key is present, otherwise outbox.

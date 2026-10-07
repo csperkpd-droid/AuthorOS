@@ -109,8 +109,8 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
                 href={filterHref(r)}
                 aria-current={r === role ? "page" : undefined}
                 className={cn(
-                  "rounded-full border border-border px-3 py-1 text-sm hover:bg-muted",
-                  r === role && "border-primary/50 bg-primary/10 font-medium",
+                  "rounded-full border border-border px-3 py-1 text-sm hover:bg-surface-hover",
+                  r === role && "border-primary/50 bg-secondary font-medium",
                 )}
               >
                 {ROLE_FILTER_LABELS[r]}
@@ -135,7 +135,7 @@ export default async function SearchPage({ searchParams }: PageProps<"/search">)
             >
               {results.map(({ node, snippet }) => (
                 <li key={node.id}>
-                  <Link href={node.href} className="block space-y-1 p-4 hover:bg-muted/50">
+                  <Link href={node.href} className="block space-y-1 p-4 hover:bg-surface-hover">
                     <p className="flex flex-wrap items-center gap-2">
                       <Badge>{NODE_KIND_LABELS[node.kind].one}</Badge>
                       <span className="font-medium">{node.title}</span>

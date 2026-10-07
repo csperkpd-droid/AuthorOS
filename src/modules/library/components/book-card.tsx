@@ -28,13 +28,13 @@ export function BookCard({
       className="flex h-full flex-col gap-3 rounded-xl border border-border bg-surface p-4 shadow-sm transition-colors hover:border-primary/40"
     >
       <div className="min-w-0 flex-1">
-        <p className="font-serif text-lg leading-snug">{book.title}</p>
+        <p className="font-display text-2xl leading-snug font-semibold">{book.title}</p>
         {book.subtitle && <p className="text-sm text-muted-foreground">{book.subtitle}</p>}
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <Badge>{WRITING_STATUS_LABELS[book.writingStatus]}</Badge>
         {showPenName && (
-          <Badge className="bg-primary/10 text-primary">
+          <Badge className="bg-secondary text-primary">
             {book.penName.name}
             {book.penName.archivedAt && " (archived)"}
           </Badge>

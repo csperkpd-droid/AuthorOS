@@ -1,4 +1,4 @@
-import { Brand } from "@/components/shell/brand";
+import { Brand, Endorsement } from "@/components/shell/brand";
 
 export default function AuthLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -7,6 +7,7 @@ export default function AuthLayout({ children }: { children: React.ReactNode }) 
         <Brand href="/" />
       </div>
       <div className="w-full max-w-sm">{children}</div>
+      <Endorsement className="mt-12" />
     </main>
   );
 }

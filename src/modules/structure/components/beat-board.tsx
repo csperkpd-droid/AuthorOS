@@ -81,7 +81,7 @@ export function BeatBoard({
   return (
     <section aria-labelledby="beats-heading" className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="beats-heading" className="font-serif text-xl">
+        <h2 id="beats-heading" className="text-lg font-semibold">
           Beats
         </h2>
         <Button variant="outline" size="sm" onClick={() => setEditing("new")}>
@@ -103,8 +103,8 @@ export function BeatBoard({
               className={cn(
                 "rounded-full border px-3 py-1 text-sm",
                 bookFilter === option.id
-                  ? "border-primary bg-primary/10 text-primary"
-                  : "border-border text-muted-foreground hover:bg-muted",
+                  ? "border-primary bg-secondary text-primary"
+                  : "border-border text-muted-foreground hover:bg-surface-hover",
               )}
             >
               {option.label}
@@ -207,7 +207,7 @@ function BeatCard({
             <h3 className="font-medium">{beat.title}</h3>
             {series && planned && <Badge>Book {planned.number}</Badge>}
             {beat.targetPercent !== null && <Badge>~{beat.targetPercent}%</Badge>}
-            {!placed && <Badge className="bg-primary/10 text-primary">Not placed</Badge>}
+            {!placed && <Badge className="bg-secondary text-primary">Not placed</Badge>}
           </div>
           {beat.description && (
             <p className="mt-0.5 text-sm text-muted-foreground">{beat.description}</p>
@@ -234,7 +234,7 @@ function BeatCard({
                   type="button"
                   aria-label={`Remove ${s.title} from ${beat.title}`}
                   onClick={() => unassign.run(beat.id, s.id)}
-                  className="shrink-0 rounded-full p-1 text-muted-foreground hover:bg-muted"
+                  className="shrink-0 rounded-full p-1 text-muted-foreground hover:bg-surface-hover"
                 >
                   <X className="size-3" aria-hidden />
                 </button>

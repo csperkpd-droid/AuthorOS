@@ -29,7 +29,7 @@ export default async function TimelinesPage() {
         >
           {timelines.map((t) => (
             <li key={t.id}>
-              <Link href={t.href} className="flex items-center gap-3 p-4 hover:bg-muted/50">
+              <Link href={t.href} className="flex items-center gap-3 p-4 hover:bg-surface-hover">
                 <ChartGantt className="size-4 text-muted-foreground" aria-hidden />
                 <span className="font-medium">{t.title}</span>
                 <Badge>{t.kind === "SERIES" ? "Series" : "Book"}</Badge>

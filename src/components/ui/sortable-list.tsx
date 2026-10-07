@@ -128,7 +128,7 @@ function SortableRow({ id, render }: { id: string; render: (handle: ReactNode) =
       {...attributes}
       {...listeners}
       aria-label="Drag to reorder"
-      className="flex size-7 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground hover:bg-muted focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none active:cursor-grabbing"
+      className="flex size-7 shrink-0 cursor-grab touch-none items-center justify-center rounded text-muted-foreground hover:bg-surface-hover focus-visible:focus-ring active:cursor-grabbing"
     >
       <GripVertical className="size-4" aria-hidden />
     </button>

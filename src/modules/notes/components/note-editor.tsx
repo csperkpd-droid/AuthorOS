@@ -48,7 +48,7 @@ export function NoteEditor({
           else setValue(title);
         }}
         onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-        className="w-full rounded-md bg-transparent px-1 font-serif text-3xl tracking-tight focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+        className="w-full rounded-md bg-transparent px-1 font-display text-3xl font-semibold tracking-tight focus-visible:focus-ring"
       />
       <FormError message={rename.error} />
       <RichTextEditor

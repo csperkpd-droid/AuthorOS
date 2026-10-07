@@ -8,7 +8,7 @@ This block is written and re-added by `next dev` — verify at `node_modules/nex
 
 <!-- END:nextjs-agent-rules -->
 
-# AuthorOS conventions
+# Spellbound Draft conventions
 
 Read `docs/ARCHITECTURE.md` and `docs/DATABASE.md` before changing structure or schema.
 
@@ -50,4 +50,5 @@ Read `docs/ARCHITECTURE.md` and `docs/DATABASE.md` before changing structure or 
 - **Auth:** call `requireAuthorContext()` in every page, action and route handler that touches author data. Don't rely on layouts or `proxy.ts` for authorization.
 - **Schema:** follow `docs/DATABASE.md` conventions (UUIDv7, snake_case maps, `workspace_id` everywhere, `deleted_at` on creative content). Record notable choices in `docs/DECISIONS.md`.
 - **Navigation:** add new sections to `src/config/navigation.ts`.
+- **Brand (Brand Specification v1.1, DECISIONS 111):** the product is Spellbound Draft (`src/config/brand.ts`). Colors come from the role tokens in `src/app/globals.css` (light, and dark through `prefers-color-scheme` only: no manual theme switch); never hard-code a color. Type: `font-display` (Cormorant Garamond) for titles 22px and up, Inter for all UI, `font-manuscript` (Literata) for the author's prose. Gold (`accent`) is decorative only. The tagline belongs on the public home page only. The compatibility identifiers `authoros.workspace`, `authoros-drafts`, `authoros-signed-out` and `authoros-json` (and the `authoros:work*` keys) keep the old name on purpose: never rename them; no blind rename of "AuthorOS".
 - **Checks before committing:** `pnpm format:check && pnpm lint && pnpm typecheck && pnpm test` (and `pnpm test:e2e` for UI or auth changes).

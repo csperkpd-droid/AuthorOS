@@ -167,8 +167,8 @@ export function AddConnectionDialog({
                       onClick={() => setSelected(r)}
                       aria-pressed={selected?.id === r.id}
                       className={cn(
-                        "flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-muted",
-                        selected?.id === r.id && "bg-primary/10",
+                        "flex w-full items-center gap-2 px-3 py-2 text-left text-sm hover:bg-surface-hover",
+                        selected?.id === r.id && "bg-secondary",
                       )}
                     >
                       <span className="shrink-0 text-xs text-muted-foreground">

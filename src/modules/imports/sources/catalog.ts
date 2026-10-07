@@ -15,9 +15,9 @@ export type ImportSourceInfo = {
 export const IMPORT_SOURCES = [
   {
     id: "authoros-json",
-    label: "AuthorOS backup (.json)",
+    label: "Spellbound Draft backup (.json)",
     description:
-      "A Standard backup or Complete archive exported from AuthorOS: restores everything it contains, with its ids, identities and links.",
+      "A Standard backup or Complete archive exported from Spellbound Draft (AuthorOS backups work too): restores everything it contains, with its ids, identities and links.",
     extensions: [".json"],
     available: true,
   },

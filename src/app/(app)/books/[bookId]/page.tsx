@@ -179,7 +179,7 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
       {book.description && <p className="max-w-prose text-muted-foreground">{book.description}</p>}
       {book.heatLevel && (
         <p>
-          <Badge className="bg-primary/10 text-primary">{HEAT_LEVEL_LABELS[book.heatLevel]}</Badge>
+          <Badge className="bg-secondary text-primary">{HEAT_LEVEL_LABELS[book.heatLevel]}</Badge>
         </p>
       )}
       {tropes && (
@@ -196,7 +196,7 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
 
       <section aria-labelledby="structures-heading" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="structures-heading" className="font-serif text-xl">
+          <h2 id="structures-heading" className="text-lg font-semibold">
             Structures
           </h2>
           <div className="flex flex-wrap gap-2">

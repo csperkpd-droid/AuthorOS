@@ -34,7 +34,7 @@ export default async function NotesPage() {
       {notes.length === 0 ? (
         <div className="flex flex-col items-center rounded-xl border border-dashed border-border px-6 py-16 text-center">
           <StickyNote className="size-10 text-muted-foreground" aria-hidden />
-          <p className="mt-4 font-serif text-xl">No notes yet</p>
+          <p className="mt-4 font-display text-2xl font-semibold">No notes yet</p>
           <p className="mt-2 max-w-md text-sm text-muted-foreground">
             Notes can be about a book, scene, character, relationship or anything else.
           </p>
@@ -46,7 +46,7 @@ export default async function NotesPage() {
         >
           {notes.map((n) => (
             <li key={n.id}>
-              <Link href={`/notes/${n.id}`} className="block p-4 hover:bg-muted/50">
+              <Link href={`/notes/${n.id}`} className="block p-4 hover:bg-surface-hover">
                 <p className="font-medium">{n.title}</p>
                 {n.bodyText && (
                   <p className="mt-1 line-clamp-2 text-sm text-muted-foreground">{n.bodyText}</p>

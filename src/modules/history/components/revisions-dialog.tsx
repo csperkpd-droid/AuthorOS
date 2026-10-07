@@ -152,7 +152,7 @@ export function RevisionsDialog({ nodeId, noun = "scene" }: { nodeId: string; no
                     </div>
                   </div>
                   {selected?.id === r.id ? (
-                    <div className="mt-3 max-h-64 overflow-y-auto rounded bg-surface p-3 font-serif text-sm whitespace-pre-wrap">
+                    <div className="mt-3 max-h-64 overflow-y-auto rounded bg-surface p-3 font-manuscript text-sm whitespace-pre-wrap">
                       {selected.text || <em className="text-muted-foreground">Empty</em>}
                     </div>
                   ) : (

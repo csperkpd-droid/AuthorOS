@@ -89,7 +89,7 @@ export function ImpactReview({
           <h3 id="impact-suggested" className="text-sm font-medium">
             Suggested (your choice)
           </h3>
-          <ul className="divide-y divide-border rounded-lg border border-amber-500/40">
+          <ul className="divide-y divide-border rounded-lg border border-warning">
             {suggestions.map((g) => (
               <li key={g.key} className="space-y-1 p-3">
                 <label className="flex items-start gap-2 text-sm">

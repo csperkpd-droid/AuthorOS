@@ -15,7 +15,7 @@ export function DropdownMenuContent({ className, ...props }: ComponentProps<type
         align="end"
         sideOffset={4}
         className={cn(
-          "z-50 min-w-44 rounded-md border border-border bg-surface p-1 text-sm shadow-md",
+          "z-50 min-w-44 rounded-md border border-border bg-surface-elevated p-1 text-sm shadow-float",
           className,
         )}
         {...props}
@@ -32,7 +32,7 @@ export function DropdownMenuItem({
   return (
     <Menu.Item
       className={cn(
-        "flex cursor-default items-center gap-2 rounded px-2 py-1.5 outline-none select-none data-[disabled]:opacity-50 data-[highlighted]:bg-muted [&_svg]:size-4",
+        "flex cursor-default items-center gap-2 rounded px-2 py-1.5 outline-none select-none data-[disabled]:opacity-50 data-[highlighted]:bg-surface-hover [&_svg]:size-4",
         destructive && "text-destructive",
         className,
       )}

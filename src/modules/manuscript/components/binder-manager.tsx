@@ -84,7 +84,7 @@ export function BinderManager({ bookId, items }: { bookId: string; items: BookLe
   return (
     <section aria-labelledby="binder-heading" className="space-y-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="binder-heading" className="font-serif text-xl">
+        <h2 id="binder-heading" className="text-lg font-semibold">
           Manuscript
         </h2>
         <div className="flex flex-wrap gap-2">
@@ -102,7 +102,7 @@ export function BinderManager({ bookId, items }: { bookId: string; items: BookLe
 
       {items.length === 0 ? (
         <div className="rounded-xl border border-dashed border-border px-6 py-10 text-center">
-          <p className="font-serif text-lg">No chapters yet</p>
+          <p className="font-display text-2xl font-semibold">No chapters yet</p>
           <p className="mt-1 text-sm text-muted-foreground">
             Add a chapter to start writing. Parts are optional; use them for acts or larger
             sections.
@@ -175,7 +175,7 @@ function PartBlock({ part, handle, ...shared }: { part: PartItem; handle: ReactN
               onDone={() => setRenaming(null)}
             />
           ) : (
-            <span className="font-serif text-lg">{part.title}</span>
+            <span className="text-lg font-semibold">{part.title}</span>
           )
         }
         meta={formatWords(part.wordCount)}
@@ -301,7 +301,7 @@ function ChapterBlock({
         )}
         <button
           onClick={addScene}
-          className="mt-1 flex items-center gap-1.5 rounded px-2 py-1 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
+          className="mt-1 flex items-center gap-1.5 rounded px-2 py-1 text-sm text-muted-foreground hover:bg-surface-hover hover:text-foreground"
         >
           <Plus className="size-3.5" aria-hidden />
           Add scene

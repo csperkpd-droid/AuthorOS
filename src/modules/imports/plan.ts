@@ -687,7 +687,7 @@ export async function planImport(
   const missingBuiltIns = b.builtInTemplates.filter((t) => !builtIns.has(t.id));
   if (missingBuiltIns.length)
     adjustments.push(
-      `Built-in templates not in this version of AuthorOS (${missingBuiltIns.map((t) => t.name).join(", ")}): structures made from them are imported without the template link.`,
+      `Built-in templates not in this version of Spellbound Draft (${missingBuiltIns.map((t) => t.name).join(", ")}): structures made from them are imported without the template link.`,
     );
   const usedTemplates = await taken(
     "structure_templates",
@@ -1055,7 +1055,7 @@ export async function planImport(
     const items = k.items.filter((i) => knownTemplate(i.templateId));
     if (items.length < k.items.length)
       adjustments.push(
-        `The kit “${k.name}” loses templates that aren’t in this version of AuthorOS.`,
+        `The kit “${k.name}” loses templates that aren’t in this version of Spellbound Draft.`,
       );
     const data = { name: k.name, description: k.description };
     const itemRows = (kitId: string) =>

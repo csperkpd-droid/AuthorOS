@@ -29,7 +29,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
                   <Icon className="size-4 shrink-0" aria-hidden />
                   <span className="flex-1 truncate">{item.label}</span>
                   {badge && (
-                    <span className="rounded bg-muted px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
+                    <span className="rounded border border-border-strong px-1.5 py-0.5 text-[10px] font-medium text-muted-foreground">
                       {badge.replace("Milestone ", "M")}
                     </span>
                   )}
@@ -37,7 +37,7 @@ export function SidebarNav({ onNavigate }: { onNavigate?: () => void }) {
               );
               const classes = cn(
                 "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                active ? "bg-primary/10 font-medium text-primary" : "hover:bg-muted",
+                active ? "bg-surface font-medium text-primary" : "hover:bg-surface-hover",
                 isLater && "cursor-default text-muted-foreground hover:bg-transparent",
               );
               return (

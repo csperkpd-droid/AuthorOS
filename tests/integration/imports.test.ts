@@ -374,7 +374,7 @@ describe("import: validation", () => {
 
     const cases: [Uint8Array, RegExp][] = [
       [new TextEncoder().encode("{not json"), /valid JSON/],
-      [encode({ format: "something.else" }), /isn’t an AuthorOS backup/],
+      [encode({ format: "something.else" }), /isn’t a Spellbound Draft backup/],
       [encode({ ...data, version: 99 }), /newer version/],
       [
         encode({ ...data, scenes: [{ ...data.scenes[0], chapterId: crypto.randomUUID() }] }),

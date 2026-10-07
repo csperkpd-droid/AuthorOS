@@ -268,7 +268,7 @@ describe("workspace JSON export", () => {
       kind: "archive",
     });
 
-    expect(filename).toMatch(/^authoros-workspace-archive-\d{4}-\d{2}-\d{2}\.json$/);
+    expect(filename).toMatch(/^spellbound-draft-workspace-archive-\d{4}-\d{2}-\d{2}\.json$/);
     expect(data).toMatchObject({
       format: "authoros.workspace",
       version: 6,

@@ -17,7 +17,7 @@ const UPGRADES: Record<number, Step> = {};
 /** A document in the current format. Refuses documents from a newer format. */
 export function upgradeDoc(doc: Doc, format: number): Doc {
   if (format > CURRENT_DOC_FORMAT)
-    throw new Error(`Document format ${format} is newer than this version of AuthorOS.`);
+    throw new Error(`Document format ${format} is newer than this version of Spellbound Draft.`);
   let current = doc;
   for (let f = format; f < CURRENT_DOC_FORMAT; f++) current = UPGRADES[f](current);
   return current;

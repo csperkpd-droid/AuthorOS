@@ -51,7 +51,8 @@ export function draftOwner(ctx: { userId: string; workspaceId: string }) {
 
 const storageKey = (ref: Pick<DraftRef, "owner" | "item">) => `${ref.owner}|${ref.item}`;
 
-const DB_NAME = "authoros-drafts";
+/** Compatibility identifier: unsynced writing on authors' devices lives here. Never rename. */
+export const DRAFTS_DB_NAME = "authoros-drafts";
 const STORE = "drafts";
 
 let opening: Promise<IDBDatabase | null> | null = null;
@@ -60,7 +61,7 @@ function open(): Promise<IDBDatabase | null> {
   if (typeof indexedDB === "undefined") return Promise.resolve(null);
   opening ??= new Promise((resolve) => {
     try {
-      const request = indexedDB.open(DB_NAME, 1);
+      const request = indexedDB.open(DRAFTS_DB_NAME, 1);
       request.onupgradeneeded = () => request.result.createObjectStore(STORE, { keyPath: "key" });
       request.onsuccess = () => resolve(request.result);
       request.onerror = () => resolve(null);

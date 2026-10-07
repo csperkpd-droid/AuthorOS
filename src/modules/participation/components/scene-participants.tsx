@@ -87,7 +87,7 @@ export function SceneParticipants({
               aria-label={`${p.name}: ${describeParticipation(p)}`}
               className={cn(
                 "flex items-center gap-1 rounded-full border bg-surface py-0.5 pr-1 pl-3 text-sm",
-                p.pov && "border-primary/50 bg-primary/10",
+                p.pov && "border-primary/50 bg-secondary",
                 p.presence === "MENTIONED"
                   ? "border-dashed border-border text-muted-foreground"
                   : "border-border",
@@ -108,7 +108,7 @@ export function SceneParticipants({
                     <button
                       type="button"
                       aria-label={`Change ${p.name}’s part in this scene`}
-                      className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                      className="rounded-full p-1 text-muted-foreground hover:bg-surface-hover hover:text-foreground"
                     >
                       <MoreHorizontal className="size-3.5" aria-hidden />
                     </button>
@@ -321,7 +321,7 @@ function AddToScene({
               <li key={r.id}>
                 <button
                   type="button"
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-surface-hover"
                   onClick={() => choose({ characterId: r.id })}
                 >
                   {r.title}
@@ -332,7 +332,7 @@ function AddToScene({
               <li>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary hover:bg-muted"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary hover:bg-surface-hover"
                   onClick={() => choose({ newName: query.trim() })}
                 >
                   <Plus className="size-4" aria-hidden />

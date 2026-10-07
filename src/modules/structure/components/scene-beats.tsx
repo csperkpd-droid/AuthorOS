@@ -24,7 +24,7 @@ export function SceneBeats({ beats }: { beats: SceneBeat[] }) {
           <Link
             href={`/structure/${b.outlineId}`}
             title={`${STRUCTURE_KIND_LABELS[b.kind].one}${b.seriesWide ? " (whole series)" : ""}: ${b.outlineTitle}`}
-            className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-0.5 text-xs hover:bg-muted"
+            className="inline-flex items-center gap-1.5 rounded-full border border-border px-3 py-0.5 text-xs hover:bg-surface-hover"
           >
             <Workflow className="size-3 text-muted-foreground" aria-hidden />
             <span className="text-muted-foreground">

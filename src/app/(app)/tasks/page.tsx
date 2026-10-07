@@ -33,7 +33,9 @@ export default async function TasksPage({ searchParams }: PageProps<"/tasks">) {
             aria-current={f.active ? "page" : undefined}
             className={cn(
               "rounded-full px-3 py-1",
-              f.active ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted",
+              f.active
+                ? "bg-secondary text-primary"
+                : "text-muted-foreground hover:bg-surface-hover",
             )}
           >
             {f.label}

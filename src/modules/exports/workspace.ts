@@ -219,7 +219,7 @@ export async function exportWorkspaceJson(
     format: EXPORT_FORMAT,
     version: EXPORT_VERSION,
     exportedAt: new Date().toISOString(),
-    app: "AuthorOS",
+    app: "Spellbound Draft",
     kind,
     scope: { kind: pens ? "pen-names" : "workspace", label: resolved.label, penNameIds: pens },
     workspace,
@@ -267,7 +267,7 @@ export async function exportWorkspaceJson(
   };
   const date = data.exportedAt.slice(0, 10);
   return {
-    filename: `authoros-${resolved.slug}-${kind === "archive" ? "archive-" : ""}${date}.json`,
+    filename: `spellbound-draft-${resolved.slug}-${kind === "archive" ? "archive-" : ""}${date}.json`,
     data,
   };
 }

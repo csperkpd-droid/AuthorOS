@@ -133,7 +133,7 @@ export default async function SeriesPage({ params }: PageProps<"/library/series/
         </p>
       ) : (
         <section aria-labelledby="order-heading" className="space-y-3">
-          <h2 id="order-heading" className="font-serif text-xl">
+          <h2 id="order-heading" className="text-lg font-semibold">
             Reading order
           </h2>
           <SeriesBookOrder books={series.books} seriesTitle={series.title} />
@@ -142,7 +142,7 @@ export default async function SeriesPage({ params }: PageProps<"/library/series/
 
       <section aria-labelledby="series-structures-heading" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="series-structures-heading" className="font-serif text-xl">
+          <h2 id="series-structures-heading" className="text-lg font-semibold">
             Structures
           </h2>
           <div className="flex flex-wrap gap-2">

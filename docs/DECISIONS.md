@@ -999,6 +999,40 @@ writing is only on this device; the server ends the session on the next
 request (`/sign-out`). Nothing is uploaded on the way out and nothing is
 deleted.
 
+## Rebrand Milestone 1 (Spellbound Draft)
+
+### 111. AuthorOS becomes Spellbound Draft; compatibility identifiers keep their name — Accepted (Rebrand 1)
+
+The product is **Spellbound Draft, by Scrollkeep Studio**, implemented from
+the approved Brand Specification v1.1 and the Rebrand Implementation Audit
+(at commit `3244c9e`). Presentation only: name, role tokens (light and the
+approved dark representation, still following the device theme), the
+three typefaces, email and metadata branding.
+
+- **No blind rename.** Each occurrence was classified: user-facing text
+  changed; the compatibility identifiers `authoros.workspace` (backups),
+  `authoros-drafts` (unsynced writing on devices), `authoros-signed-out`
+  (offline sign-out) and `authoros-json` (import source) stayed, because
+  renaming them would break restoring backups, orphan unsynced writing,
+  leave offline sign-outs unfinished or break import requests. The
+  `authoros:work*` session keys, database and package names, file and
+  function names and code comments stayed too (technical, unseen). Past
+  decisions and audits keep the name as written.
+- **Backups:** new files are named `spellbound-draft-…json` and say
+  `app: "Spellbound Draft"`; the import never reads either, so AuthorOS
+  backups restore unchanged (the import wording says so).
+- **Tokens:** existing role names were re-pointed by role
+  (`--background` = color-bg, `--muted` = color-surface-2, `--ring` =
+  color-focus, `--destructive` = color-error…) and the missing v1.1 roles
+  added beside them; no parallel styling system.
+- **Not done here:** logo, favicon and app icons (waiting for production
+  vector artwork; the Feather icon and the default favicon stay), the
+  production domain (`author-os-eight.vercel.app` stays), the email sender
+  domain and the Google consent screen (outside the repository), a web
+  manifest (a new capability). **Rejected:** renaming the identifiers with
+  compatibility aliases (risk with no benefit to authors); a manual theme
+  switch (out of scope, spec 13).
+
 ## Milestone 13 (Tropes)
 
 ### 110. Tropes are shared story objects linked by `uses_trope` — Accepted (M13)

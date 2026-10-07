@@ -65,7 +65,7 @@ export function ExportWizard({
   return (
     <form action="/export/download" method="get" className="space-y-8">
       <fieldset className="space-y-2">
-        <legend className="font-serif text-xl">1. What to include</legend>
+        <legend className="text-lg font-semibold">1. What to include</legend>
         {[
           {
             value: "current" as const,
@@ -122,7 +122,7 @@ export function ExportWizard({
       </fieldset>
 
       <fieldset className="space-y-2">
-        <legend className="font-serif text-xl">2. Format</legend>
+        <legend className="text-lg font-semibold">2. Format</legend>
         {FORMATS.map((f) => (
           <label key={f.value} className="flex items-start gap-2 text-sm">
             <input
@@ -147,7 +147,7 @@ export function ExportWizard({
 
       {manuscript && (
         <fieldset className="space-y-2">
-          <legend className="font-serif text-xl">3. Books</legend>
+          <legend className="text-lg font-semibold">3. Books</legend>
           {inScope.length === 0 ? (
             <p className="text-sm text-muted-foreground">No books in this selection.</p>
           ) : (

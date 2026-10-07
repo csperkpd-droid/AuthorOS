@@ -41,7 +41,7 @@ export function SceneDetails({
             else setTitleValue(title);
           }}
           onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-          className="min-w-0 flex-1 rounded-md bg-transparent px-1 font-serif text-3xl tracking-tight focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
+          className="min-w-0 flex-1 rounded-md bg-transparent px-1 font-display text-3xl font-semibold tracking-tight focus-visible:focus-ring"
         />
         <Select
           aria-label="Scene status"

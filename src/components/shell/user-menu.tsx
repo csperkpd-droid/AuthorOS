@@ -14,7 +14,7 @@ export function UserMenu({ user, draftOwner }: { user: SessionUser; draftOwner: 
       </div>
       <Link
         href="/settings"
-        className="flex items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-muted"
+        className="flex items-center gap-3 rounded-md px-3 py-2 text-sm hover:bg-surface-hover"
       >
         <Settings className="size-4" aria-hidden />
         Settings

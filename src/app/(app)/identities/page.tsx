@@ -56,10 +56,10 @@ export default async function IdentitiesPage() {
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="min-w-0">
-                  <h2 className="flex flex-wrap items-center gap-2 font-serif text-xl">
+                  <h2 className="flex flex-wrap items-center gap-2 text-lg font-semibold">
                     {identity.name}
                     {identity.isDefault && <Badge>Default</Badge>}
-                    {isActive && <Badge className="bg-primary/10 text-primary">Writing as</Badge>}
+                    {isActive && <Badge className="bg-secondary text-primary">Writing as</Badge>}
                   </h2>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {formatCount(identity.seriesCount, "series", "series")} ·{" "}
@@ -100,7 +100,7 @@ export default async function IdentitiesPage() {
 
       {archived.length > 0 && (
         <section aria-labelledby="archived-heading" className="space-y-3">
-          <h2 id="archived-heading" className="font-serif text-xl">
+          <h2 id="archived-heading" className="text-lg font-semibold">
             Archived
           </h2>
           <p className="text-sm text-muted-foreground">

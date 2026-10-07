@@ -90,10 +90,10 @@ export function TaskList({
               </div>
               <div className="flex shrink-0 flex-wrap justify-end gap-1">
                 {t.priority === "HIGH" && !done && (
-                  <Badge className="bg-primary/10 text-primary">High</Badge>
+                  <Badge className="bg-secondary text-primary">High</Badge>
                 )}
                 {t.dueOn && (
-                  <Badge className={overdue ? "bg-destructive/10 text-destructive" : undefined}>
+                  <Badge className={overdue ? "bg-destructive-bg text-destructive" : undefined}>
                     {overdue ? "Overdue · " : ""}
                     {formatDay(t.dueOn, { weekday: "short", month: "short" })}
                   </Badge>

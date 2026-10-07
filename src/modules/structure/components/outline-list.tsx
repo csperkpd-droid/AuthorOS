@@ -35,7 +35,7 @@ export function OutlineList({
         <li key={o.id}>
           <Link
             href={`/structure/${o.id}`}
-            className="flex flex-wrap items-center gap-3 p-4 hover:bg-muted/50"
+            className="flex flex-wrap items-center gap-3 p-4 hover:bg-surface-hover"
           >
             <div className="min-w-0 flex-1">
               <p className="font-medium">{o.title}</p>
@@ -46,7 +46,7 @@ export function OutlineList({
                 {o.series && ` · Whole series: ${o.series.title}`}
               </p>
             </div>
-            {o.series && <Badge className="bg-primary/10 text-primary">Series</Badge>}
+            {o.series && <Badge className="bg-secondary text-primary">Series</Badge>}
             <div className="w-40 space-y-1">
               <p className="text-right text-xs text-muted-foreground">
                 {o.placedCount} of {o.beatCount} beats placed

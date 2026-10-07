@@ -72,7 +72,7 @@ export function LogWordsDialog({
       <DialogTrigger asChild>{trigger}</DialogTrigger>
       <DialogContent
         title="Log words"
-        description="For words written outside AuthorOS. Words you write here are counted automatically."
+        description="For words written outside Spellbound Draft. Words you write here are counted automatically."
       >
         <form
           className="space-y-4"

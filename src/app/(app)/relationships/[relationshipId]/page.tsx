@@ -103,7 +103,7 @@ export default async function RelationshipPage({ params }: Props) {
       <div className="flex flex-wrap items-center gap-3">
         <Badge>{r.type}</Badge>
         {r.members.length > 2 && (
-          <Badge className="bg-primary/10 text-primary">Group of {r.members.length}</Badge>
+          <Badge className="bg-secondary text-primary">Group of {r.members.length}</Badge>
         )}
         {r.members.map((c) => (
           <span key={c.id} className="text-sm">
@@ -132,7 +132,7 @@ export default async function RelationshipPage({ params }: Props) {
 
       {dynamics.length > 0 && (
         <section aria-labelledby="dynamics-heading" className="space-y-3">
-          <h2 id="dynamics-heading" className="font-serif text-xl">
+          <h2 id="dynamics-heading" className="text-lg font-semibold">
             Within the group
           </h2>
           <p className="text-sm text-muted-foreground">
@@ -153,7 +153,7 @@ export default async function RelationshipPage({ params }: Props) {
 
       <section aria-labelledby="romance-heading" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 id="romance-heading" className="font-serif text-xl">
+          <h2 id="romance-heading" className="text-lg font-semibold">
             Romance arcs
           </h2>
           {structureOptions.books.length > 0 && (

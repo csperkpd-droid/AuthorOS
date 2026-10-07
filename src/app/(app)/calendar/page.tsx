@@ -48,7 +48,7 @@ export default async function CalendarPage({ searchParams }: PageProps<"/calenda
         >
           <ChevronLeft />
         </Link>
-        <h2 className="font-serif text-xl" aria-live="polite">
+        <h2 className="text-lg font-semibold" aria-live="polite">
           {label}
         </h2>
         <div className="flex items-center gap-1">

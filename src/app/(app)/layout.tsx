@@ -30,7 +30,7 @@ export default async function AppLayout({ children }: { children: React.ReactNod
   return (
     <div className="min-h-dvh lg:grid lg:grid-cols-[16rem_1fr]">
       <TimeZoneSync needed={!timeZoneKnown} />
-      <aside className="hidden border-r border-border bg-surface lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col">
+      <aside className="hidden border-r border-border bg-muted lg:sticky lg:top-0 lg:flex lg:h-dvh lg:flex-col">
         <div className="px-6 py-5">
           <Brand />
         </div>

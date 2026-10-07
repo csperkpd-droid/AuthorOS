@@ -2,7 +2,7 @@ import type { WorkspaceBundle } from "../bundle";
 
 /** What a source reports about the file, shown in the review. */
 export type ImportFileInfo = {
-  /** e.g. "AuthorOS backup (.json)". */
+  /** e.g. "Spellbound Draft backup (.json)". */
   sourceLabel: string;
   /** "Standard backup", "Complete archive"… */
   description: string;

@@ -104,7 +104,7 @@ export function KitDialog({
                 return (
                   <label
                     key={t.id}
-                    className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-muted"
+                    className="flex items-center gap-2 rounded px-1 py-1 text-sm hover:bg-surface-hover"
                   >
                     <input
                       type="checkbox"

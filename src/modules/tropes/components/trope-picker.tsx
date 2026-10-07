@@ -55,7 +55,7 @@ export function TropePicker({
                 type="button"
                 aria-label={`Remove trope ${t.name}`}
                 onClick={() => remove.run(targetId, t.id)}
-                className="rounded-full p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                className="rounded-full p-1 text-muted-foreground hover:bg-surface-hover hover:text-foreground"
               >
                 <X className="size-3" aria-hidden />
               </button>
@@ -146,7 +146,7 @@ function AddTrope({
               <li key={t.id}>
                 <button
                   type="button"
-                  className="w-full px-3 py-2 text-left text-sm hover:bg-muted"
+                  className="w-full px-3 py-2 text-left text-sm hover:bg-surface-hover"
                   onClick={() => choose({ tropeId: t.id })}
                 >
                   {t.name}
@@ -157,7 +157,7 @@ function AddTrope({
               <li key={s}>
                 <button
                   type="button"
-                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-muted"
+                  className="flex w-full items-center justify-between gap-2 px-3 py-2 text-left text-sm hover:bg-surface-hover"
                   onClick={() => choose({ name: s })}
                 >
                   {s}
@@ -169,7 +169,7 @@ function AddTrope({
               <li>
                 <button
                   type="button"
-                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary hover:bg-muted"
+                  className="flex w-full items-center gap-2 px-3 py-2 text-left text-sm text-primary hover:bg-surface-hover"
                   onClick={() => choose({ name: query.trim() })}
                 >
                   <Plus className="size-4" aria-hidden />

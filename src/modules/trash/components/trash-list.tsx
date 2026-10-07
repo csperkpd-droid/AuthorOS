@@ -35,7 +35,7 @@ export function TrashList({ items }: { items: Item[] }) {
   if (items.length === 0) {
     return (
       <div className="rounded-xl border border-dashed border-border px-6 py-12 text-center">
-        <p className="font-serif text-lg">The Trash is empty</p>
+        <p className="font-display text-2xl font-semibold">The Trash is empty</p>
         <p className="mt-1 text-sm text-muted-foreground">
           Deleted work waits here until you restore it or delete it forever.
         </p>

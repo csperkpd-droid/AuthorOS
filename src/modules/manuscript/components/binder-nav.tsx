@@ -24,7 +24,7 @@ export function BinderNav({
 
   const tree = (
     <nav aria-label="Contents" className="space-y-3 text-sm">
-      <Link href={`/books/${bookId}`} className="block font-serif text-base hover:text-primary">
+      <Link href={`/books/${bookId}`} className="block text-base font-semibold hover:text-primary">
         {bookTitle}
       </Link>
       <ul className="space-y-3">
@@ -100,8 +100,8 @@ function ChapterNav({
               onClick={onNavigate}
               aria-current={s.id === currentSceneId ? "page" : undefined}
               className={cn(
-                "block truncate rounded px-2 py-1 text-muted-foreground hover:bg-muted hover:text-foreground",
-                s.id === currentSceneId && "bg-primary/10 font-medium text-primary",
+                "block truncate rounded px-2 py-1 text-muted-foreground hover:bg-surface-hover hover:text-foreground",
+                s.id === currentSceneId && "bg-secondary font-medium text-primary",
               )}
             >
               {s.title}

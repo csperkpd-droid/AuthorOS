@@ -88,7 +88,7 @@ export function MembersDialog({
               return (
                 <div
                   key={c.id}
-                  className="flex flex-wrap items-center gap-2 rounded px-1 py-1 hover:bg-muted"
+                  className="flex flex-wrap items-center gap-2 rounded px-1 py-1 hover:bg-surface-hover"
                 >
                   <label className="flex min-w-32 flex-1 items-center gap-2 text-sm">
                     <input

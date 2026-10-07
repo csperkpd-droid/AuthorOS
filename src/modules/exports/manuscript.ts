@@ -264,7 +264,7 @@ export async function exportDocx(
     })),
   });
   const doc = new Document({
-    creator: "AuthorOS",
+    creator: "Spellbound Draft",
     title: books.length === 1 ? books[0].title : "Manuscripts",
     styles: { default: { document: { run: { font: FONT, size: SIZE } } } },
     numbering: {

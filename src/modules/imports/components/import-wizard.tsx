@@ -108,7 +108,7 @@ export function ImportWizard() {
   return (
     <div className="space-y-8">
       <fieldset className="space-y-2">
-        <legend className="font-serif text-xl">1. Source</legend>
+        <legend className="text-lg font-semibold">1. Source</legend>
         {IMPORT_SOURCES.map((s) => (
           <label
             key={s.id}
@@ -136,10 +136,10 @@ export function ImportWizard() {
       </fieldset>
 
       <fieldset className="space-y-2">
-        <legend className="font-serif text-xl">2. File</legend>
+        <legend className="text-lg font-semibold">2. File</legend>
         <label
           htmlFor={`${id}-file`}
-          className="flex cursor-pointer flex-wrap items-center gap-3 rounded-xl border border-dashed border-border p-4 text-sm hover:bg-muted/40"
+          className="flex cursor-pointer flex-wrap items-center gap-3 rounded-xl border border-dashed border-border p-4 text-sm hover:bg-surface-hover/40"
         >
           <FileUp className="size-5 text-muted-foreground" aria-hidden />
           <span className="min-w-0 flex-1">
@@ -169,7 +169,7 @@ export function ImportWizard() {
       </fieldset>
 
       <fieldset className="space-y-3">
-        <legend className="font-serif text-xl">3. Options</legend>
+        <legend className="text-lg font-semibold">3. Options</legend>
         <div className="space-y-2">
           <p className="text-sm font-medium">Ids</p>
           {[

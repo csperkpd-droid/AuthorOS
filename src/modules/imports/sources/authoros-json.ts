@@ -19,17 +19,17 @@ export const parseAuthorOsJson: ImportParser = ({ bytes }) => {
     throw new ImportFileError(["This file isn’t valid JSON."]);
   }
   if (!raw || typeof raw !== "object" || Array.isArray(raw)) {
-    throw new ImportFileError(["This file isn’t an AuthorOS backup."]);
+    throw new ImportFileError(["This file isn’t a Spellbound Draft backup."]);
   }
   const envelope = raw as { format?: unknown; version?: unknown };
   if (envelope.format !== EXPORT_FORMAT) {
     throw new ImportFileError([
-      "This file isn’t an AuthorOS backup (it has no “authoros.workspace” format).",
+      "This file isn’t a Spellbound Draft backup (it has no backup format marker).",
     ]);
   }
   if (typeof envelope.version !== "number" || envelope.version > EXPORT_VERSION) {
     throw new ImportFileError([
-      `This backup was made by a newer version of AuthorOS (format version ${String(envelope.version)}).`,
+      `This backup was made by a newer version of Spellbound Draft (format version ${String(envelope.version)}).`,
     ]);
   }
   const parsed = workspaceBundle.safeParse(raw);
@@ -46,7 +46,7 @@ export const parseAuthorOsJson: ImportParser = ({ bytes }) => {
   return {
     bundle,
     info: {
-      sourceLabel: "AuthorOS backup",
+      sourceLabel: "Spellbound Draft backup",
       description: bundle.kind === "archive" ? "Complete archive" : "Standard backup",
       exportedAt: bundle.exportedAt,
       scopeLabel: bundle.scope.label,
