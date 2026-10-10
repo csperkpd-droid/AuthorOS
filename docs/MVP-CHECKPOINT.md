@@ -125,6 +125,9 @@ rewriting large parts of the code:
    holding a text-quote selector (exact text plus prefix/suffix) and the
    document version it was made on, re-anchored by matching on later
    versions. The document never changes for a comment.
+   **Status (M16, decision 114):** built for comments with one `comments`
+   table holding the anchor as columns, not a general `annotations` table;
+   a shared anchor table waits for its second use (suggestions, M24).
 2. **Book status mixes writing stage and publication.** `books.status` has
    `PLANNING … COMPLETE, PUBLISHED`. Publication belongs to editions
    (a book can be published in one format, unpublished in another) and to

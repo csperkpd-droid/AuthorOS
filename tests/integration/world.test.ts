@@ -329,7 +329,7 @@ describe("backups (format 8)", () => {
     const guild = await createWorldEntry(ctx, { name: "Lanternwrights", entryType: "Guild" });
     await connect(ctx, { sourceId: guild.id, targetId: harbour.id, kind: "related" });
     const { data } = await exportWorkspaceJson(ctx, { scope: { kind: "all" } });
-    expect(data.version).toBe(8);
+    expect(data.version).toBe(9);
     expect(data.places).toEqual([expect.objectContaining({ id: harbour.id, name: "Saltmarsh" })]);
     expect(data.worldEntries).toEqual([
       expect.objectContaining({ id: guild.id, entryType: "Guild" }),

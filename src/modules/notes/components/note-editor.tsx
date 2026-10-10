@@ -1,11 +1,12 @@
 "use client";
 
-import { useCallback, useState } from "react";
+import { useCallback, useState, type ComponentProps } from "react";
 
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import { FormError } from "@/components/ui/field";
 import { useAction } from "@/hooks/use-action";
 import type { Doc } from "@/lib/text";
+import { DocumentComments } from "@/modules/comments/ui";
 import { keepDeviceDraftAction } from "@/modules/history/ui";
 
 import { renameNoteAction, saveNoteBodyAction } from "../actions";
@@ -17,6 +18,8 @@ export function NoteEditor({
   body,
   version,
   draftOwner,
+  comments,
+  canComment,
 }: {
   noteId: string;
   title: string;
@@ -24,6 +27,9 @@ export function NoteEditor({
   version: number;
   /** The signed-in member unsynced text on this device belongs to (`draftOwner(ctx)`). */
   draftOwner: string;
+  /** The note's comments (M16), kept beside the text. */
+  comments: ComponentProps<typeof DocumentComments>["initial"];
+  canComment: boolean;
 }) {
   const [value, setValue] = useState(title);
   const rename = useAction(renameNoteAction);
@@ -69,6 +75,17 @@ export function NoteEditor({
         label="Note text"
         placeholder="Write your note…"
         thing="note"
+        aside={(api) => (
+          <DocumentComments
+            nodeId={noteId}
+            initial={comments}
+            editor={api.editor}
+            version={api.version}
+            saved={api.saved}
+            canComment={canComment}
+            thing="note"
+          />
+        )}
       />
     </div>
   );

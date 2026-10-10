@@ -5,6 +5,7 @@ import {
   WritingStatus,
   CalendarPurpose,
   CharacterRole,
+  CommentState,
   FieldType,
   HeatLevel,
   IdeaStatus,
@@ -308,6 +309,24 @@ const trope = z.object({
   ...softDeleted,
 });
 
+/** A comment on a scene's or note's text, with its external anchor (version 9). */
+const comment = z.object({
+  id,
+  nodeId: id,
+  body: z.string().trim().min(1).max(5000),
+  state: z.enum(CommentState).optional().default("OPEN"),
+  anchorStart: int(0, 100_000_000),
+  anchorEnd: int(1, 100_000_000),
+  quote: z.string().min(1).max(2000),
+  prefix: z.string().max(32).optional().default(""),
+  suffix: z.string().max(32).optional().default(""),
+  docVersion: int().optional().default(0),
+  anchorLost: z.boolean().optional().default(false),
+  createdAt: stamp,
+  updatedAt: stamp,
+  resolvedAt: optDate,
+});
+
 /** A place in the story world (version 8). */
 const place = z.object({
   id,
@@ -448,7 +467,7 @@ const fieldRevision = z.object({
 
 export const workspaceBundle = z.object({
   /** Format version of the file (upgraded to the current one after parsing). */
-  version: z.number().int().min(1).max(8),
+  version: z.number().int().min(1).max(9),
   /** "standard" backups have no version history; "archive" ones do. */
   kind: z.enum(["standard", "archive"]).optional().default("standard"),
   exportedAt: optDate,
@@ -494,6 +513,7 @@ export const workspaceBundle = z.object({
   fieldDefinitions: list(fieldDefinition, 10_000),
   fieldValues: list(fieldValue, 1_000_000),
   writingSessions: list(writingSession, 1_000_000),
+  comments: list(comment, 1_000_000),
   contentRevisions: list(contentRevision, 1_000_000),
   fieldRevisions: list(fieldRevision, 1_000_000),
 });

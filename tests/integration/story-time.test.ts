@@ -439,7 +439,7 @@ describe("Story Time: backups", () => {
     await placeSceneInTime(ctx, s1, { afterId: s2 });
     await createTimelineEvent(ctx, { ownerId: bookId, title: "Wreck", afterId: s2 });
     const { data } = await exportWorkspaceJson(ctx, { scope: { kind: "all" } });
-    expect(data.version).toBe(8);
+    expect(data.version).toBe(9);
     const expected = await storyOrder();
 
     const v4 = { ...data, version: 4, timelineEvents: undefined, sceneStoryTimes: undefined };

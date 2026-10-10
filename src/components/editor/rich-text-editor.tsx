@@ -4,7 +4,7 @@ import { EditorContent, useEditor, useEditorState, type Editor } from "@tiptap/r
 import { Placeholder } from "@tiptap/extensions";
 import StarterKit from "@tiptap/starter-kit";
 import { Bold, Heading2, Italic, Minus, Quote, Redo2, Undo2, type LucideIcon } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 
 import { Button } from "@/components/ui/button";
 import { formatWords } from "@/lib/format";
@@ -45,6 +45,13 @@ const RETRY_DELAY_MS = 5000;
 const PLACE_DELAY_MS = 300;
 const SERVER_PLACE_DELAY_MS = 3000;
 
+/**
+ * What a panel beside the text (comments, M16) needs from the editor: the
+ * editor itself, the version the cloud has, and whether the text shown is
+ * exactly that version (nothing unsaved).
+ */
+export type EditorApi = { editor: Editor; version: number; saved: boolean };
+
 export type SaveResult =
   | { ok: true; data: { version: number; savedAt: Date | string } }
   | { ok: false; error: string; code?: string };
@@ -83,6 +90,7 @@ export function RichTextEditor({
   placeholder = "Start writing…",
   thing = "text",
   workPlace,
+  aside,
 }: {
   content: Doc | null;
   version: number;
@@ -110,6 +118,8 @@ export function RichTextEditor({
     entry: Omit<WorkEntry, "anchor">;
     onPlace?: (anchor: PlaceAnchor) => void;
   };
+  /** Controls shown beside the save status, e.g. the document's comments (M16). */
+  aside?: (api: EditorApi) => ReactNode;
 }) {
   // Stable while the same document is open (the prop is a new object each render).
   const { owner, item, label: draftLabel, href } = draft;
@@ -118,6 +128,8 @@ export function RichTextEditor({
     [owner, item, draftLabel, href],
   );
   const versionRef = useRef(version);
+  // The cloud's version, as state for `aside` (versionRef stays the source of truth).
+  const [cloudVersion, setCloudVersion] = useState(version);
   const placeRef = useRef(workPlace);
   const placeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const serverPlaceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -191,6 +203,7 @@ export function RichTextEditor({
       const result = await onSave(editor.getJSON() as Doc, versionRef.current);
       if (result.ok) {
         versionRef.current = result.data.version;
+        setCloudVersion(result.data.version);
         setSavedAt(new Date(result.data.savedAt));
         notePlaceRef.current();
         if (changeSeq.current === seq) {
@@ -434,6 +447,7 @@ export function RichTextEditor({
     if (stateRef.current === "saved") {
       editor.commands.setContent(content ?? "", { emitUpdate: false });
       versionRef.current = version;
+      setCloudVersion(version);
       setWordCount(initialWordCount ?? 0);
     } else {
       update("conflict");
@@ -478,6 +492,7 @@ export function RichTextEditor({
             <span data-testid="word-count">{formatWords(wordCount)}</span>
           )}
           <SaveStatus state={state} device={device} offline={offline} savedAt={savedAt} />
+          {editor && aside?.({ editor, version: cloudVersion, saved: state === "saved" })}
         </div>
       </div>
 

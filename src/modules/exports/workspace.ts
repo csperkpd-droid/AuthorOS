@@ -50,9 +50,12 @@ export const EXPORT_FORMAT = "authoros.workspace";
  * the author) and `note`.
  * Version 8 (M15): world objects (`places`, `worldEntries`, story nodes of
  * kind PLACE and WORLD_ENTRY) and where scenes are set (`sceneSettings`).
+ * Version 9 (M16): comments on scene and note text (`comments`), with their
+ * external anchors (offsets, quote, context, document version) and state;
+ * deleted comments are left out. Comments are never in the documents.
  * The importer upgrades older files.
  */
-export const EXPORT_VERSION = 8;
+export const EXPORT_VERSION = 9;
 
 /**
  * "standard": the backup (all story data, no version history).
@@ -170,6 +173,7 @@ export async function exportWorkspaceJson(
     storyNodes,
     writingSessions,
     member,
+    comments,
   ] = await Promise.all([
     db.beatAssignment.findMany({ where: { beat: { outlineId: { in: outlineIds } } } }),
     db.sceneStoryTime.findMany({
@@ -207,6 +211,26 @@ export async function exportWorkspaceJson(
     db.workspaceMember.findUnique({
       where: { workspaceId_userId: { workspaceId: ws, userId: ctx.userId } },
       select: { dailyWordGoal: true },
+    }),
+    db.comment.findMany({
+      where: { workspaceId: ws, nodeId: { in: [...included] }, deletedAt: null },
+      orderBy: [{ nodeId: "asc" }, { anchorStart: "asc" }],
+      select: {
+        id: true,
+        nodeId: true,
+        body: true,
+        state: true,
+        anchorStart: true,
+        anchorEnd: true,
+        quote: true,
+        prefix: true,
+        suffix: true,
+        docVersion: true,
+        anchorLost: true,
+        createdAt: true,
+        updatedAt: true,
+        resolvedAt: true,
+      },
     }),
   ]);
   const fieldsInScope = fieldDefinitions.filter(
@@ -283,6 +307,7 @@ export async function exportWorkspaceJson(
     fieldDefinitions: fieldsInScope,
     fieldValues,
     writingSessions,
+    comments,
     ...(revisions ? { contentRevisions: revisions } : {}),
     ...(fieldRevisions ? { fieldRevisions } : {}),
   };
@@ -336,6 +361,7 @@ export type IntegrityInput = {
   fieldDefinitions: (Id & { penNameId: Ref; seriesId: Ref; bookId: Ref })[];
   fieldValues: { fieldId: string; nodeId: string }[];
   writingSessions?: { bookId: Ref }[];
+  comments: { nodeId: string }[];
   contentRevisions?: { nodeId: string }[];
   fieldRevisions?: { nodeId: string }[];
 };
@@ -446,6 +472,12 @@ export function checkExportIntegrity(data: IntegrityInput): string[] {
     need("field.book", f.bookId, books);
   }
   for (const w of data.writingSessions ?? []) need("writing.book", w.bookId, books);
+  for (const c of data.comments) {
+    const kind = nodes.get(c.nodeId);
+    if (!kind) problems.push(`comment.node → ${c.nodeId} is missing`);
+    else if (kind !== "SCENE" && kind !== "NOTE")
+      problems.push(`comment.node → ${c.nodeId} is not a scene or note`);
+  }
   for (const r of data.contentRevisions ?? []) need("revision.node", r.nodeId, nodes);
   for (const r of data.fieldRevisions ?? []) need("fieldRevision.node", r.nodeId, nodes);
   return problems;

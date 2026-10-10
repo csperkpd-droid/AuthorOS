@@ -1,9 +1,10 @@
 "use client";
 
-import { useCallback } from "react";
+import { useCallback, type ComponentProps } from "react";
 
 import { RichTextEditor } from "@/components/editor/rich-text-editor";
 import type { Doc } from "@/lib/text";
+import { DocumentComments } from "@/modules/comments/ui";
 import { keepDeviceDraftAction } from "@/modules/history/ui";
 import { setWritingPlaceAction } from "@/modules/work-context/ui";
 
@@ -18,6 +19,8 @@ export function SceneEditor({
   draftOwner,
   draftLabel,
   href,
+  comments,
+  canComment,
 }: {
   sceneId: string;
   content: Doc | null;
@@ -28,6 +31,9 @@ export function SceneEditor({
   /** How a sign-out warning names this scene. */
   draftLabel: string;
   href: string;
+  /** The scene's comments (M16), kept beside the text. */
+  comments: ComponentProps<typeof DocumentComments>["initial"];
+  canComment: boolean;
 }) {
   const save = useCallback(
     (doc: Doc, baseVersion: number) => saveSceneContentAction(sceneId, doc, baseVersion),
@@ -53,6 +59,17 @@ export function SceneEditor({
       }}
       label="Scene text"
       thing="scene"
+      aside={(api) => (
+        <DocumentComments
+          nodeId={sceneId}
+          initial={comments}
+          editor={api.editor}
+          version={api.version}
+          saved={api.saved}
+          canComment={canComment}
+          thing="scene"
+        />
+      )}
     />
   );
 }

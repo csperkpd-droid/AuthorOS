@@ -2,6 +2,7 @@ import "server-only";
 
 import { Prisma } from "@/generated/prisma/client";
 import { countWords } from "@/lib/text";
+import { reanchorComments } from "@/modules/comments";
 import { recordFieldHistory } from "@/modules/history";
 import type { AuthorContext } from "@/server/context";
 
@@ -196,6 +197,33 @@ export async function applyPlan(tx: Tx, ctx: AuthorContext, ops: ImportOps) {
     (data) => tx.contentRevision.createMany({ data }),
   );
   await insert(ops.fieldRevisions, (data) => tx.fieldRevision.createMany({ data }));
+
+  // Comments (M16): imported ones, and those of text the import replaced,
+  // find their passages in the text as it is now (strictly; otherwise
+  // flagged for review). Comments are never written into the text.
+  await insert(ops.comments, (data) => tx.comment.createMany({ data }));
+  if (ops.reanchor.length) {
+    const [scenes, notes] = await Promise.all([
+      tx.scene.findMany({
+        where: { workspaceId: ws, id: { in: ops.reanchor } },
+        select: { id: true, content: true, version: true },
+      }),
+      tx.note.findMany({
+        where: { workspaceId: ws, id: { in: ops.reanchor } },
+        select: { id: true, body: true, version: true },
+      }),
+    ]);
+    for (const d of [
+      ...scenes,
+      ...notes.map((n) => ({ id: n.id, content: n.body, version: n.version })),
+    ])
+      await reanchorComments(tx, {
+        workspaceId: ws,
+        nodeId: d.id,
+        content: d.content,
+        version: d.version,
+      });
+  }
 
   // Validity of the imported placements from the imported state, by the
   // database's own rules (M14): older files carry none, and the author's

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { CURRENT_DOC_FORMAT } from "@/lib/doc-format";
 import { ConflictError, NotFoundError } from "@/lib/errors";
 import { countWords, docSchema, docToText } from "@/lib/text";
+import { reanchorComments } from "@/modules/comments";
 import { resolveNode, storyObjectType } from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 import { assertCan, assertCanView } from "@/server/policy";
@@ -128,6 +129,13 @@ export async function saveContent(
       text,
       wordCount,
       format: CURRENT_DOC_FORMAT,
+    });
+    // Comments (M16) find their passages again in the new text, or are flagged.
+    await reanchorComments(tx, {
+      workspaceId: ctx.workspaceId,
+      nodeId,
+      content: doc,
+      version: written.version,
     });
     if (afterWrite) await afterWrite(tx, { before: previous.wordCount, after: wordCount });
     return { ...written, wordCount };
@@ -253,6 +261,12 @@ export async function restoreRevision(ctx: AuthorContext, revisionId: string): P
       text: full.contentText,
       wordCount: full.wordCount,
       format: full.contentFormat,
+    });
+    await reanchorComments(tx, {
+      workspaceId: ctx.workspaceId,
+      nodeId: revision.nodeId,
+      content: full.content,
+      version: written.version,
     });
     return { ...written, wordCount: full.wordCount };
   });

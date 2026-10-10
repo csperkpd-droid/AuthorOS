@@ -297,6 +297,7 @@ async function deletionReport(
   const ws = ctx.workspaceId;
   const [
     revisions,
+    comments,
     links,
     appearances,
     settings,
@@ -308,6 +309,8 @@ async function deletionReport(
     scopedFields,
   ] = await Promise.all([
     db.contentRevision.count({ where: { workspaceId: ws, nodeId: { in: all } } }),
+    // Comments (M16) go with their scene or note (deleted ones included).
+    db.comment.count({ where: { workspaceId: ws, nodeId: { in: all } } }),
     db.connection.findMany({
       where: { workspaceId: ws, OR: [{ sourceId: { in: all } }, { targetId: { in: all } }] },
       select: { id: true, sourceId: true, targetId: true },
@@ -420,6 +423,14 @@ async function deletionReport(
         noun: { one: "saved version", many: "saved versions" },
         effect: "Deleted",
         count: revisions,
+        items: [],
+      },
+      {
+        key: "COMMENTS",
+        label: "Comments",
+        noun: { one: "comment", many: "comments" },
+        effect: "Deleted with their scene or note",
+        count: comments,
         items: [],
       },
       {

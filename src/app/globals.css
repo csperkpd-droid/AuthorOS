@@ -227,6 +227,24 @@ body {
   line-height: 1.25;
   margin-top: 1.25em;
 }
+/* Comments (M16): on wide screens the open comments panel takes the right
+   edge; the page makes room so it never covers the text. */
+@media (width >= 64rem) {
+  body.comments-open {
+    padding-right: 24rem;
+  }
+}
+/* Comments (M16): highlights drawn by the editor over anchored passages.
+   Decorations only: nothing is stored in the text. */
+.manuscript .comment-highlight {
+  background: var(--info-bg);
+  border-bottom: 2px solid var(--info);
+  cursor: pointer;
+}
+.manuscript .comment-highlight-active {
+  background: var(--surface-selected);
+  border-bottom-color: var(--primary);
+}
 .manuscript a {
   color: var(--link);
   text-decoration: underline;

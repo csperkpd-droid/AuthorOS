@@ -46,6 +46,7 @@ import {
 import { ImpactDialog } from "@/modules/impact/ui";
 
 import { SCENE_STATUS_LABELS } from "../labels";
+import { ReviewBadge } from "./review-badge";
 import type { BookLevelItem, ChapterItem, PartItem, SceneItem } from "../structure";
 import { InlineTitleInput } from "./inline-title";
 import { MoveDialog, type MoveTarget } from "./move-dialog";
@@ -57,7 +58,16 @@ type Result = { ok: true } | { ok: false; error: string };
  * (or use the keyboard) to reorder within a list; "Move to…" moves between
  * chapters or parts.
  */
-export function BinderManager({ bookId, items }: { bookId: string; items: BookLevelItem[] }) {
+export function BinderManager({
+  bookId,
+  items,
+  reviewCounts = {},
+}: {
+  bookId: string;
+  items: BookLevelItem[];
+  /** Comments needing review, per scene (M16). */
+  reviewCounts?: Record<string, number>;
+}) {
   const [error, setError] = useState<string | null>(null);
   const [renaming, setRenaming] = useState<string | null>(null);
   const [moveTarget, setMoveTarget] = useState<MoveTarget | null>(null);
@@ -73,6 +83,7 @@ export function BinderManager({ bookId, items }: { bookId: string; items: BookLe
   }
 
   const shared: Shared = {
+    reviewCounts,
     bookId,
     act,
     renaming,
@@ -153,6 +164,7 @@ export function BinderManager({ bookId, items }: { bookId: string; items: BookLe
 
 type Shared = {
   bookId: string;
+  reviewCounts: Record<string, number>;
   act: (p: Promise<Result>) => Promise<Result>;
   renaming: string | null;
   setRenaming: (id: string | null) => void;
@@ -319,6 +331,7 @@ function SceneRow({
   bookId,
   act,
   setMoveTarget,
+  reviewCounts,
 }: { scene: SceneItem; chapterId: string; handle: ReactNode } & Shared) {
   return (
     <Row
@@ -333,6 +346,7 @@ function SceneRow({
       }
       meta={
         <span className="flex items-center gap-2">
+          <ReviewBadge count={reviewCounts[scene.id]} />
           <Badge>{SCENE_STATUS_LABELS[scene.status as keyof typeof SCENE_STATUS_LABELS]}</Badge>
           {formatWords(scene.wordCount)}
         </span>

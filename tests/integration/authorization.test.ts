@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { ForbiddenError } from "@/lib/errors";
 import * as calendar from "@/modules/calendar";
 import * as characters from "@/modules/characters";
+import * as comments from "@/modules/comments";
 import * as connections from "@/modules/connections";
 import * as exportsModule from "@/modules/exports";
 import * as fields from "@/modules/fields";
@@ -37,6 +38,7 @@ import { createAuthor, resetDatabase } from "../support/db";
 const MODULES = {
   calendar,
   characters,
+  comments,
   connections,
   exports: exportsModule,
   fields,

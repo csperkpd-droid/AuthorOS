@@ -21,6 +21,7 @@ import { getBookTree } from "@/modules/manuscript";
 import { BinderManager } from "@/modules/manuscript/ui";
 import { ChangePenNameDialog } from "@/modules/impact/ui";
 import { deadlinesFor } from "@/modules/calendar";
+import { countCommentsToReview } from "@/modules/comments";
 import { listPenNames } from "@/modules/pen-names";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
@@ -57,16 +58,25 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
   const [tropes, allTropes] = canView(ctx, "storyBible")
     ? await Promise.all([tropesOf(ctx, bookId), listTropes(ctx)])
     : [null, []];
-  const [tree, penNames, seriesOptions, connections, outlines, structureOptions, kits] =
-    await Promise.all([
-      orNotFound(getBookTree(ctx, bookId)),
-      listPenNames(ctx),
-      listSeriesOptions(ctx),
-      orNotFound(listConnections(ctx, bookId)),
-      listOutlines(ctx, { bookId }),
-      newStructureOptions(ctx, { penNameId: book.penName.id }),
-      listKits(ctx),
-    ]);
+  const [
+    tree,
+    penNames,
+    seriesOptions,
+    connections,
+    outlines,
+    structureOptions,
+    kits,
+    reviewCounts,
+  ] = await Promise.all([
+    orNotFound(getBookTree(ctx, bookId)),
+    listPenNames(ctx),
+    listSeriesOptions(ctx),
+    orNotFound(listConnections(ctx, bookId)),
+    listOutlines(ctx, { bookId }),
+    newStructureOptions(ctx, { penNameId: book.penName.id }),
+    listKits(ctx),
+    countCommentsToReview(ctx, bookId),
+  ]);
   const firstScene = tree.sceneOrder[0];
 
   return (
@@ -192,7 +202,7 @@ export default async function BookPage({ params }: PageProps<"/books/[bookId]">)
         />
       )}
 
-      <BinderManager bookId={book.id} items={tree.items} />
+      <BinderManager bookId={book.id} items={tree.items} reviewCounts={reviewCounts} />
 
       <section aria-labelledby="structures-heading" className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">

@@ -999,6 +999,56 @@ writing is only on this device; the server ends the session on the next
 request (`/sign-out`). Nothing is uploaded on the way out and nothing is
 deleted.
 
+## Milestone 16 (Comments with external anchors)
+
+### 114. Comments are built with external anchors in one table — Accepted (M16)
+
+Builds decision 87 (plan item "Comments with external anchors"), with the
+seven decisions approved before M16:
+
+- **Never in the text.** A comment is a row in `comments`, not a mark in
+  the document; adding, editing, resolving, deleting or re-attaching one
+  changes no text, version, saved version, word count or manuscript export.
+  Comments are not story objects (no registry kind).
+- **One `comments` table, the anchor as columns.** Rejected for now: a
+  separate `comment_anchors` table (DATABASE.md's earlier sketch) and a
+  general `annotations` table (MVP checkpoint C6): no speculative
+  abstraction. The anchor-matching code (`lib/anchors.ts`) is pure and can
+  serve suggestions (M24) when they arrive. Marks with ids inside the
+  document (architecture checkpoint R7) stay rejected (decision 87).
+- **The anchor:** offsets into the editor's own plain text (`flattenDoc`;
+  the server computes the same text from the stored JSON, proven by a
+  test), the exact quote, 32 characters of context on each side, and the
+  document version last confirmed.
+- **Strict re-anchoring, on the server, in the text write's transaction**
+  (save, restore, import): the same place; or exactly one place with the
+  exact quote and both sides of its context; or exactly one with one full
+  side. Never fuzzy or partial matching, never a choice between places.
+  Otherwise the comment needs review, keeps its original quote, and stays
+  flagged until the author attaches it to a passage they select; similar
+  text coming back never re-attaches it.
+- **States:** Open, Needs review, Resolved (resolved ones kept, hidden by
+  default). Comment states, not validity states. A resolved comment whose
+  passage is lost reopens as Needs review.
+- **Delete:** soft, with an Undo that carries the deletion's token
+  (repeatable; refused for an earlier deletion). Not in the story-object
+  Trash. The comment is re-anchored when undone.
+- **Scenes and notes.** Adding and changing: the `comment` action on the
+  document's area; reading: `view`, through the read funnel (hidden while
+  the document is in the Trash; deleted with it forever, listed in that
+  review). Comment edits are guarded by the text the author started from,
+  so re-anchoring during autosave never makes an edit form stale.
+- **Interface:** a margin panel on wide screens (the page makes room), a
+  sheet on phones; highlights are editor decorations, never stored. The
+  book binder shows how many comments need review per scene; no
+  workspace-wide review page (that is M17).
+- **Export format 9** includes comments (deleted ones left out); formats
+  1–8 import unchanged. Imported comments, and those of text an import
+  replaces, are re-anchored against the resulting text by the same rules.
+- **Not here:** replies, threads, mentions, collaborators' comments (M22),
+  AI suggestions (M24), tasks from comments (M18), comments on anything
+  but scene and note text, a document-format change.
+
 ## Milestone 15 (World objects)
 
 ### 113. Places and world entries are story objects; scenes are set in places — Accepted (M15)

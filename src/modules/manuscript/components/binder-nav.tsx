@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { cn } from "@/lib/utils";
 
+import { ReviewBadge } from "./review-badge";
 import type { BookLevelItem, ChapterItem } from "../structure";
 
 /** Read-only contents for the editor: jump between scenes. */
@@ -14,11 +15,14 @@ export function BinderNav({
   bookTitle,
   items,
   currentSceneId,
+  reviewCounts = {},
 }: {
   bookId: string;
   bookTitle: string;
   items: BookLevelItem[];
   currentSceneId: string;
+  /** Comments needing review, per scene (M16). */
+  reviewCounts?: Record<string, number>;
 }) {
   const [open, setOpen] = useState(false);
 
@@ -41,6 +45,7 @@ export function BinderNav({
                     chapter={c}
                     bookId={bookId}
                     currentSceneId={currentSceneId}
+                    reviewCounts={reviewCounts}
                     onNavigate={() => setOpen(false)}
                   />
                 ))}
@@ -52,6 +57,7 @@ export function BinderNav({
               chapter={item}
               bookId={bookId}
               currentSceneId={currentSceneId}
+              reviewCounts={reviewCounts}
               onNavigate={() => setOpen(false)}
             />
           ),
@@ -82,11 +88,13 @@ function ChapterNav({
   chapter,
   bookId,
   currentSceneId,
+  reviewCounts,
   onNavigate,
 }: {
   chapter: ChapterItem;
   bookId: string;
   currentSceneId: string;
+  reviewCounts: Record<string, number>;
   onNavigate: () => void;
 }) {
   return (
@@ -100,11 +108,12 @@ function ChapterNav({
               onClick={onNavigate}
               aria-current={s.id === currentSceneId ? "page" : undefined}
               className={cn(
-                "block truncate rounded px-2 py-1 text-muted-foreground hover:bg-surface-hover hover:text-foreground",
+                "flex items-center gap-1.5 rounded px-2 py-1 text-muted-foreground hover:bg-surface-hover hover:text-foreground",
                 s.id === currentSceneId && "bg-secondary font-medium text-primary",
               )}
             >
-              {s.title}
+              <span className="min-w-0 flex-1 truncate">{s.title}</span>
+              <ReviewBadge count={reviewCounts[s.id]} />
             </Link>
           </li>
         ))}

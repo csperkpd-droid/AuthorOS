@@ -161,10 +161,11 @@ the mechanisms. "Not built" marks designed parts with no code yet.
 
 ### Decided designs, not built yet
 
-- **Comments are metadata (decision 87)**, never in the manuscript text:
-  an anchor outside the document (node, version, position, quoted text and
-  context). When the text changes the anchor is re-found or the comment is
-  flagged for review, never silently attached to other text.
+- **Comments are metadata (decision 87, built in M16: decision 114)**,
+  never in the manuscript text: an anchor outside the document (node,
+  version, position, quoted text and context). When the text changes the
+  anchor is re-found or the comment is flagged for review, never silently
+  attached to other text.
 - **Workspace membership is not access to everything (decision 89).**
   Co-authoring adds per-book, series and pen-name grants through the read
   and write funnel of invariant 14.
@@ -508,6 +509,66 @@ permission or behaviour changed.
 - **Pending artwork.** The Feather icon in `components/shell/brand.tsx`
   holds the Open Page mark's place, and `app/favicon.ico` stays, until the
   production vector marks exist.
+
+## Comments (M16)
+
+Comments (decisions 87 and 114, `comments` module, table `comments`) are
+the author's notes on a passage of a scene's or note's text. They are not
+story objects (no registry kind) and never enter the document: adding,
+editing, resolving, deleting or re-attaching one never changes the text,
+its version, its saved versions, its word count or its manuscript exports.
+
+**The anchor.** Offsets into the editor's own plain text (`flattenDoc`;
+`lib/anchors.ts → anchorText` computes the same text from the stored JSON,
+and a test compares the two), the exact quote, up to 32 characters of
+context on each side, and the document version it was last confirmed
+against. Creating a comment sends the selection made in the saved text; if
+the text changed since, the passage is found again strictly, or the comment
+is refused (select it again).
+
+**Re-anchoring** runs on the server in the same transaction as every write
+of the text: `history.saveContent`, `restoreRevision` and the import's
+apply (for imported comments and for text the import replaced). Under the
+document's row lock, each comment's passage is found again
+(`findAnchor`): the same quote and context in place; or exactly one place
+with the exact quote and both sides of its context; or exactly one place
+with the exact quote and one full side (text typed or removed on the other
+side). Never a partial quote, a near spelling or a choice between several
+places. When that isn't certain the comment is **flagged**: an open comment
+becomes Needs review (`anchor_lost`) and keeps its original quote and
+context; a resolved one stays resolved and reopens as Needs review. A
+flagged comment stays flagged until the author attaches it to a passage
+they select (`updateCommentAnchor`); similar text coming back never
+re-attaches it.
+
+**States:** Open, Needs review, Resolved (kept, hidden by default). These
+are comment states, not validity states. **Delete** is a soft delete with
+Undo (`restoreComment` with the deletion's token: repeating it is harmless,
+an Undo for an earlier deletion is refused); deleted comments are not in the
+Trash, not in exports, and re-anchored when undone.
+
+**Access and lifecycle.** Adding and changing comments is the `comment`
+action on the document's area; reading them, `view`, through the read
+funnel. A comment is hidden while its scene or note is in the Trash (the
+funnel) and returns with it; deleting the scene or note forever deletes its
+comments (FK cascade), and the review lists them. Comments belong to their
+document, so moving a book or series to another pen name carries them.
+
+**Editor.** A "Comment on selected text" button and a comments panel (a
+right-hand panel on wide screens, which the page makes room for; a sheet on
+phones). Highlights are ProseMirror decorations drawn from the anchors,
+mapped through typing and redrawn from the server's anchors after each
+save: never marks in the document. Comments need a connection (the text
+must be saved first); writing offline keeps working through the device
+draft. The book binder shows how many comments need review per scene.
+
+**Actions:** `addComment`, `updateCommentBody` (refused if the comment
+changed since the author started editing), `setCommentResolved`,
+`updateCommentAnchor`, `deleteComment`, `restoreComment`. **Reads:**
+`listComments`, `countCommentsToReview`. Internal: `reanchorComments`
+(inside the text write's transaction). Not built: replies, threads,
+mentions, collaborators' comments (M22), a workspace-wide review page (M17),
+tasks from comments (M18), AI suggestions (M24).
 
 ## World objects (M15)
 
@@ -1003,7 +1064,7 @@ Uses so far:
 - **Moving to another pen name** (book or series): below.
 - **Deleting forever / emptying the Trash:** everything removed with the
   item (contents, dependent relationships and arcs, version history, beat
-  placements, scene settings, custom fields limited to that work), links to
+  placements, scene settings, comments, custom fields limited to that work), links to
   items that stay, and what stays (a series' characters, places and world
   entries, words-written history).
 - **Deleting a custom field in use:** each item with a value, the value
@@ -1168,7 +1229,8 @@ or the entire workspace**, then a format:
 "standard"`): the structured backup. Every story object with its original
   id and story-node kind; the hierarchy with positions; scene and note
   content as ProseMirror JSON with its format version; characters, places, world
-  entries and scene settings (format 8), relationships with members and
+  entries and scene settings (format 8), comments with their anchors
+  (format 9; deleted ones left out), relationships with members and
   roles, connections (kind, label, note, attributes), structures, beats
   (story nodes since format 7) and beat → scene assignments (with validity,
   exception and note since format 7), templates, kits, custom fields and values,

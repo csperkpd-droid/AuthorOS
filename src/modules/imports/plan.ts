@@ -92,6 +92,10 @@ export type ImportOps = {
   fieldDefinitions: TableOps;
   fieldValues: TableOps;
   writingSessions: TableOps;
+  /** Comments (format 9), created only (an import never changes or removes comments). */
+  comments: Row[];
+  /** Scenes and notes whose comments are re-anchored after the import's writes. */
+  reanchor: string[];
   revisions: Row[];
   fieldRevisions: Row[];
   /** Scenes and notes whose current text is saved as a version before replacing. */
@@ -1259,6 +1263,42 @@ export async function planImport(
     decisions.push(["value", v.nodeId, v.fieldId, "create"]);
   }
 
+  // ── Comments (format 9): added when missing, never changed or removed ───
+  // Their passages are found again in the text as it is after the import
+  // (applyPlan), strictly: what can't be found is flagged for review.
+  const comments = b.comments.filter((c) => ok(c.nodeId));
+  const usedComments = await taken(
+    "comments",
+    comments.map((c) => c.id),
+  );
+  for (const c of comments) {
+    if (keep && usedComments.get(c.id) === ws) {
+      count("comments", "Comments", "skip");
+      decisions.push(["comment", c.id, "skip"]);
+      continue;
+    }
+    ops.comments.push({
+      id: freshId(c.id, usedComments),
+      workspaceId: ws,
+      nodeId: to(c.nodeId),
+      body: c.body,
+      state: c.state,
+      anchorStart: c.anchorStart,
+      anchorEnd: c.anchorEnd,
+      quote: c.quote,
+      prefix: c.prefix,
+      suffix: c.suffix,
+      docVersion: c.docVersion,
+      anchorLost: c.anchorLost,
+      createdById: ctx.userId,
+      createdAt: c.createdAt,
+      updatedAt: c.updatedAt,
+      resolvedAt: c.resolvedAt,
+    });
+    count("comments", "Comments", "create");
+    decisions.push(["comment", c.id, "create"]);
+  }
+
   // ── Writing sessions ─────────────────────────────────────────────────────
   const sessions = b.writingSessions.filter((s) => !s.bookId || ok(s.bookId));
   const usedSessions = await taken(
@@ -1393,6 +1433,11 @@ export async function planImport(
     ...created(ops.worldEntries.create, "WORLD_ENTRY"),
   ];
 
+  // Text that changed here, or that new comments point into: re-anchor.
+  ops.reanchor = [
+    ...new Set([...ops.snapshots.map((x) => x.id), ...ops.comments.map((c) => c.nodeId as string)]),
+  ];
+
   const order = COUNT_ORDER;
   const sorted = [...counts.values()].sort((x, y) => order.indexOf(x.key) - order.indexOf(y.key));
   const conflictList = [...conflicts.values()];
@@ -1432,6 +1477,7 @@ const COUNT_ORDER = [
   "fieldDefinitions",
   "fieldValues",
   "writingSessions",
+  "comments",
   "revisions",
   "fieldRevisions",
 ];
@@ -1448,6 +1494,7 @@ const TAKEN_SQL: Record<string, string> = {
   writing_sessions: `SELECT "id", "workspace_id" AS ws FROM "writing_sessions" WHERE "id" = ANY($1::uuid[])`,
   field_revisions: `SELECT "id", "workspace_id" AS ws FROM "field_revisions" WHERE "id" = ANY($1::uuid[])`,
   content_revisions: `SELECT "id", "workspace_id" AS ws FROM "content_revisions" WHERE "id" = ANY($1::uuid[])`,
+  comments: `SELECT "id", "workspace_id" AS ws FROM "comments" WHERE "id" = ANY($1::uuid[])`,
 };
 
 function emptyOps(): ImportOps {
@@ -1487,6 +1534,8 @@ function emptyOps(): ImportOps {
     fieldDefinitions: t(),
     fieldValues: t(),
     writingSessions: t(),
+    comments: [],
+    reanchor: [],
     revisions: [],
     fieldRevisions: [],
     snapshots: [],

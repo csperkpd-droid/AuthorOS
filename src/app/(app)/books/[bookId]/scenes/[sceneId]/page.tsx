@@ -10,6 +10,7 @@ import { getBook } from "@/modules/library";
 import { getSceneForEditor } from "@/modules/manuscript";
 import { BinderNav, SceneDetails, SceneEditor, trashSceneAction } from "@/modules/manuscript/ui";
 import { RevisionsDialog } from "@/modules/history/ui";
+import { countCommentsToReview, listComments } from "@/modules/comments";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
 import { NewNoteDialog } from "@/modules/notes/ui";
@@ -38,7 +39,17 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function ScenePage({ params }: Props) {
   const { bookId, sceneId } = await params;
   const ctx = await requireAuthorContext();
-  const [book, editor, connections, beats, participants, places, storyTime] = await Promise.all([
+  const [
+    book,
+    editor,
+    connections,
+    beats,
+    participants,
+    places,
+    storyTime,
+    comments,
+    reviewCounts,
+  ] = await Promise.all([
     orNotFound(getBook(ctx, bookId)),
     orNotFound(getSceneForEditor(ctx, sceneId)),
     orNotFound(listConnections(ctx, sceneId)),
@@ -46,6 +57,8 @@ export default async function ScenePage({ params }: Props) {
     orNotFound(listParticipants(ctx, sceneId)),
     orNotFound(listScenePlaces(ctx, sceneId)),
     orNotFound(getSceneStoryTime(ctx, sceneId)),
+    orNotFound(listComments(ctx, sceneId)),
+    countCommentsToReview(ctx, bookId),
   ]);
   const { scene, tree, previous, next } = editor;
   if (scene.bookId !== bookId) notFound();
@@ -59,6 +72,7 @@ export default async function ScenePage({ params }: Props) {
           bookTitle={book.title}
           items={tree.items}
           currentSceneId={scene.id}
+          reviewCounts={reviewCounts}
         />
       </aside>
 
@@ -128,6 +142,8 @@ export default async function ScenePage({ params }: Props) {
           draftOwner={draftOwner(ctx)}
           draftLabel={`${scene.title} · ${book.title}`}
           href={`/books/${bookId}/scenes/${scene.id}`}
+          comments={comments}
+          canComment={can(ctx, "comment", "manuscript")}
         />
 
         <nav

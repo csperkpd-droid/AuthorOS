@@ -53,6 +53,7 @@ export function validateBundle(b: WorkspaceBundle): string[] {
   unique("connection", b.connections);
   unique("writing session", b.writingSessions);
   unique("version", b.contentRevisions);
+  unique("comment", b.comments);
   if (problems.length) return problems;
 
   // ── Identities ──
@@ -219,6 +220,16 @@ export function validateBundle(b: WorkspaceBundle): string[] {
     const key = `${v.nodeId}|${v.fieldId}`;
     if (valueKeys.has(key)) problems.push(`a field value is listed twice`);
     valueKeys.add(key);
+  }
+
+  // ── Comments: a passage of a scene's or note's text, consistent state ──
+  for (const c of b.comments) {
+    if (c.anchorEnd - c.anchorStart !== c.quote.length)
+      problems.push(`comment ${c.id}: its passage doesn’t match its quote`);
+    if (c.state === "NEEDS_REVIEW" && !c.anchorLost)
+      problems.push(`comment ${c.id} needs review but is anchored`);
+    if (c.state === "OPEN" && c.anchorLost)
+      problems.push(`comment ${c.id} is open but lost its passage`);
   }
 
   // ── Documents: never from a newer format than this version reads ──

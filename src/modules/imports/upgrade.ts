@@ -22,6 +22,8 @@ export function upgradeBundle(bundle: WorkspaceBundle): WorkspaceBundle {
   // Version 8 (M15) only added world objects (`places`, `worldEntries`,
   // `sceneSettings`); older files have none.
   if (b.version < 8) b = { ...b, version: 8 };
+  // Version 9 (M16) only added comments; older files have none.
+  if (b.version < 9) b = { ...b, version: 9 };
   return b;
 }
 

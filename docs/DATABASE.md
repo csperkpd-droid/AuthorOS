@@ -257,6 +257,23 @@ marks text saved before an import replaced it.
 - Migrations: `20261009090000_pen_name_node_kind` (adds the enum value on
   its own: it must be committed before use), `20261009090100_foundations`.
 
+### Comments (Milestone 16)
+
+- **`comments`** (not a story node; decisions 87 and 114): `id` (UUIDv7),
+  `workspace_id`, `node_id` (the scene or note: tenant-safe FK to
+  `story_nodes`, cascade), `body` (CHECK: not blank, ≤ 5000), `state`
+  (`comment_state`: `OPEN`, `NEEDS_REVIEW`, `RESOLVED`), the anchor:
+  `anchor_start`, `anchor_end` (offsets in the editor's plain text),
+  `quote` (≤ 2000), `prefix`, `suffix` (≤ 32 each), `doc_version`;
+  `anchor_lost` (the passage wasn't found with certainty; CHECKs: an open
+  comment is never lost, Needs review is always lost), `created_by_id?`,
+  timestamps, `resolved_at?`, `deleted_at?` (soft delete with Undo).
+- One table with the anchor as columns: no `comment_anchors` and no general
+  `annotations` table (decision 114; a shared anchor table waits for its
+  second use). Nothing is ever stored in the documents.
+- Migration `20261017090000_comments`: the new enum and table only. Export
+  format 9.
+
 ### World objects (Milestone 15)
 
 - **`places`** (node kind `PLACE`, with the two story-node triggers):
@@ -433,12 +450,12 @@ template_id, position)`: apply a main plot, romance and character arcs
 
 Recorded so nothing built now blocks them (decisions 87–92, 106):
 
-| Future table(s)                     | Shape                                                                                                                                                                                                                                               |
-| ----------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `editions`, `edition_status`        | Book → Edition (ebook, paperback, hardcover, audiobook) → publishing status per edition ("Ebook: Published", "Audiobook: Not started"). `books.writing_status` stays about the writing.                                                             |
-| `comments`, `comment_anchors`       | Comments are metadata, never in the text: anchor = node, document version, position, quoted text and surrounding context. When the text changes, the anchor is re-found or the comment is flagged for review, never silently moved.                 |
-| `project_access` (or `book_grants`) | Workspace membership ≠ access to every book: per-book/series/pen-name grants for co-authors and editors. Private projects, pen names and business records stay isolated.                                                                            |
-| Life Planner (separate boundary)    | Its own tables and permissions; shares only explicit task/event references (`shared_items` with a grant). No reads of Spellbound Draft story data; no personal/household data inside Spellbound Draft. Enforced in services and schema, not the UI. |
+| Future table(s)                     | Shape                                                                                                                                                                                                                                                               |
+| ----------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `editions`, `edition_status`        | Book → Edition (ebook, paperback, hardcover, audiobook) → publishing status per edition ("Ebook: Published", "Audiobook: Not started"). `books.writing_status` stays about the writing.                                                                             |
+| `comments`                          | Built in M16 (decision 114): one table with the anchor as columns (above). Comments are metadata, never in the text: anchor = node, document version, position, quoted text and surrounding context; re-found strictly or flagged for review, never silently moved. |
+| `project_access` (or `book_grants`) | Workspace membership ≠ access to every book: per-book/series/pen-name grants for co-authors and editors. Private projects, pen names and business records stay isolated.                                                                                            |
+| Life Planner (separate boundary)    | Its own tables and permissions; shares only explicit task/event references (`shared_items` with a grant). No reads of Spellbound Draft story data; no personal/household data inside Spellbound Draft. Enforced in services and schema, not the UI.                 |
 
 ### v1.2: AI suggestions
 

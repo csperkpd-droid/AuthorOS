@@ -4,6 +4,7 @@ import Link from "next/link";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
+import { listComments } from "@/modules/comments";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
 import { RevisionsDialog } from "@/modules/history/ui";
@@ -12,6 +13,7 @@ import { NoteEditor, trashNoteAction } from "@/modules/notes/ui";
 import { draftOwner } from "@/lib/local-drafts";
 import { requireAuthorContext } from "@/server/context";
 import { orNotFound } from "@/server/not-found";
+import { can } from "@/server/policy";
 
 type Props = PageProps<"/notes/[noteId]">;
 
@@ -24,9 +26,10 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
 export default async function NotePage({ params }: Props) {
   const { noteId } = await params;
   const ctx = await requireAuthorContext();
-  const [note, connections] = await Promise.all([
+  const [note, connections, comments] = await Promise.all([
     orNotFound(getNote(ctx, noteId)),
     listConnections(ctx, noteId),
+    orNotFound(listComments(ctx, noteId)),
   ]);
 
   return (
@@ -68,6 +71,8 @@ export default async function NotePage({ params }: Props) {
         body={note.body}
         version={note.version}
         draftOwner={draftOwner(ctx)}
+        comments={comments}
+        canComment={can(ctx, "comment", "storyBible")}
       />
     </div>
   );

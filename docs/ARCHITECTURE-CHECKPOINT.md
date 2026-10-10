@@ -82,7 +82,9 @@ order at the end.
    one annotation anchor (ProseMirror marks with stable ids stored in the
    document, plus an `annotations` table keyed by that id and the node) and
    reuse it for comments (Collaboration), revision notes (Revision) and
-   suggestions (v1.2).
+   suggestions (v1.2). **Superseded:** marks with ids stored in the
+   document were rejected (decision 87, MVP checkpoint C6); anchors live
+   outside the text, built for comments in M16 (decision 114).
 6. **Recurrence and time.** Events have a date and an optional `HH:MM`
    with no time zone or duration, tasks have no recurrence. A Planner / Life
    Planner needs repeating items, durations, reminders and calendar export

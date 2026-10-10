@@ -4,6 +4,7 @@ import type { WorkspaceRole } from "@/generated/prisma/client";
 import { DomainError, ForbiddenError, NotFoundError } from "@/lib/errors";
 import * as calendar from "@/modules/calendar";
 import * as characters from "@/modules/characters";
+import * as comments from "@/modules/comments";
 import * as connections from "@/modules/connections";
 import * as exportsModule from "@/modules/exports";
 import * as fields from "@/modules/fields";
@@ -42,6 +43,7 @@ import { createAuthor, resetDatabase } from "../support/db";
 const MODULES = {
   calendar,
   characters,
+  comments,
   connections,
   exports: exportsModule,
   fields,
@@ -111,6 +113,7 @@ const NOT_A_READ = new Set([
   "history.recordParticipationChange",
   "history.recordStoryTimeChange",
   "history.recordSettingChange",
+  "comments.reanchorComments",
   "progress.recordEditorWords",
   "storyGraph.purgeStoryNodes",
   // The member's own settings, not author data.

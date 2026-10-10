@@ -42,6 +42,7 @@ model User {
   connections    Connection[]
   participations SceneParticipation[]
   settings       SceneSetting[]
+  comments       Comment[]
   storyTimes     SceneStoryTime[]
   writing        WritingSession[]
 
@@ -229,6 +230,7 @@ model StoryNode {
   note           Note?
   idea           Idea?
   trope          Trope?
+  comments       Comment[]
   place          Place?
   worldEntry     WorldEntry?
   outline        Outline?
@@ -725,6 +727,50 @@ model SceneSetting {
   @@id([sceneId, placeId])
   @@index([placeId])
   @@map("scene_settings")
+}
+
+// ─── Comments (M16) ─────────────────────────────────────────────────────────
+
+enum CommentState {
+  OPEN
+  NEEDS_REVIEW
+  RESOLVED
+
+  @@map("comment_state")
+}
+
+/// A comment on a passage of a scene's or note's text (decisions 87 and 114,
+/// M16). Never in the document: the passage is anchored here (offsets in the
+/// editor's plain text, the exact quote, up to 32 characters of context on
+/// each side, the document version) and re-found on every save, restore and
+/// import (`lib/anchors.ts`). Not a story object. `anchorLost`: the passage
+/// couldn't be found with certainty (an open comment then needs review; a
+/// resolved one reopens as needing review). Soft-deleted, with Undo.
+model Comment {
+  id          String       @id @default(uuid(7)) @db.Uuid
+  workspaceId String       @map("workspace_id") @db.Uuid
+  nodeId      String       @map("node_id") @db.Uuid
+  body        String
+  state       CommentState @default(OPEN)
+  anchorStart Int          @map("anchor_start")
+  anchorEnd   Int          @map("anchor_end")
+  quote       String
+  prefix      String       @default("")
+  suffix      String       @default("")
+  docVersion  Int          @map("doc_version")
+  anchorLost  Boolean      @default(false) @map("anchor_lost")
+  createdById String?      @map("created_by_id") @db.Uuid
+  createdAt   DateTime     @default(now()) @map("created_at")
+  updatedAt   DateTime     @updatedAt @map("updated_at")
+  resolvedAt  DateTime?    @map("resolved_at")
+  deletedAt   DateTime?    @map("deleted_at")
+
+  node      StoryNode @relation(fields: [nodeId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  createdBy User?     @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([nodeId])
+  @@index([workspaceId])
+  @@map("comments")
 }
 
 // ─── Universal connections ──────────────────────────────────────────────────
