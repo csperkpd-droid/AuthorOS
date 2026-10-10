@@ -19,12 +19,14 @@ import * as penNames from "@/modules/pen-names";
 import * as progress from "@/modules/progress";
 import * as relationships from "@/modules/relationships";
 import * as search from "@/modules/search";
+import * as setting from "@/modules/setting";
 import * as storyGraph from "@/modules/story-graph";
 import * as structure from "@/modules/structure";
 import * as tasks from "@/modules/tasks";
 import * as timeline from "@/modules/timeline";
 import * as trash from "@/modules/trash";
 import * as tropes from "@/modules/tropes";
+import * as world from "@/modules/world";
 import * as workContext from "@/modules/work-context";
 import * as workspaces from "@/modules/workspaces";
 import type { AuthorContext } from "@/server/context";
@@ -50,6 +52,7 @@ const MODULES = {
   progress,
   relationships,
   search,
+  setting,
   storyGraph,
   structure,
   tasks,
@@ -58,6 +61,7 @@ const MODULES = {
   tropes,
   workContext,
   workspaces,
+  world,
 } as Record<string, Record<string, unknown>>;
 
 /** Names of services that change data. */

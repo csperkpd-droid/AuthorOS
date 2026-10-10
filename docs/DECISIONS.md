@@ -999,6 +999,47 @@ writing is only on this device; the server ends the session on the next
 request (`/sign-out`). Nothing is uploaded on the way out and nothing is
 deleted.
 
+## Milestone 15 (World objects)
+
+### 113. Places and world entries are story objects; scenes are set in places — Accepted (M15)
+
+Builds plan item "World objects" (implementation-readiness plan M14) with
+the reserved kinds of the MVP checkpoint, as approved before M15:
+
+- **Two kinds, not one per type.** `PLACE` (a place: name, summary) and
+  `WORLD_ENTRY` (anything else: an organization, an item, or a type the
+  author names in `entry_type`, free text, never parsed; Organization and
+  Item are suggestions only). A table per type (factions, items, species…)
+  was rejected: each would multiply the cost of a node kind (R12).
+- **Owned by one pen name**, optionally one of its series, like
+  characters (identity rule `column`): they link only within their pen name
+  and a series' world is used only in its books. Shared world objects were
+  rejected for now; a shared world bible stays the explicit opt-in
+  extension point of the identity model.
+- **Scene Setting is a dedicated relationship** (`scene_settings`, the
+  `setting` module), following "dedicated relationships first" and Scene
+  Participation (decision 106), not a `set_in` connection (as DATABASE.md
+  had planned). A scene may be set in several places. The author's
+  statement: never inferred from text, never changing it; manuscript edit
+  rights; every change kept in the scene's Story History.
+- **No place hierarchy in M15.** A parent place (with cycle checks and its
+  Change Impact) can be added later without changing stored data. No maps
+  (they need Assets), no worldbuilding rules, no new field types.
+- **Change Impact.** A world object's pen name changes on its own only
+  while nothing links it (as characters); otherwise it moves with the book
+  or series it belongs to, in that move's review (places set in the work's
+  scenes, world objects linked to it, a series' own), and one of another
+  series blocks the move. A series' place set in a book's scenes blocks
+  the book from leaving the series. Deleting forever lists the scene
+  settings that go and the world objects that stay.
+- **Export format 8:** `places`, `worldEntries`, `sceneSettings` and their
+  story nodes; formats 1–7 import unchanged (they have none). The import
+  validates the identity rules of every scene setting.
+- **Not here:** validity for world objects, timeline links, inference,
+  genre-specific models. **Rejected:** settings as connections (the
+  product relies on them: a dedicated relationship); a fixed list of world
+  entry types.
+
 ## Milestone 14 (Beats, Beat Assignments and Validity)
 
 ### 112. Beats are story objects; beat assignments carry validity — Accepted (M14)

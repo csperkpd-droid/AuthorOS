@@ -25,6 +25,9 @@ import type { ImpactBlocker, ImpactItem, ImpactReport } from "./types";
  *   scenes (Scene Participation), owning its arcs, in a relationship with such a character, or
  *   linked to it, transitively (a series' own characters always move);
  * - their relationships;
+ * - places and world entries of the old pen name connected to that work (a
+ *   place set in its scenes, anything linked to it, transitively; a series'
+ *   own always move), like characters (M15);
  * - values of custom fields limited to the old pen name (the field is copied
  *   to the new pen name, or its same-named field reused).
  *
@@ -43,6 +46,8 @@ type Client = Prisma.TransactionClient | typeof db;
 
 /** Kinds shared by every identity (from the Story Object Registry). */
 const SHARED_KINDS = kindsWhere((t) => t.identity === "shared");
+/** World objects (M15): owned by a pen name, they move with the work they are linked to. */
+const WORLD_KINDS: StoryNodeKind[] = ["PLACE", "WORLD_ENTRY"];
 
 type Plan = {
   report: ImpactReport;
@@ -51,6 +56,8 @@ type Plan = {
   bookIds: string[];
   seriesId: string | null;
   characterIds: string[];
+  placeIds: string[];
+  worldEntryIds: string[];
   /** Pen-limited field definitions whose values move, by definition id. */
   fields: {
     id: string;
@@ -145,21 +152,77 @@ async function planIdentityMove(
   const sharedLinked = new Set<string>();
   const pendingCharacters = new Set<string>();
   const pendingRelationships = new Set<string>();
+  // Places and world entries (M15): admitted like characters.
+  const world = new Map<
+    string,
+    { id: string; name: string; kind: "PLACE" | "WORLD_ENTRY"; deletedAt: Date | null }
+  >();
+  const pendingWorld = new Set<string>();
+  const blockedWorld = new Set<string>();
 
   if (seriesId) {
-    const own = await client.character.findMany({ where: { seriesId }, select: { id: true } });
+    const [own, ownPlaces, ownEntries] = await Promise.all([
+      client.character.findMany({ where: { seriesId }, select: { id: true } }),
+      client.place.findMany({ where: { seriesId }, select: { id: true } }),
+      client.worldEntry.findMany({ where: { seriesId }, select: { id: true } }),
+    ]);
     own.forEach((c) => pendingCharacters.add(c.id));
+    [...ownPlaces, ...ownEntries].forEach((x) => pendingWorld.add(x.id));
   }
   for (const o of outlines) {
     if (o.characterId) pendingCharacters.add(o.characterId);
     if (o.relationshipId) pendingRelationships.add(o.relationshipId);
   }
 
-  const inside = (id: string) => structural.has(id) || characters.has(id) || relationships.has(id);
+  const inside = (id: string) =>
+    structural.has(id) || characters.has(id) || relationships.has(id) || world.has(id);
   let frontier = [...structural];
   const titleOf = new Map<string, string>([...books.map((b) => [b.id, b.title] as const)]);
 
-  while (frontier.length || pendingCharacters.size || pendingRelationships.size) {
+  while (
+    frontier.length ||
+    pendingCharacters.size ||
+    pendingRelationships.size ||
+    pendingWorld.size
+  ) {
+    // Admit pending places and world entries (checking they aren't bound to another series).
+    if (pendingWorld.size) {
+      const ids = [...pendingWorld];
+      pendingWorld.clear();
+      const select = {
+        id: true,
+        name: true,
+        penNameId: true,
+        seriesId: true,
+        deletedAt: true,
+        series: { select: { title: true } },
+      } as const;
+      const [places, entries] = await Promise.all([
+        client.place.findMany({ where: { id: { in: ids }, workspaceId: ws }, select }),
+        client.worldEntry.findMany({ where: { id: { in: ids }, workspaceId: ws }, select }),
+      ]);
+      for (const [kind, rows] of [
+        ["PLACE", places],
+        ["WORLD_ENTRY", entries],
+      ] as const) {
+        for (const x of rows) {
+          if (world.has(x.id) || blockedWorld.has(x.id) || x.penNameId !== fromPenNameId) continue;
+          const href = kind === "PLACE" ? `/places/${x.id}` : `/world-entries/${x.id}`;
+          if (x.seriesId && x.seriesId !== seriesId) {
+            blockedWorld.add(x.id);
+            blockers.push({
+              title: x.name,
+              href,
+              reason: `Belongs to the series “${x.series!.title}”, which stays with ${fromPenName}.`,
+            });
+            continue;
+          }
+          world.set(x.id, { id: x.id, name: x.name, kind, deletedAt: x.deletedAt });
+          titleOf.set(x.id, x.name);
+          frontier.push(x.id);
+        }
+      }
+    }
     // Admit pending characters (checking they aren't bound to another series).
     if (pendingCharacters.size) {
       const rows = await client.character.findMany({
@@ -221,14 +284,15 @@ async function planIdentityMove(
         for (const m of members) if (!characters.has(m.id)) pendingCharacters.add(m.id);
       }
     }
-    if (pendingCharacters.size) continue;
+    if (pendingCharacters.size || pendingWorld.size) continue;
     if (!frontier.length) break;
 
     // Follow links out of everything admitted so far.
     const batch = frontier;
     frontier = [];
-    // Universal Connections and Scene Participation (character ↔ scene).
-    const [connections, participations] = await Promise.all([
+    // Universal Connections, Scene Participation (character ↔ scene) and
+    // Scene Setting (place ↔ scene).
+    const [connections, participations, settings] = await Promise.all([
       client.connection.findMany({
         where: { workspaceId: ws, OR: [{ sourceId: { in: batch } }, { targetId: { in: batch } }] },
         select: { sourceId: true, targetId: true },
@@ -240,10 +304,15 @@ async function planIdentityMove(
         },
         select: { characterId: true, sceneId: true },
       }),
+      client.sceneSetting.findMany({
+        where: { workspaceId: ws, OR: [{ placeId: { in: batch } }, { sceneId: { in: batch } }] },
+        select: { placeId: true, sceneId: true },
+      }),
     ]);
     const links = [
       ...connections,
       ...participations.map((p) => ({ sourceId: p.characterId, targetId: p.sceneId })),
+      ...settings.map((x) => ({ sourceId: x.placeId, targetId: x.sceneId })),
     ];
     const outside = new Map<string, string>(); // other end → the inside end it links to
     for (const l of links) {
@@ -259,10 +328,15 @@ async function planIdentityMove(
       if (SHARED_KINDS.includes(n.kind)) sharedLinked.add(n.id);
       else if (n.kind === "CHARACTER") pendingCharacters.add(n.id);
       else if (n.kind === "RELATIONSHIP") pendingRelationships.add(n.id);
+      else if (WORLD_KINDS.includes(n.kind)) pendingWorld.add(n.id);
     }
     // Other work of the old pen name that is linked in: blockers.
     const elsewhere = nodes.filter(
-      (n) => !SHARED_KINDS.includes(n.kind) && n.kind !== "CHARACTER" && n.kind !== "RELATIONSHIP",
+      (n) =>
+        !SHARED_KINDS.includes(n.kind) &&
+        n.kind !== "CHARACTER" &&
+        n.kind !== "RELATIONSHIP" &&
+        !WORLD_KINDS.includes(n.kind),
     );
     for (const other of await describeWork(client, elsewhere)) {
       if (other.penNameId !== fromPenNameId) continue;
@@ -297,7 +371,12 @@ async function planIdentityMove(
   }
 
   // 4. Custom fields limited to the old pen name, with values on moving objects.
-  const movingNodeIds = [...structural, ...characters.keys(), ...relationships.keys()];
+  const movingNodeIds = [
+    ...structural,
+    ...characters.keys(),
+    ...relationships.keys(),
+    ...world.keys(),
+  ];
   const values = await client.nodeFieldValue.findMany({
     where: { workspaceId: ws, nodeId: { in: movingNodeIds }, field: { penNameId: fromPenNameId } },
     select: {
@@ -378,6 +457,20 @@ async function planIdentityMove(
         ),
       },
       {
+        key: "WORLD",
+        label: "Places and world entries",
+        noun: { one: "world object", many: "world objects" },
+        effect,
+        items: sortItems(
+          [...world.values()].map((x) => ({
+            id: x.id,
+            title: x.name,
+            href: x.kind === "PLACE" ? `/places/${x.id}` : `/world-entries/${x.id}`,
+            ...inTrash(x.deletedAt),
+          })),
+        ),
+      },
+      {
         key: "OUTLINE",
         label: "Story structures and romance arcs",
         noun: { one: "structure", many: "structures" },
@@ -424,6 +517,8 @@ async function planIdentityMove(
     bookIds,
     seriesId,
     characterIds: [...characters.keys()],
+    placeIds: [...world.values()].filter((x) => x.kind === "PLACE").map((x) => x.id),
+    worldEntryIds: [...world.values()].filter((x) => x.kind === "WORLD_ENTRY").map((x) => x.id),
     fields,
   };
 }
@@ -560,6 +655,11 @@ export async function applyIdentityMove(ctx: AuthorContext, move: IdentityMove, 
     await tx.book.updateMany({ where: { id: { in: plan.bookIds } }, data: { penNameId: to } });
     await tx.character.updateMany({
       where: { id: { in: plan.characterIds } },
+      data: { penNameId: to },
+    });
+    await tx.place.updateMany({ where: { id: { in: plan.placeIds } }, data: { penNameId: to } });
+    await tx.worldEntry.updateMany({
+      where: { id: { in: plan.worldEntryIds } },
       data: { penNameId: to },
     });
 

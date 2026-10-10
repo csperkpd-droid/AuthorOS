@@ -68,6 +68,9 @@ export function validateBundle(b: WorkspaceBundle): string[] {
   for (const x of b.characters)
     if (x.seriesId && seriesPen.get(x.seriesId) !== x.penNameId)
       problems.push(`character “${x.name}” belongs to a series of another pen name`);
+  for (const x of [...b.places, ...b.worldEntries])
+    if (x.seriesId && seriesPen.get(x.seriesId) !== x.penNameId)
+      problems.push(`“${x.name}” belongs to a series of another pen name`);
   for (const x of b.chapters)
     if (x.partId && part.get(x.partId)?.bookId !== x.bookId)
       problems.push(`chapter “${x.title}” is in a part of another book`);
@@ -178,6 +181,25 @@ export function validateBundle(b: WorkspaceBundle): string[] {
     }
   }
 
+  // ── Scene Setting (same identity rules as Scene Participation) ──
+  const placeOf = new Map(b.places.map((p) => [p.id, p]));
+  const settings = new Set<string>();
+  for (const x of b.sceneSettings) {
+    const book = bookOf.get(sceneBook.get(x.sceneId) ?? "");
+    const place = placeOf.get(x.placeId);
+    if (!book || !place) {
+      problems.push(`a scene setting refers to a missing scene or place`);
+      continue;
+    }
+    const key = `${x.sceneId}|${x.placeId}`;
+    if (settings.has(key)) problems.push(`a scene is set in ${place.name} twice`);
+    settings.add(key);
+    if (place.penNameId !== book.penNameId)
+      problems.push(`a scene of another pen name is set in ${place.name}`);
+    if (place.seriesId && place.seriesId !== book.seriesId)
+      problems.push(`a scene outside its series is set in ${place.name}`);
+  }
+
   // ── Custom fields ──
   const field = new Map(b.fieldDefinitions.map((f) => [f.id, f]));
   const labels = new Set<string>();
@@ -239,6 +261,7 @@ export function penLookup(b: WorkspaceBundle): (id: string) => string | null {
   for (const x of b.series) pen.set(x.id, x.penNameId);
   for (const x of b.books) pen.set(x.id, x.penNameId);
   for (const x of b.characters) pen.set(x.id, x.penNameId);
+  for (const x of [...b.places, ...b.worldEntries]) pen.set(x.id, x.penNameId);
   const bookPen = (bookId: string) => pen.get(bookId);
   for (const x of [...b.parts, ...b.chapters, ...b.scenes]) {
     const p = bookPen(x.bookId);

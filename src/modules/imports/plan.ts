@@ -65,6 +65,8 @@ export type ImportOps = {
   chapters: TableOps;
   scenes: TableOps;
   characters: TableOps;
+  places: TableOps;
+  worldEntries: TableOps;
   relationships: TableOps;
   relationshipMembers: Row[];
   memberRoles: { relationshipId: string; characterId: string; role: string | null }[];
@@ -81,6 +83,7 @@ export type ImportOps = {
   outlineBeats: TableOps;
   beatScenes: Row[];
   sceneParticipations: TableOps;
+  sceneSettings: Row[];
   connections: TableOps;
   kits: TableOps;
   kitItems: Row[];
@@ -205,6 +208,8 @@ export async function planImport(
     exTimelineEvents,
     exTropes,
     exBeats,
+    exPlaces,
+    exWorldEntries,
   ] = await Promise.all([
     byId(
       chunked(existingIds(b.series), (ids) =>
@@ -282,6 +287,16 @@ export async function planImport(
     byId(
       chunked(existingIds(b.outlineBeats), (ids) =>
         client.beat.findMany({ where: { workspaceId: ws, id: { in: ids } } }),
+      ),
+    ),
+    byId(
+      chunked(existingIds(b.places), (ids) =>
+        client.place.findMany({ where: { workspaceId: ws, id: { in: ids } } }),
+      ),
+    ),
+    byId(
+      chunked(existingIds(b.worldEntries), (ids) =>
+        client.worldEntry.findMany({ where: { workspaceId: ws, id: { in: ids } } }),
       ),
     ),
   ]);
@@ -511,6 +526,37 @@ export async function planImport(
       role: r.role,
       summary: r.summary,
       profile: r.profile,
+      ...soft(r),
+    }),
+    { fixed: ["penNameId"] },
+  );
+
+  // World objects (format 8): owned by a pen name, like characters.
+  nodes(
+    "places",
+    "Places",
+    b.places,
+    exPlaces,
+    (r) => ({
+      penNameId: to(r.penNameId),
+      seriesId: toRef(r.seriesId),
+      name: r.name,
+      summary: r.summary,
+      ...soft(r),
+    }),
+    { fixed: ["penNameId"] },
+  );
+  nodes(
+    "worldEntries",
+    "World entries",
+    b.worldEntries,
+    exWorldEntries,
+    (r) => ({
+      penNameId: to(r.penNameId),
+      seriesId: toRef(r.seriesId),
+      entryType: r.entryType,
+      name: r.name,
+      summary: r.summary,
       ...soft(r),
     }),
     { fixed: ["penNameId"] },
@@ -985,6 +1031,35 @@ export async function planImport(
     decisions.push(["connection", c.id, "create"]);
   }
 
+  // ── Scene Setting (format 8): added when missing, never removed ─────────
+  const settingRows = b.sceneSettings.filter((x) => ok(x.sceneId) && ok(x.placeId));
+  const wsSettings = await chunked([...new Set(settingRows.map((x) => to(x.sceneId)))], (ids) =>
+    client.sceneSetting.findMany({
+      where: { workspaceId: ws, sceneId: { in: ids } },
+      select: { sceneId: true, placeId: true },
+    }),
+  );
+  const settingKeys = new Set(wsSettings.map((x) => `${x.sceneId}|${x.placeId}`));
+  for (const x of settingRows) {
+    const sceneId = to(x.sceneId);
+    const placeId = to(x.placeId);
+    if (settingKeys.has(`${sceneId}|${placeId}`)) {
+      count("sceneSettings", "Scene settings", "skip");
+      decisions.push(["setting", x.sceneId, x.placeId, "skip"]);
+      continue;
+    }
+    settingKeys.add(`${sceneId}|${placeId}`);
+    ops.sceneSettings.push({
+      workspaceId: ws,
+      sceneId,
+      placeId,
+      createdById: ctx.userId,
+      createdAt: x.createdAt,
+    });
+    count("sceneSettings", "Scene settings", "create");
+    decisions.push(["setting", x.sceneId, x.placeId, "create"]);
+  }
+
   // ── Scene Participation ──────────────────────────────────────────────────
   // A scene keeps the point of view it already has here: the file's
   // point-of-view character is added without it, and the review says so.
@@ -1314,6 +1389,8 @@ export async function planImport(
     ...created(ops.timelineEvents.create, "TIMELINE_EVENT"),
     ...created(ops.tropes.create, "TROPE"),
     ...created(ops.outlineBeats.create, "BEAT"),
+    ...created(ops.places.create, "PLACE"),
+    ...created(ops.worldEntries.create, "WORLD_ENTRY"),
   ];
 
   const order = COUNT_ORDER;
@@ -1334,6 +1411,8 @@ const COUNT_ORDER = [
   "chapters",
   "scenes",
   "characters",
+  "places",
+  "worldEntries",
   "relationships",
   "notes",
   "ideas",
@@ -1346,6 +1425,7 @@ const COUNT_ORDER = [
   "sceneStoryTimes",
   "tropes",
   "sceneParticipations",
+  "sceneSettings",
   "connections",
   "templates",
   "kits",
@@ -1381,6 +1461,8 @@ function emptyOps(): ImportOps {
     chapters: t(),
     scenes: t(),
     characters: t(),
+    places: t(),
+    worldEntries: t(),
     relationships: t(),
     relationshipMembers: [],
     memberRoles: [],
@@ -1397,6 +1479,7 @@ function emptyOps(): ImportOps {
     outlineBeats: t(),
     beatScenes: [],
     sceneParticipations: t(),
+    sceneSettings: [],
     connections: t(),
     kits: t(),
     kitItems: [],
@@ -1480,6 +1563,7 @@ function nodeTitles(b: WorkspaceBundle) {
   for (const p of b.penNames) titles.set(p.id, p.name);
   for (const c of b.characters) titles.set(c.id, c.name);
   for (const t of b.tropes) titles.set(t.id, t.name);
+  for (const x of [...b.places, ...b.worldEntries]) titles.set(x.id, x.name);
   const names = new Map(b.characters.map((c) => [c.id, c.name]));
   for (const r of b.relationships)
     titles.set(r.id, `${r.type}: ${r.members.map((m) => names.get(m.characterId)).join(", ")}`);

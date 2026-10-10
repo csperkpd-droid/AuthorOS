@@ -18,8 +18,8 @@ import { STORY_KINDS, STORY_OBJECT_TYPES } from "./kinds";
  *   name, scenes and chapters in their book;
  * - structure: beats stay inside their structure's book or series and
  *   identity; a placement outside them is never shown as current (validity);
- * - connections: never across pen names; a series' characters appear only
- *   in that series' books.
+ * - connections: never across pen names; a series' characters appear, and
+ *   its places are scene settings, only in that series' books.
  *
  * Used by the tests after every kind of operation; cheap enough to run in
  * support tooling.
@@ -54,6 +54,8 @@ export async function auditGraph(ctx: AuthorContext): Promise<AuditIssue[]> {
       (SELECT b."pen_name_id" FROM "chapters" x JOIN "books" b ON b."id" = x."book_id" WHERE x."id" = ${id}),
       (SELECT b."pen_name_id" FROM "scenes" x JOIN "books" b ON b."id" = x."book_id" WHERE x."id" = ${id}),
       (SELECT c."pen_name_id" FROM "characters" c WHERE c."id" = ${id}),
+      (SELECT pl."pen_name_id" FROM "places" pl WHERE pl."id" = ${id}),
+      (SELECT we."pen_name_id" FROM "world_entries" we WHERE we."id" = ${id}),
       (SELECT c."pen_name_id" FROM "relationship_members" m JOIN "characters" c ON c."id" = m."character_id"
          WHERE m."relationship_id" = ${id} LIMIT 1),
       (SELECT coalesce(b."pen_name_id", s."pen_name_id") FROM "outlines" o
@@ -96,6 +98,33 @@ export async function auditGraph(ctx: AuthorContext): Promise<AuditIssue[]> {
         JOIN "books" b ON b."id" = sc."book_id"
         WHERE p."workspace_id" = ${ws}::uuid
           AND ch."series_id" IS NOT NULL AND b."series_id" IS DISTINCT FROM ch."series_id"`,
+    ],
+    [
+      // Scene Setting (M15): the same identity rules as Scene Participation.
+      "place set in a scene of another pen name",
+      Prisma.sql`SELECT st."place_id" AS id FROM "scene_settings" st
+        JOIN "places" pl ON pl."id" = st."place_id"
+        JOIN "scenes" sc ON sc."id" = st."scene_id"
+        JOIN "books" b ON b."id" = sc."book_id"
+        WHERE st."workspace_id" = ${ws}::uuid AND pl."pen_name_id" <> b."pen_name_id"`,
+    ],
+    [
+      "series place set outside the series",
+      Prisma.sql`SELECT st."place_id" AS id FROM "scene_settings" st
+        JOIN "places" pl ON pl."id" = st."place_id"
+        JOIN "scenes" sc ON sc."id" = st."scene_id"
+        JOIN "books" b ON b."id" = sc."book_id"
+        WHERE st."workspace_id" = ${ws}::uuid
+          AND pl."series_id" IS NOT NULL AND b."series_id" IS DISTINCT FROM pl."series_id"`,
+    ],
+    [
+      "place or world entry in a series of another pen name",
+      Prisma.sql`SELECT x."id" FROM (
+          SELECT "id", "workspace_id", "pen_name_id", "series_id" FROM "places"
+          UNION ALL
+          SELECT "id", "workspace_id", "pen_name_id", "series_id" FROM "world_entries"
+        ) x JOIN "series" s ON s."id" = x."series_id"
+        WHERE x."workspace_id" = ${ws}::uuid AND s."pen_name_id" <> x."pen_name_id"`,
     ],
     [
       "book in a series of another pen name",

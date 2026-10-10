@@ -16,7 +16,8 @@ import type { ExportScopeInput } from "./schemas";
  *   id with its kind), including items in the Trash (`deletedAt` set);
  * - the structural hierarchy (series → books → parts → chapters → scenes,
  *   positions included), scene and note content (ProseMirror JSON);
- * - characters, the scenes they are in (Scene Participation), relationships
+ * - characters, the scenes they are in (Scene Participation), places and
+ *   the scenes set in them (Scene Setting), world entries, relationships
  *   with their members, connections (with kind,
  *   label, note and attributes), structures, beats and beat → scene
  *   assignments, templates and kits, custom fields and values, tasks,
@@ -47,9 +48,11 @@ export const EXPORT_FORMAT = "authoros.workspace";
  * they can be linked and keep their own description history), and each
  * beat assignment (`beatScenes`) has its `validity`, `exceptedAt` (kept by
  * the author) and `note`.
+ * Version 8 (M15): world objects (`places`, `worldEntries`, story nodes of
+ * kind PLACE and WORLD_ENTRY) and where scenes are set (`sceneSettings`).
  * The importer upgrades older files.
  */
-export const EXPORT_VERSION = 7;
+export const EXPORT_VERSION = 8;
 
 /**
  * "standard": the backup (all story data, no version history).
@@ -75,12 +78,15 @@ export async function exportWorkspaceJson(
   ]);
   const bookIds = books.map((b) => b.id);
   const seriesIds = series.map((s) => s.id);
-  const [parts, chapters, scenes, characters] = await Promise.all([
+  const [parts, chapters, scenes, characters, places, worldEntries] = await Promise.all([
     db.part.findMany({ where: { bookId: { in: bookIds } } }),
     db.chapter.findMany({ where: { bookId: { in: bookIds } } }),
     db.scene.findMany({ where: { bookId: { in: bookIds } } }),
     db.character.findMany({ where: { workspaceId: ws, ...penFilter } }),
+    db.place.findMany({ where: { workspaceId: ws, ...penFilter } }),
+    db.worldEntry.findMany({ where: { workspaceId: ws, ...penFilter } }),
   ]);
+  const placeIds = new Set(places.map((p) => p.id));
   const characterIds = new Set(characters.map((c) => c.id));
   const relationshipRows = await db.relationship.findMany({
     where: { workspaceId: ws },
@@ -116,6 +122,8 @@ export async function exportWorkspaceJson(
     ...chapters.map((c) => c.id),
     ...scenes.map((s) => s.id),
     ...characterIds,
+    ...placeIds,
+    ...worldEntries.map((e) => e.id),
     ...relationshipIds,
     ...outlineIds,
     ...outlineBeats.map((b) => b.id),
@@ -155,6 +163,7 @@ export async function exportWorkspaceJson(
     beatScenes,
     sceneStoryTimes,
     participations,
+    settings,
     templates,
     kits,
     fieldDefinitions,
@@ -177,6 +186,10 @@ export async function exportWorkspaceJson(
         createdAt: true,
         updatedAt: true,
       },
+    }),
+    db.sceneSetting.findMany({
+      where: { workspaceId: ws, sceneId: { in: [...sceneIds] } },
+      select: { sceneId: true, placeId: true, createdAt: true },
     }),
     db.structureTemplate.findMany({
       where: { OR: [{ workspaceId: ws }, { workspaceId: null }] },
@@ -237,6 +250,8 @@ export async function exportWorkspaceJson(
     chapters,
     scenes,
     characters,
+    places,
+    worldEntries,
     relationships: relationships.map(({ members, ...r }) => ({
       ...r,
       members: members.map((m) => ({
@@ -255,6 +270,7 @@ export async function exportWorkspaceJson(
     outlineBeats,
     beatScenes: beatScenes.filter((b) => sceneIds.has(b.sceneId)),
     sceneParticipations: participations.filter((p) => characterIds.has(p.characterId)),
+    sceneSettings: settings.filter((x) => placeIds.has(x.placeId)),
     timelineEvents,
     sceneStoryTimes,
     // The author's templates in full; built-in ones (seeded with fixed ids in
@@ -292,6 +308,8 @@ export type IntegrityInput = {
   chapters: (Id & { bookId: string; partId: Ref })[];
   scenes: (Id & { bookId: string; chapterId: string })[];
   characters: (Id & { penNameId: string; seriesId: Ref })[];
+  places: (Id & { penNameId: string; seriesId: Ref })[];
+  worldEntries: (Id & { penNameId: string; seriesId: Ref })[];
   relationships: (Id & { members: { characterId: string }[] })[];
   notes: Id[];
   ideas: Id[];
@@ -309,6 +327,7 @@ export type IntegrityInput = {
   outlineBeats: (Id & { outlineId: string; bookId: Ref })[];
   beatScenes: { beatId: string; sceneId: string }[];
   sceneParticipations: { sceneId: string; characterId: string }[];
+  sceneSettings: { sceneId: string; placeId: string }[];
   timelineEvents: (Id & { bookId: Ref; seriesId: Ref })[];
   sceneStoryTimes: { sceneId: string }[];
   structureTemplates: Id[];
@@ -374,6 +393,10 @@ export function checkExportIntegrity(data: IntegrityInput): string[] {
     need("character.penName", c.penNameId, penNames);
     need("character.series", c.seriesId, series);
   }
+  for (const x of [...data.places, ...data.worldEntries]) {
+    need("world.penName", x.penNameId, penNames);
+    need("world.series", x.seriesId, series);
+  }
   for (const r of data.relationships) {
     if (r.members.length < 2) problems.push(`relationship ${r.id} has fewer than two members`);
     for (const m of r.members) need("relationship.member", m.characterId, characters);
@@ -405,6 +428,11 @@ export function checkExportIntegrity(data: IntegrityInput): string[] {
   for (const p of data.sceneParticipations) {
     need("appearance.scene", p.sceneId, ids(data.scenes));
     need("appearance.character", p.characterId, characters);
+  }
+  const places = ids(data.places);
+  for (const x of data.sceneSettings) {
+    need("setting.scene", x.sceneId, ids(data.scenes));
+    need("setting.place", x.placeId, places);
   }
   for (const v of data.fieldValues) {
     need("fieldValue.field", v.fieldId, fields);

@@ -41,6 +41,7 @@ model User {
   fieldRevisions FieldRevision[]
   connections    Connection[]
   participations SceneParticipation[]
+  settings       SceneSetting[]
   storyTimes     SceneStoryTime[]
   writing        WritingSession[]
 
@@ -172,6 +173,8 @@ model PenName {
   series           Series[]
   books            Book[]
   characters       Character[]
+  places           Place[]
+  worldEntries     WorldEntry[]
   fieldDefinitions FieldDefinition[]
   activeMembers    WorkspaceMember[]
 
@@ -199,6 +202,8 @@ enum StoryNodeKind {
   TIMELINE_EVENT
   TROPE
   BEAT
+  PLACE
+  WORLD_ENTRY
 
   @@map("story_node_kind")
 }
@@ -224,6 +229,8 @@ model StoryNode {
   note           Note?
   idea           Idea?
   trope          Trope?
+  place          Place?
+  worldEntry     WorldEntry?
   outline        Outline?
   beat           Beat?
   timelineEvent  TimelineEvent?
@@ -258,6 +265,8 @@ model Series {
   node           StoryNode         @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
   penName        PenName           @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
   characters     Character[]
+  places         Place[]
+  worldEntries   WorldEntry[]
   books          Book[]
   outlines       Outline[]
   timelineEvents TimelineEvent[]
@@ -413,13 +422,14 @@ model Scene {
   updatedAt     DateTime    @updatedAt @map("updated_at")
   deletedAt     DateTime?   @map("deleted_at")
 
-  node    StoryNode   @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  book    Book        @relation(fields: [bookId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
-  chapter Chapter     @relation(fields: [chapterId, bookId], references: [id, bookId], onDelete: Cascade)
+  node    StoryNode        @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  book    Book             @relation(fields: [bookId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  chapter Chapter          @relation(fields: [chapterId, bookId], references: [id, bookId], onDelete: Cascade)
   beats   BeatAssignment[]
 
   writingMembers WorkspaceMember[]
   participants   SceneParticipation[]
+  settings       SceneSetting[]
   storyTime      SceneStoryTime?
 
   @@unique([id, workspaceId])
@@ -642,6 +652,79 @@ model Trope {
   @@unique([id, workspaceId])
   @@index([workspaceId])
   @@map("tropes")
+}
+
+// ─── World objects (M15) ────────────────────────────────────────────────────
+
+/// A place in the story world (decision 113, M15): a story object of one pen
+/// name, optionally of one of its series, like a character. Scenes are set
+/// in places through `scene_settings` (a dedicated relationship). No
+/// hierarchy yet: a parent place can be added later without changing data.
+model Place {
+  id          String    @id @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  penNameId   String    @map("pen_name_id") @db.Uuid
+  seriesId    String?   @map("series_id") @db.Uuid
+  name        String
+  summary     String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  node     StoryNode      @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  penName  PenName        @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
+  series   Series?        @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+  settings SceneSetting[]
+
+  @@unique([id, workspaceId])
+  @@index([workspaceId])
+  @@index([penNameId])
+  @@index([seriesId])
+  @@map("places")
+}
+
+/// Anything else in the story world (decision 113, M15): an organization, an
+/// item, or a type the author names. `entryType` is the author's own word,
+/// free text, never parsed. Owned like places; linked through connections.
+model WorldEntry {
+  id          String    @id @db.Uuid
+  workspaceId String    @map("workspace_id") @db.Uuid
+  penNameId   String    @map("pen_name_id") @db.Uuid
+  seriesId    String?   @map("series_id") @db.Uuid
+  entryType   String    @map("entry_type")
+  name        String
+  summary     String?
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  deletedAt   DateTime? @map("deleted_at")
+
+  node    StoryNode @relation(fields: [id, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  penName PenName   @relation(fields: [penNameId, workspaceId], references: [id, workspaceId], onDelete: NoAction)
+  series  Series?   @relation(fields: [seriesId], references: [id], onDelete: SetNull)
+
+  @@unique([id, workspaceId])
+  @@index([workspaceId])
+  @@index([penNameId])
+  @@index([seriesId])
+  @@map("world_entries")
+}
+
+/// Scene setting (decision 113, M15): a scene takes place in a place, as the
+/// author states it; never inferred from the text. A scene may have several.
+model SceneSetting {
+  workspaceId String   @map("workspace_id") @db.Uuid
+  sceneId     String   @map("scene_id") @db.Uuid
+  placeId     String   @map("place_id") @db.Uuid
+  createdById String?  @map("created_by_id") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  scene     Scene @relation(fields: [sceneId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  place     Place @relation(fields: [placeId, workspaceId], references: [id, workspaceId], onDelete: Cascade)
+  createdBy User? @relation(fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@id([sceneId, placeId])
+  @@index([placeId])
+  @@map("scene_settings")
 }
 
 // ─── Universal connections ──────────────────────────────────────────────────

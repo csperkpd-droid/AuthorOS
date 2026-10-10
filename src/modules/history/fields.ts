@@ -8,6 +8,7 @@ import type { AuthorContext } from "@/server/context";
 import { assertCan, assertCanView } from "@/server/policy";
 
 import { PARTICIPATION_FIELD } from "./participation";
+import { SETTING_FIELD } from "./setting";
 import { STORY_TIME_FIELD } from "./story-time";
 
 /**
@@ -45,6 +46,8 @@ const COLUMNS: Partial<Record<StoryNodeKind, Record<string, { table: string; col
   // Descriptions only: trope names have no history (decision 110).
   TROPE: { description: { table: "tropes", column: "description" } },
   BEAT: { description: { table: "beats", column: "description" } },
+  PLACE: { summary: { table: "places", column: "summary" } },
+  WORLD_ENTRY: { summary: { table: "world_entries", column: "summary" } },
 };
 
 function fieldOf(kind: StoryNodeKind, field: string) {
@@ -156,11 +159,15 @@ export async function listFieldHistory(
     where: {
       workspaceId: ctx.workspaceId,
       nodeId,
-      // Participation and Story Time changes are a record, not earlier text.
+      // Participation, setting and Story Time changes are a record, not earlier text.
       ...(field
         ? { field }
         : {
-            NOT: [{ field: { startsWith: PARTICIPATION_FIELD } }, { field: STORY_TIME_FIELD }],
+            NOT: [
+              { field: { startsWith: PARTICIPATION_FIELD } },
+              { field: { startsWith: SETTING_FIELD } },
+              { field: STORY_TIME_FIELD },
+            ],
           }),
     },
     orderBy: { createdAt: "desc" },

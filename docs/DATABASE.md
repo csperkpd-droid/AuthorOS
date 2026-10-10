@@ -16,7 +16,7 @@ This document has two parts:
 | -------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Tenancy                          | Every domain table has a `workspace_id`. Services filter by it via `AuthorContext`.                                                                                                                                                                                                                                                                                                          |
 | Tenant-safe foreign keys         | A reference to another row in the same workspace is a **composite FK including `workspace_id`** (e.g. `books(pen_name_id, workspace_id) → pen_names(id, workspace_id)`), so the database itself rejects cross-workspace links even if a service check were missed. Optional relations use plain FKs plus service checks (Prisma requires all-or-nothing optionality on composite relations). |
-| Story nodes                      | Story objects (series, books, parts, chapters, scenes, and future characters, locations…) take their primary key from a row in `story_nodes`. See [Story Graph](#story-graph).                                                                                                                                                                                                               |
+| Story nodes                      | Story objects (series, books, parts, chapters, scenes, characters, places, world entries…) take their primary key from a row in `story_nodes`. See [Story Graph](#story-graph).                                                                                                                                                                                                              |
 | Primary keys                     | `uuid` with `@default(uuid(7))`: time-ordered (good B-tree locality), not guessable, safe in URLs.                                                                                                                                                                                                                                                                                           |
 | Naming                           | Prisma models/fields in PascalCase/camelCase; Postgres tables/columns in snake_case via `@@map`/`@map`.                                                                                                                                                                                                                                                                                      |
 | Timestamps                       | `created_at`, `updated_at` on every table that users edit.                                                                                                                                                                                                                                                                                                                                   |
@@ -257,6 +257,26 @@ marks text saved before an import replaced it.
 - Migrations: `20261009090000_pen_name_node_kind` (adds the enum value on
   its own: it must be committed before use), `20261009090100_foundations`.
 
+### World objects (Milestone 15)
+
+- **`places`** (node kind `PLACE`, with the two story-node triggers):
+  `workspace_id`, `pen_name_id` (tenant-safe FK, `NO ACTION`),
+  `series_id?` (`ON DELETE SET NULL`), `name` (CHECK: not blank, ≤ 200),
+  `summary`, `deleted_at`, timestamps. Owned like characters. No parent
+  place yet.
+- **`world_entries`** (node kind `WORLD_ENTRY`, with the two story-node
+  triggers): the same columns plus `entry_type` (the author's own word,
+  CHECK: not blank, ≤ 60; never parsed).
+- **`scene_settings`**: PK `(scene_id, place_id)`, `workspace_id`,
+  `created_by_id?`, `created_at`. Scene Setting, a dedicated relationship
+  (not a connection): tenant-safe FKs to `scenes` and `places`, cascade
+  both ways. Same pen name and, for a series' place, that series' books
+  (service rules, checked by the graph audit). History in `field_revisions`
+  on the scene (field `setting:<place id>`).
+- Migrations `20261016090000_world_node_kinds` (the enum values, on their
+  own) and `20261016090100_world_objects`: new tables only, no data moved.
+  Export format 8.
+
 ### Tropes (Milestone 13)
 
 - **`tropes`** (node kind `TROPE`, with the two story-node triggers):
@@ -367,11 +387,11 @@ the archive is "not now", and history is earlier versions of live content.
 
 Every new object type gets a node kind, a typed table using the node id, the
 two triggers, and a case in the resolver; it can then take part in
-connections. Outlines joined in M3, tasks and events in M4. Planned: timeline
-events (v1.1), and later locations, research items, songs, plot threads and
-worldbuilding entries. New connection kinds join the registry as needed
-(e.g. `set_in` for Scene → Location,
-`soundtrack` for Scene → Song).
+connections. Outlines joined in M3, tasks and events in M4, timeline events
+in M12, places and world entries in M15. Planned: research items, songs and
+plot threads. New connection kinds join the registry as needed (e.g.
+`soundtrack` for Scene → Song). Where a scene takes place is Scene Setting
+(`scene_settings`, M15), a dedicated relationship, not a connection kind.
 
 | Table               | Notes                                                                                  |
 | ------------------- | -------------------------------------------------------------------------------------- |

@@ -21,3 +21,5 @@ export { listParticipationHistory, recordParticipationChange } from "./participa
 export type { ParticipationChangeView, ParticipationSnapshot } from "./participation";
 export { listStoryTimeHistory, recordStoryTimeChange } from "./story-time";
 export type { StoryTimeChange, StoryTimeChangeView } from "./story-time";
+export { listSettingHistory, recordSettingChange } from "./setting";
+export type { SettingChangeView } from "./setting";

@@ -278,7 +278,7 @@ describe("backups (format 7)", () => {
     await moveBook(book.id, null);
     await keepPlacement(ctx, beat.id, scene.id, { note: "Kept on purpose." });
     const { data } = await exportWorkspaceJson(ctx, { scope: { kind: "all" }, kind: "archive" });
-    expect(data.version).toBe(7);
+    expect(data.version).toBe(8);
     expect(data.storyNodes).toContainEqual({ id: beat.id, kind: "BEAT" });
     expect(data.beatScenes).toEqual([
       expect.objectContaining({

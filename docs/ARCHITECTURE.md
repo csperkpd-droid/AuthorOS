@@ -32,7 +32,8 @@ the mechanisms. "Not built" marks designed parts with no code yet.
    tasks in one table, history in one layer. Temporary exceptions are
    marked (see Temporary compatibility below).
 3. **Story / Plan / Manuscript / Publish are separate domains.** Story =
-   what exists (characters, relationships, notes, ideas, later places);
+   what exists (characters, relationships, notes, ideas, places and world
+   entries);
    Plan = what the author intends (structures, beats, arcs); Manuscript =
    the written words (series, books, parts, chapters, scenes and their
    text); Publish = intentional published representations (editions, not
@@ -45,7 +46,7 @@ the mechanisms. "Not built" marks designed parts with no code yet.
    publishing status. A book's writing status never says "Published".
    Editions not built.
 5. **Scene is the atomic bridge.** Scenes connect planning (beat
-   placements), story data (participation), manuscript text, story time,
+   placements), story data (participation, setting), manuscript text, story time,
    character state, review and revision, through relationships owned by
    those systems. The scene row itself stays lean (title, status,
    synopsis, text): it is not a dumping ground.
@@ -423,7 +424,8 @@ User ──< WorkspaceMember >── Workspace ──< PenName
   narrows characters, relationships, structures and pickers to that identity;
   "All identities" shows everything. Nothing links across identities: the
   connection service refuses it, relationships and outlines require one
-  identity, and a linked character can't change pen name on its own. Notes,
+  identity, and a linked character can't change pen name on its own. Places
+  and world entries (M15) follow the same rules. Notes,
   ideas, tasks and events have no pen name (author-level, shared) and may
   link to anything; capturing them never asks for an identity. **Extension
   point (notes and ideas):** an optional scope (all identities, a pen name, a
@@ -506,6 +508,55 @@ permission or behaviour changed.
 - **Pending artwork.** The Feather icon in `components/shell/brand.tsx`
   holds the Open Page mark's place, and `app/favicon.ico` stays, until the
   production vector marks exist.
+
+## World objects (M15)
+
+Places and world entries (decision 113) are story objects of the
+story-bible area, for every genre: a lens over the common model, never a
+genre data model. Both belong to one pen name and optionally to one of its
+series, like characters (identity rule `column`), so they only link within
+their pen name; a series' world is used only in that series' books. Owned
+by the `world` module.
+
+- **Place** (`PLACE`, `places`): a name and a summary. No hierarchy yet (a
+  parent place can be added later without changing stored data); no maps
+  (they need Assets).
+- **World entry** (`WORLD_ENTRY`, `world_entries`): anything else in the
+  story world, an organization, an item, or a type the author names
+  (`entry_type`, free text, never parsed; Organization and Item are only
+  suggestions). It links to characters, places, scenes and other objects
+  through Universal Connections (`related`, notes `about`).
+- Searchable by name, connectable, custom fields, Trash and restore,
+  delete forever through the reviewed Trash path, summary history
+  (`recordFieldHistory`), stale forms refused (`EditGuard`).
+
+**Scene Setting** (`setting` module, `scene_settings`) is where a scene
+takes place: a dedicated relationship, not a connection ("dedicated
+relationships first"). A scene may be set in several places. The author's
+statement, never inferred from the text and never changing it; it needs
+manuscript edit rights, follows the identity rules above (same pen name; a
+series' place only in that series' books) and every change is kept in the
+scene's Story History (`setting:<place id>` field revisions, a record that
+is never "restored", like participation). Reads go through the read funnel:
+places or scenes in the Trash are hidden and come back when restored;
+nothing is removed by the Trash.
+
+**Actions:** `createPlace`, `updatePlace` (its series may change only while
+its scenes stay in that series' books), `trashPlace`, `createWorldEntry`,
+`updateWorldEntry`, `trashWorldEntry` (story-bible edit rights);
+`setScenePlace`, `setSceneInNewPlace` (the new place joins the scene's pen
+name and series), `removeScenePlace` (manuscript edit rights). **Reads:**
+`listPlaces` (with live scene counts), `getPlace`, `listWorldEntries`,
+`getWorldEntry`, `listWorldEntryTypes`, `listPlaceScenes` (manuscript
+order), `listScenePlaces`, `listSettingHistory`.
+
+**Identity.** A world object's pen name changes on its own only while
+nothing links it (as characters). Otherwise it moves with the book or series
+it belongs to, through that move's Change Impact review: places set in the
+work's scenes, world objects linked to it (transitively) and a series' own
+world objects move; one of another series blocks the move. A series' place
+set in a book's scenes blocks that book from leaving the series (as series
+characters do).
 
 ## Tropes (M13)
 
@@ -776,7 +827,8 @@ keys: fixed, typed, cascading, and queried constantly.
 `connections` between two nodes: character ↔ scene appearances (with a
 role), notes about anything, relationship moments in scenes, what an idea
 inspired, and free "related to" links. Tasks (M4), inspiration, research,
-songs, plot threads and locations will use the same table.
+songs and plot threads will use the same table. Where a scene takes place
+is not a connection: it is Scene Setting (M15), a dedicated relationship.
 
 **The registry** (`modules/connections/registry.ts`, client-safe) defines each
 kind: allowed source and target node kinds (or any), how it reads from each
@@ -801,7 +853,7 @@ inside something trashed). Connections to hidden objects are skipped, not
 deleted, so restoring brings them back. The same loaders power cross-kind
 search for the picker.
 
-**Adding a new object type** (e.g. a timeline event or a location): the
+**Adding a new object type** (e.g. a research item): the
 enum value; its table with the two node triggers; one registry entry; one
 adapter (load, Trash); its bundle columns (export, `imports/bundle.ts`,
 plan/apply). TypeScript flags every missing piece; the integrity test
@@ -951,8 +1003,9 @@ Uses so far:
 - **Moving to another pen name** (book or series): below.
 - **Deleting forever / emptying the Trash:** everything removed with the
   item (contents, dependent relationships and arcs, version history, beat
-  placements, custom fields limited to that work), links to items that stay,
-  and what stays (a series' characters, words-written history).
+  placements, scene settings, custom fields limited to that work), links to
+  items that stay, and what stays (a series' characters, places and world
+  entries, words-written history).
 - **Deleting a custom field in use:** each item with a value, the value
   that will be lost, and how many.
 - **Deleting a template:** kits that include it; structures made from it
@@ -960,7 +1013,7 @@ Uses so far:
 - **A book leaving or changing series (M7):** beats of the old series'
   structures planned for the book (they stay in the arc, unplanned) and
   placements of the book's scenes on those beats (since M14 kept and
-  marked Conflicted, never removed; the scenes stay). Series characters appearing in the book's scenes block it. Joining
+  marked Conflicted, never removed; the scenes stay). Series characters appearing in the book's scenes, and series places its scenes are set in (M15), block it. Joining
   a series affects nothing and needs no review.
 - **Removing relationship members (M7):** the members removed, with the
   roles that go, and the relationship's structures, which continue as the
@@ -983,14 +1036,16 @@ link, a deadline or a placement (the explicit action is the change);
 restoring a version (the current text is saved first); renaming; kit and
 template edits (never touch structures made from them); imports (their own
 review). Changing a character's series is refused while they appear in
-scenes outside the new series, with the count.
+scenes outside the new series, with the count; a place's likewise while
+scenes outside it are set there (M15).
 
 First use: **identity moves.** Moving a standalone book (or a series, with
 all its books) to another pen name carries its associated story data: its
 manuscript and structures; every character of the old pen name connected to
 it (appearing in its scenes, owning its arcs, in a relationship with such a
 character, or linked to it, transitively; a series' own characters always);
-their relationships; and values of fields limited to the old pen name (the
+their relationships; places and world entries of the old pen name connected
+to it in the same way (M15); and values of fields limited to the old pen name (the
 field is copied to the new pen name). Shared notes, ideas, tasks and events
 keep their links. If anything of the old pen name that belongs to other work
 is linked in (another book's scene, a character of another series), the move
@@ -1112,7 +1167,8 @@ or the entire workspace**, then a format:
 - **Standard backup (JSON)** (`authoros.workspace`, version 3 since M8, `kind:
 "standard"`): the structured backup. Every story object with its original
   id and story-node kind; the hierarchy with positions; scene and note
-  content as ProseMirror JSON with its format version; characters, relationships with members and
+  content as ProseMirror JSON with its format version; characters, places, world
+  entries and scene settings (format 8), relationships with members and
   roles, connections (kind, label, note, attributes), structures, beats
   (story nodes since format 7) and beat → scene assignments (with validity,
   exception and note since format 7), templates, kits, custom fields and values,

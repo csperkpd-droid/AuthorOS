@@ -343,7 +343,8 @@ export async function updateBook(
  * book out of that series' structures: beats planned for this book stop
  * being planned for a book (they stay in the series arc), and this book's
  * scenes are no longer placed on the series' beats (the scenes stay).
- * Characters of the series who appear in its scenes block the change.
+ * Characters of the series who appear in its scenes, and places of the
+ * series its scenes are set in (M15), block the change.
  * Anything of the book in Story Time changes timeline: listed (Red).
  */
 async function seriesChangePlan(ctx: AuthorContext, id: string, seriesId: string | null) {
@@ -366,7 +367,7 @@ async function seriesChangePlan(ctx: AuthorContext, id: string, seriesId: string
       })
     : null;
   const leaving = from && from.id !== seriesId ? from : null;
-  const [plannedBeats, placements, strandedCharacters] = leaving
+  const [plannedBeats, placements, strandedCharacters, strandedPlaces] = leaving
     ? await Promise.all([
         db.beat.findMany({
           where: { workspaceId: ctx.workspaceId, bookId: id, outline: { seriesId: leaving.id } },
@@ -393,8 +394,16 @@ async function seriesChangePlan(ctx: AuthorContext, id: string, seriesId: string
           },
           select: { id: true, name: true },
         }),
+        db.place.findMany({
+          where: {
+            workspaceId: ctx.workspaceId,
+            seriesId: leaving.id,
+            settings: { some: { scene: { bookId: id } } },
+          },
+          select: { id: true, name: true },
+        }),
       ])
-    : [[], [], []];
+    : [[], [], [], []];
   // Story Time: changing series changes the book's timeline (Red).
   const storyTime = book.seriesId === seriesId ? null : await getBookStoryTime(ctx, id);
   const action = !seriesId
@@ -445,11 +454,18 @@ async function seriesChangePlan(ctx: AuthorContext, id: string, seriesId: string
         })),
       },
     ],
-    blockers: strandedCharacters.map((c) => ({
-      title: c.name,
-      href: `/characters/${c.id}`,
-      reason: `${c.name} belongs to “${leaving!.title}” and appears in this book’s scenes. Remove them from those scenes, or keep the book in the series.`,
-    })),
+    blockers: [
+      ...strandedCharacters.map((c) => ({
+        title: c.name,
+        href: `/characters/${c.id}`,
+        reason: `${c.name} belongs to “${leaving!.title}” and appears in this book’s scenes. Remove them from those scenes, or keep the book in the series.`,
+      })),
+      ...strandedPlaces.map((p) => ({
+        title: p.name,
+        href: `/places/${p.id}`,
+        reason: `${p.name} belongs to “${leaving!.title}” and this book’s scenes are set there. Take it out of those scenes, or keep the book in the series.`,
+      })),
+    ],
     extra: [id, seriesId],
   });
   return { book, report, plannedBeats, placements };

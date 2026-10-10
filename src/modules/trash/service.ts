@@ -209,6 +209,24 @@ async function deletionSet(ctx: AuthorContext, roots: { kind: StoryNodeKind; id:
     ).map((t) => ({ id: t.id, title: t.name })),
   );
   add(
+    "PLACE",
+    (
+      await db.place.findMany({
+        where: { workspaceId: ws, id: { in: byKind("PLACE") } },
+        select: { id: true, name: true },
+      })
+    ).map((p) => ({ id: p.id, title: p.name })),
+  );
+  add(
+    "WORLD_ENTRY",
+    (
+      await db.worldEntry.findMany({
+        where: { workspaceId: ws, id: { in: byKind("WORLD_ENTRY") } },
+        select: { id: true, name: true },
+      })
+    ).map((e) => ({ id: e.id, title: e.name })),
+  );
+  add(
     "TIMELINE_EVENT",
     await db.timelineEvent.findMany({
       where: {
@@ -281,10 +299,12 @@ async function deletionReport(
     revisions,
     links,
     appearances,
+    settings,
     placements,
     storyTimes,
     fieldValues,
     keptCharacters,
+    keptWorld,
     scopedFields,
   ] = await Promise.all([
     db.contentRevision.count({ where: { workspaceId: ws, nodeId: { in: all } } }),
@@ -295,6 +315,10 @@ async function deletionReport(
     db.sceneParticipation.findMany({
       where: { workspaceId: ws, OR: [{ sceneId: { in: all } }, { characterId: { in: all } }] },
       select: { sceneId: true, characterId: true },
+    }),
+    db.sceneSetting.findMany({
+      where: { workspaceId: ws, OR: [{ sceneId: { in: all } }, { placeId: { in: all } }] },
+      select: { sceneId: true, placeId: true },
     }),
     db.beatAssignment.count({
       where: {
@@ -312,6 +336,28 @@ async function deletionReport(
       },
       select: { id: true, name: true },
     }),
+    // A series' places and world entries stay too, no longer tied to it.
+    Promise.all([
+      db.place.findMany({
+        where: {
+          workspaceId: ws,
+          seriesId: { in: (doomed.get("SERIES") ?? []).map((s) => s.id) },
+          id: { notIn: all },
+        },
+        select: { id: true, name: true },
+      }),
+      db.worldEntry.findMany({
+        where: {
+          workspaceId: ws,
+          seriesId: { in: (doomed.get("SERIES") ?? []).map((s) => s.id) },
+          id: { notIn: all },
+        },
+        select: { id: true, name: true },
+      }),
+    ]).then(([places, entries]) => [
+      ...places.map((p) => ({ ...p, href: `/places/${p.id}` })),
+      ...entries.map((e) => ({ ...e, href: `/world-entries/${e.id}` })),
+    ]),
     db.fieldDefinition.findMany({
       where: {
         workspaceId: ws,
@@ -340,6 +386,15 @@ async function deletionReport(
   const appearanceOthers = await resolveNodes(
     ctx,
     keptAppearances.map((a) => (doomedSet.has(a.sceneId) ? a.characterId : a.sceneId)),
+  );
+  // Scene settings likewise (M15): a place stays without this scene, a scene
+  // without this place.
+  const keptSettings = settings.filter(
+    (x) => !doomedSet.has(x.sceneId) || !doomedSet.has(x.placeId),
+  );
+  const settingOthers = await resolveNodes(
+    ctx,
+    keptSettings.map((x) => (doomedSet.has(x.sceneId) ? x.placeId : x.sceneId)),
   );
 
   return buildReport({
@@ -374,6 +429,18 @@ async function deletionReport(
         effect: "Removed; the other characters and scenes stay, their text unchanged",
         count: keptAppearances.length,
         items: [...appearanceOthers.values()].map((n) => ({
+          id: n.id,
+          title: n.title,
+          href: n.href,
+        })),
+      },
+      {
+        key: "SETTINGS",
+        label: "Scene settings",
+        noun: { one: "scene setting", many: "scene settings" },
+        effect: "Removed; the other places and scenes stay, their text unchanged",
+        count: keptSettings.length,
+        items: [...settingOthers.values()].map((n) => ({
           id: n.id,
           title: n.title,
           href: n.href,
@@ -440,6 +507,14 @@ async function deletionReport(
           title: c.name,
           href: `/characters/${c.id}`,
         })),
+      },
+      {
+        key: "KEPT_WORLD",
+        label: "Places and world entries of the series",
+        noun: { one: "world object", many: "world objects" },
+        effect: "Stay, no longer tied to a series",
+        affected: false,
+        items: keptWorld.map((w) => ({ id: w.id, title: w.name, href: w.href })),
       },
     ],
   });

@@ -26,7 +26,7 @@ import { fieldLabel, fieldValue, newFieldInput, type NewFieldInput } from "./sch
 export type FieldContext = {
   penNameId: string | null;
   seriesId: string | null;
-  /** Books the object belongs to or appears in (characters: their scenes' books). */
+  /** Books the object belongs to or appears in (characters and places: their scenes' books). */
   bookIds: string[];
 };
 
@@ -74,6 +74,15 @@ export async function fieldContext(ctx: AuthorContext, nodeId: string): Promise<
           ...appearances.map((a) => a.scene.bookId),
         ]),
       ];
+      break;
+    }
+    case "PLACE": {
+      // The books of the scenes set there (M15).
+      const settings = await db.sceneSetting.findMany({
+        where: { workspaceId: ctx.workspaceId, placeId: nodeId },
+        select: { scene: { select: { bookId: true } } },
+      });
+      bookIds = [...new Set(settings.map((s) => s.scene.bookId))];
       break;
     }
     default:

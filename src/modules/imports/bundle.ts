@@ -308,6 +308,30 @@ const trope = z.object({
   ...softDeleted,
 });
 
+/** A place in the story world (version 8). */
+const place = z.object({
+  id,
+  penNameId: id,
+  seriesId: ref,
+  name: title(200),
+  summary: optStr(20_000),
+  ...softDeleted,
+});
+
+/** Anything else in the story world (version 8): the author's own type, never parsed. */
+const worldEntry = z.object({
+  id,
+  penNameId: id,
+  seriesId: ref,
+  entryType: title(60),
+  name: title(200),
+  summary: optStr(20_000),
+  ...softDeleted,
+});
+
+/** Where a scene is set (Scene Setting, version 8). */
+const sceneSetting = z.object({ sceneId: id, placeId: id, createdAt: stamp });
+
 /** A scene's place in Story Time (version 5). */
 const sceneStoryTime = z.object({
   sceneId: id,
@@ -424,7 +448,7 @@ const fieldRevision = z.object({
 
 export const workspaceBundle = z.object({
   /** Format version of the file (upgraded to the current one after parsing). */
-  version: z.number().int().min(1).max(7),
+  version: z.number().int().min(1).max(8),
   /** "standard" backups have no version history; "archive" ones do. */
   kind: z.enum(["standard", "archive"]).optional().default("standard"),
   exportedAt: optDate,
@@ -448,6 +472,8 @@ export const workspaceBundle = z.object({
   chapters: list(chapter),
   scenes: list(scene),
   characters: list(character),
+  places: list(place),
+  worldEntries: list(worldEntry),
   relationships: list(relationship),
   notes: list(note),
   ideas: list(idea),
@@ -458,6 +484,7 @@ export const workspaceBundle = z.object({
   outlineBeats: list(outlineBeat),
   beatScenes: list(beatScene, 1_000_000),
   sceneParticipations: list(sceneParticipation, 1_000_000),
+  sceneSettings: list(sceneSetting, 1_000_000),
   timelineEvents: list(timelineEvent),
   tropes: list(trope),
   sceneStoryTimes: list(sceneStoryTime, 1_000_000),

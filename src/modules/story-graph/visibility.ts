@@ -28,6 +28,10 @@ export const liveScene = {
 
 export const liveCharacter = { deletedAt: null } satisfies Prisma.CharacterWhereInput;
 
+export const livePlace = { deletedAt: null } satisfies Prisma.PlaceWhereInput;
+
+export const liveWorldEntry = { deletedAt: null } satisfies Prisma.WorldEntryWhereInput;
+
 /** A relationship is visible while it and every member are. */
 export const liveRelationship = {
   deletedAt: null,

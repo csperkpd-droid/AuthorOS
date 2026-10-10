@@ -94,6 +94,10 @@ export async function applyPlan(tx: Tx, ctx: AuthorContext, ops: ImportOps) {
   );
   await insert(ops.characters.create, (data) => tx.character.createMany({ data }));
   await update(ops.characters, ({ id, data }) => tx.character.update({ where: { id }, data }));
+  await insert(ops.places.create, (data) => tx.place.createMany({ data }));
+  await update(ops.places, ({ id, data }) => tx.place.update({ where: { id }, data }));
+  await insert(ops.worldEntries.create, (data) => tx.worldEntry.createMany({ data }));
+  await update(ops.worldEntries, ({ id, data }) => tx.worldEntry.update({ where: { id }, data }));
 
   await insert(ops.relationships.create, (data) => tx.relationship.createMany({ data }));
   await insert(ops.relationshipMembers, (data) => tx.relationshipMember.createMany({ data }));
@@ -161,6 +165,8 @@ export async function applyPlan(tx: Tx, ctx: AuthorContext, ops: ImportOps) {
       data: u.data as never,
     });
   }
+
+  await insert(ops.sceneSettings, (data) => tx.sceneSetting.createMany({ data }));
 
   await insert(ops.connections.create, (data) => tx.connection.createMany({ data }));
   await update(ops.connections, ({ id, data }) => tx.connection.update({ where: { id }, data }));
@@ -261,6 +267,8 @@ async function keepTextHistory(tx: Tx, ctx: AuthorContext, ops: ImportOps) {
       };
     },
   );
+  await keep(ops.places, (l) => tx.place.findMany(ids(l)), column("summary"));
+  await keep(ops.worldEntries, (l) => tx.worldEntry.findMany(ids(l)), column("summary"));
   // A beat keeps its description history on itself (M14).
   await keep(ops.outlineBeats, (l) => tx.beat.findMany(ids(l)), column("description"));
 }

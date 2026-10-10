@@ -22,6 +22,8 @@ import {
   liveTimelineEvent,
   liveTrope,
   liveBeat,
+  livePlace,
+  liveWorldEntry,
 } from "./visibility";
 
 /**
@@ -876,6 +878,101 @@ export const KIND_ADAPTERS = {
     },
     // No Trash of its own (lifecycle "remove").
     trash: null,
+  },
+  PLACE: {
+    async load(ctx, { ids, query, take, penNameId }) {
+      const rows = await db.place.findMany({
+        where: {
+          ...scope(ctx, ids),
+          ...livePlace,
+          ...(penNameId ? { penNameId } : {}),
+          name: contains(query),
+        },
+        select: {
+          id: true,
+          name: true,
+          penNameId: true,
+          seriesId: true,
+          series: { select: { title: true } },
+        },
+        ...page(take),
+      });
+      return rows.map((r) => ({
+        id: r.id,
+        kind: "PLACE" as const,
+        title: r.name,
+        context: r.series?.title ?? null,
+        href: `/places/${r.id}`,
+        penNameId: r.penNameId,
+        seriesId: r.seriesId,
+      }));
+    },
+    trash: {
+      async list(ctx) {
+        const rows = await db.place.findMany({
+          where: trashed(ctx),
+          select: { id: true, deletedAt: true, name: true },
+        });
+        return rows.map((r) => ({
+          id: r.id,
+          title: r.name,
+          context: null,
+          deletedAt: trashedAt(r),
+        }));
+      },
+      isListed: async (ctx, id) =>
+        Boolean(await db.place.findFirst({ where: { ...trashed(ctx), id }, select: { id: true } })),
+      restore: async (id) => void (await db.place.update({ where: { id }, ...restore })),
+    },
+  },
+  WORLD_ENTRY: {
+    async load(ctx, { ids, query, take, penNameId }) {
+      const rows = await db.worldEntry.findMany({
+        where: {
+          ...scope(ctx, ids),
+          ...liveWorldEntry,
+          ...(penNameId ? { penNameId } : {}),
+          name: contains(query),
+        },
+        select: {
+          id: true,
+          name: true,
+          entryType: true,
+          penNameId: true,
+          seriesId: true,
+          series: { select: { title: true } },
+        },
+        ...page(take),
+      });
+      return rows.map((r) => ({
+        id: r.id,
+        kind: "WORLD_ENTRY" as const,
+        title: r.name,
+        context: trail(r.entryType, r.series?.title),
+        href: `/world-entries/${r.id}`,
+        penNameId: r.penNameId,
+        seriesId: r.seriesId,
+      }));
+    },
+    trash: {
+      async list(ctx) {
+        const rows = await db.worldEntry.findMany({
+          where: trashed(ctx),
+          select: { id: true, deletedAt: true, name: true, entryType: true },
+        });
+        return rows.map((r) => ({
+          id: r.id,
+          title: r.name,
+          context: r.entryType,
+          deletedAt: trashedAt(r),
+        }));
+      },
+      isListed: async (ctx, id) =>
+        Boolean(
+          await db.worldEntry.findFirst({ where: { ...trashed(ctx), id }, select: { id: true } }),
+        ),
+      restore: async (id) => void (await db.worldEntry.update({ where: { id }, ...restore })),
+    },
   },
 } satisfies Record<StoryNodeKind, KindAdapter>;
 

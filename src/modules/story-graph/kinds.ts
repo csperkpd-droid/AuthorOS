@@ -25,7 +25,7 @@ export type StoryArea = "identity" | "manuscript" | "storyBible" | "structure" |
 /**
  * How an object's author identity (pen name) is determined:
  * - `self`: it is a pen name;
- * - `column`: its own `pen_name_id`;
+ * - `column`: its own `pen_name_id` (characters, places, world entries);
  * - `book`: its book's pen name (parts, chapters, scenes);
  * - `members`: its members' (relationships; members share one pen name);
  * - `owner`: its book's or series' (structures, their beats, timeline events);
@@ -50,7 +50,9 @@ export type BundleKey =
   | "outlines"
   | "timelineEvents"
   | "tropes"
-  | "outlineBeats";
+  | "outlineBeats"
+  | "places"
+  | "worldEntries";
 
 export type StoryObjectType = {
   kind: StoryNodeKind;
@@ -375,6 +377,41 @@ const DEFINITIONS = {
     dated: false,
     bundle: "outlineBeats",
     table: "beats",
+  },
+  PLACE: {
+    label: { one: "Place", many: "Places" },
+    noun: { one: "place", many: "places" },
+    area: "storyBible",
+    // One pen name, optionally one of its series (decision 113), like characters.
+    identity: "column",
+    hierarchy: null,
+    structure: { owner: false, placedOnBeats: false },
+    connectable: true,
+    fieldable: true,
+    search: "title",
+    versioned: false,
+    lifecycle: "trash",
+    movesWithIdentity: true,
+    dated: false,
+    bundle: "places",
+    table: "places",
+  },
+  WORLD_ENTRY: {
+    label: { one: "World entry", many: "World entries" },
+    noun: { one: "world entry", many: "world entries" },
+    area: "storyBible",
+    identity: "column",
+    hierarchy: null,
+    structure: { owner: false, placedOnBeats: false },
+    connectable: true,
+    fieldable: true,
+    search: "title",
+    versioned: false,
+    lifecycle: "trash",
+    movesWithIdentity: true,
+    dated: false,
+    bundle: "worldEntries",
+    table: "world_entries",
   },
 } as const satisfies Record<StoryNodeKind, Entry>;
 

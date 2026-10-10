@@ -41,6 +41,8 @@ import { deleteForever, listTrash, previewDeleteForever, restoreFromTrash } from
 import { addParticipant } from "@/modules/participation";
 import { createTimelineEvent, placeSceneInTime, trashTimelineEvent } from "@/modules/timeline";
 import { addTrope, createTrope, trashTrope } from "@/modules/tropes";
+import { setScenePlace } from "@/modules/setting";
+import { createPlace, createWorldEntry, trashPlace, trashWorldEntry } from "@/modules/world";
 import type { AuthorContext } from "@/server/context";
 
 import { createAuthor, resetDatabase } from "../support/db";
@@ -94,6 +96,13 @@ async function world(): Promise<World> {
   await placeSceneInTime(ctx, scene.id, { afterId: happening.id, label: "Day 1" });
   const trope = await createTrope(ctx, { name: "Trope Slowburn" });
   await addTrope(ctx, book.id, { tropeId: trope.id });
+  const harbour = await createPlace(ctx, { name: "Place Saltmarsh", seriesId: series.id });
+  await setScenePlace(ctx, scene.id, harbour.id);
+  const guild = await createWorldEntry(ctx, {
+    name: "Guild Lanternwrights",
+    entryType: "Organization",
+    seriesId: series.id,
+  });
   return {
     PEN_NAME: { id: pen.id, title: "Rose Hart" },
     SERIES: { id: series.id, title: "Crown of Ash" },
@@ -111,6 +120,8 @@ async function world(): Promise<World> {
     TIMELINE_EVENT: { id: happening.id, title: "Shipwreck" },
     TROPE: { id: trope.id, title: "Trope Slowburn" },
     BEAT: { id: beat.id, title: "Beat Turning point" },
+    PLACE: { id: harbour.id, title: "Place Saltmarsh" },
+    WORLD_ENTRY: { id: guild.id, title: "Guild Lanternwrights" },
   };
 }
 
@@ -131,6 +142,8 @@ const TRASH: Record<StoryNodeKind, ((ctx: AuthorContext, id: string) => Promise<
   TIMELINE_EVENT: trashTimelineEvent,
   TROPE: trashTrope,
   BEAT: null, // removed from its structure with Change Impact, never trashed
+  PLACE: trashPlace,
+  WORLD_ENTRY: trashWorldEntry,
 };
 
 describe("Story Graph integrity, for every kind in the registry", () => {

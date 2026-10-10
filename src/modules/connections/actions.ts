@@ -24,7 +24,7 @@ export async function disconnectAction(id: string) {
  * Picker search for things to connect to `forNodeId`; read-only, so no
  * refresh. Results stay within that object's pen name (or, for shared objects
  * such as notes, the one the author is writing as), and a scene is only
- * offered characters of its own series or none.
+ * offered characters and places of its own series or none.
  */
 export async function searchNodesAction(query: string, kinds: StoryNodeKind[], forNodeId?: string) {
   return runAction(
@@ -42,7 +42,7 @@ export async function searchNodesAction(query: string, kinds: StoryNodeKind[], f
           r.id !== forNodeId &&
           !(
             node?.kind === "SCENE" &&
-            r.kind === "CHARACTER" &&
+            (r.kind === "CHARACTER" || r.kind === "PLACE") &&
             r.seriesId &&
             r.seriesId !== node.seriesId
           ),
