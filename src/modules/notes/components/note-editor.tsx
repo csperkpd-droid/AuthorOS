@@ -20,6 +20,7 @@ export function NoteEditor({
   draftOwner,
   comments,
   canComment,
+  focusCommentId = null,
 }: {
   noteId: string;
   title: string;
@@ -30,6 +31,8 @@ export function NoteEditor({
   /** The note's comments (M16), kept beside the text. */
   comments: ComponentProps<typeof DocumentComments>["initial"];
   canComment: boolean;
+  /** A comment to open the panel on (Review's "Open in text", M17). */
+  focusCommentId?: string | null;
 }) {
   const [value, setValue] = useState(title);
   const rename = useAction(renameNoteAction);
@@ -84,6 +87,7 @@ export function NoteEditor({
             saved={api.saved}
             canComment={canComment}
             thing="note"
+            focusId={focusCommentId}
           />
         )}
       />

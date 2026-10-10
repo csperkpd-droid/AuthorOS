@@ -3,8 +3,17 @@ import "server-only";
 import type { Prisma } from "@/generated/prisma/client";
 import { anchorText, findAnchor, makeAnchor, reanchor, type TextAnchor } from "@/lib/anchors";
 import { db } from "@/lib/db";
-import { ConflictError, NotFoundError } from "@/lib/errors";
-import { liveScene, resolveNode, storyObjectType } from "@/modules/story-graph";
+import { ConflictError, NotFoundError, RuleError } from "@/lib/errors";
+import {
+  liveBook,
+  liveNote,
+  liveScene,
+  resolveNode,
+  resolveNodes,
+  storyObjectType,
+  viewableKinds,
+  type NodeSummary,
+} from "@/modules/story-graph";
 import type { AuthorContext } from "@/server/context";
 import { assertCan, assertCanView } from "@/server/policy";
 
@@ -190,6 +199,131 @@ export async function countCommentsToReview(
     _count: true,
   });
   return Object.fromEntries(counts.map((c) => [c.nodeId, c._count]));
+}
+
+// ─── Review (M17): comments across the workspace ────────────────────────────
+
+export type ReviewState = CommentView["state"];
+
+export type ReviewItem = CommentView & {
+  /** The scene or note, as the read funnel shows it (title, context, link). */
+  document: Pick<NodeSummary, "id" | "kind" | "title" | "context" | "href">;
+  /** The scene's book (null for notes). */
+  book: { id: string; title: string } | null;
+};
+
+export const REVIEW_PAGE_SIZE = 50;
+
+const REVIEW_STATES: readonly ReviewState[] = ["NEEDS_REVIEW", "OPEN", "RESOLVED"];
+
+/**
+ * Which comments Review may show: not deleted, on a scene or note the reader
+ * may view (by kind), that is visible (the Story Graph's own visibility
+ * rules: nothing in the Trash or inside something in the Trash). With a pen
+ * name chosen ("Writing as"), that pen name's scenes; notes are shared and
+ * always included. Null when the reader may view neither kind.
+ */
+function reviewScope(ctx: AuthorContext): Prisma.CommentWhereInput | null {
+  const kinds = viewableKinds(ctx, ["SCENE", "NOTE"]);
+  const pen = ctx.activePenNameId;
+  const documents: Prisma.StoryNodeWhereInput[] = [];
+  if (kinds.includes("SCENE"))
+    documents.push({
+      kind: "SCENE",
+      scene: { is: { ...liveScene, book: { ...liveBook, ...(pen ? { penNameId: pen } : {}) } } },
+    });
+  if (kinds.includes("NOTE")) documents.push({ kind: "NOTE", note: { is: liveNote } });
+  if (!documents.length) return null;
+  return { workspaceId: ctx.workspaceId, deletedAt: null, node: { OR: documents } };
+}
+
+/** "<ISO time>|<id>": the position after which the next page starts. */
+function parseCursor(cursor: string) {
+  const [time, id] = cursor.split("|");
+  const at = new Date(time ?? "");
+  if (Number.isNaN(at.getTime()) || !/^[0-9a-f-]{36}$/i.test(id ?? ""))
+    throw new RuleError("That page of comments can’t be found. Reload Review.");
+  return { at, id: id! };
+}
+
+/** How many comments Review shows in each state (the same scope as the list). */
+export async function countCommentsForReview(
+  ctx: AuthorContext,
+): Promise<Record<ReviewState, number>> {
+  assertCanView(ctx, "any");
+  const counts: Record<ReviewState, number> = { NEEDS_REVIEW: 0, OPEN: 0, RESOLVED: 0 };
+  const scope = reviewScope(ctx);
+  if (!scope) return counts;
+  const rows = await db.comment.groupBy({ by: ["state"], where: scope, _count: true });
+  for (const r of rows) counts[r.state] = r._count;
+  return counts;
+}
+
+/**
+ * One page of the comments in a state, across the workspace's scenes and
+ * notes, newest first (by creation; the id breaks ties, so pages never
+ * repeat or skip a comment that stays in the state). Titles, context and
+ * links come from the read funnel in one batch per page; anything it
+ * doesn't return is left out. Listing never changes a comment or a text.
+ */
+export async function listCommentsForReview(
+  ctx: AuthorContext,
+  {
+    state = "NEEDS_REVIEW",
+    cursor = null,
+    limit = REVIEW_PAGE_SIZE,
+  }: { state?: ReviewState; cursor?: string | null; limit?: number } = {},
+): Promise<{ items: ReviewItem[]; nextCursor: string | null }> {
+  assertCanView(ctx, "any");
+  if (!REVIEW_STATES.includes(state)) throw new RuleError("Choose a Review view.");
+  const scope = reviewScope(ctx);
+  if (!scope) return { items: [], nextCursor: null };
+  const take = Math.min(Math.max(1, limit), 200);
+  const after = cursor ? parseCursor(cursor) : null;
+  const rows = await db.comment.findMany({
+    where: {
+      ...scope,
+      state,
+      ...(after
+        ? {
+            OR: [{ createdAt: { lt: after.at } }, { createdAt: after.at, id: { lt: after.id } }],
+          }
+        : {}),
+    },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+    take: take + 1,
+    select: {
+      ...viewSelect,
+      nodeId: true,
+      node: { select: { scene: { select: { bookId: true } } } },
+    },
+  });
+  const page = rows.slice(0, take);
+  const last = page.at(-1);
+  const nextCursor =
+    rows.length > take && last ? `${last.createdAt.toISOString()}|${last.id}` : null;
+  const bookIds = page.flatMap((r) => (r.node.scene ? [r.node.scene.bookId] : []));
+  const nodes = await resolveNodes(ctx, [...page.map((r) => r.nodeId), ...bookIds]);
+  const items = page.flatMap((r): ReviewItem[] => {
+    const document = nodes.get(r.nodeId);
+    if (!document || (document.kind !== "SCENE" && document.kind !== "NOTE")) return [];
+    const book = r.node.scene ? nodes.get(r.node.scene.bookId) : null;
+    if (r.node.scene && !book) return [];
+    return [
+      {
+        ...toView(r),
+        document: {
+          id: document.id,
+          kind: document.kind,
+          title: document.title,
+          context: document.context,
+          href: document.href,
+        },
+        book: book ? { id: book.id, title: book.title } : null,
+      },
+    ];
+  });
+  return { items, nextCursor };
 }
 
 // ─── Changes ────────────────────────────────────────────────────────────────

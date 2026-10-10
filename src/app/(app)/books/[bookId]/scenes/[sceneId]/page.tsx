@@ -11,6 +11,7 @@ import { getSceneForEditor } from "@/modules/manuscript";
 import { BinderNav, SceneDetails, SceneEditor, trashSceneAction } from "@/modules/manuscript/ui";
 import { RevisionsDialog } from "@/modules/history/ui";
 import { countCommentsToReview, listComments } from "@/modules/comments";
+import { BackToReview } from "@/modules/comments/ui";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
 import { NewNoteDialog } from "@/modules/notes/ui";
@@ -36,8 +37,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: scene.title };
 }
 
-export default async function ScenePage({ params }: Props) {
+export default async function ScenePage({ params, searchParams }: Props) {
   const { bookId, sceneId } = await params;
+  const { comment, from } = await searchParams;
   const ctx = await requireAuthorContext();
   const [
     book,
@@ -77,6 +79,7 @@ export default async function ScenePage({ params }: Props) {
       </aside>
 
       <article className="mx-auto w-full max-w-3xl min-w-0 space-y-4">
+        <BackToReview from={from} />
         <div className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground">
           <p>{location}</p>
           <div className="flex gap-2">
@@ -144,6 +147,7 @@ export default async function ScenePage({ params }: Props) {
           href={`/books/${bookId}/scenes/${scene.id}`}
           comments={comments}
           canComment={can(ctx, "comment", "manuscript")}
+          focusCommentId={typeof comment === "string" ? comment : null}
         />
 
         <nav

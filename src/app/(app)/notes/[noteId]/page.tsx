@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/components/ui/confirm-dialog";
 import { listComments } from "@/modules/comments";
+import { BackToReview } from "@/modules/comments/ui";
 import { listConnections } from "@/modules/connections";
 import { ConnectionsPanel } from "@/modules/connections/ui";
 import { RevisionsDialog } from "@/modules/history/ui";
@@ -23,8 +24,9 @@ export async function generateMetadata({ params }: Props): Promise<Metadata> {
   return { title: note.title };
 }
 
-export default async function NotePage({ params }: Props) {
+export default async function NotePage({ params, searchParams }: Props) {
   const { noteId } = await params;
+  const { comment, from } = await searchParams;
   const ctx = await requireAuthorContext();
   const [note, connections, comments] = await Promise.all([
     orNotFound(getNote(ctx, noteId)),
@@ -34,6 +36,7 @@ export default async function NotePage({ params }: Props) {
 
   return (
     <div className="space-y-8">
+      <BackToReview from={from} />
       <div className="flex items-center justify-between gap-2 text-sm text-muted-foreground">
         <nav aria-label="Breadcrumb">
           <Link href="/notes" className="hover:text-foreground">
@@ -73,6 +76,7 @@ export default async function NotePage({ params }: Props) {
         draftOwner={draftOwner(ctx)}
         comments={comments}
         canComment={can(ctx, "comment", "storyBible")}
+        focusCommentId={typeof comment === "string" ? comment : null}
       />
     </div>
   );

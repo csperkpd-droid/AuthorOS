@@ -115,6 +115,7 @@ export function DocumentComments({
   saved,
   canComment,
   thing,
+  focusId = null,
 }: {
   nodeId: string;
   initial: Comment[];
@@ -124,12 +125,20 @@ export function DocumentComments({
   canComment: boolean;
   /** "scene" or "note", for messages. */
   thing: string;
+  /**
+   * A comment to show on opening (Review's "Open in text", M17): the panel
+   * opens on it and its passage is selected; a comment that needs review
+   * shows its original quote. Ignored when it isn't one of this text's.
+   */
+  focusId?: string | null;
 }) {
   const [comments, setComments] = useState<Comment[]>(initial);
-  const [open, setOpen] = useState(false);
-  const [active, setActive] = useState<string | null>(null);
+  const focused = focusId ? initial.find((c) => c.id === focusId) : undefined;
+  const [open, setOpen] = useState(Boolean(focused));
+  const [active, setActive] = useState<string | null>(focused?.id ?? null);
+  const focusPending = useRef(Boolean(focused));
   const [composing, setComposing] = useState<Selected | null>(null);
-  const [showResolved, setShowResolved] = useState(false);
+  const [showResolved, setShowResolved] = useState(focused?.state === "RESOLVED");
   const [deleted, setDeleted] = useState<{ comment: Comment; token: string } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
@@ -188,6 +197,20 @@ export function DocumentComments({
     document.body.classList.add("comments-open");
     return () => document.body.classList.remove("comments-open");
   }, [open]);
+
+  // Opened on a comment: once the saved text is shown, select its passage
+  // (when it is still anchored) and bring the comment into view.
+  useEffect(() => {
+    if (!focusPending.current || !open || !saved || editor.isDestroyed) return;
+    const c = comments.find((x) => x.id === active);
+    if (!c) return;
+    focusPending.current = false;
+    const range = passageRange(flattenDoc(editor.state.doc), c);
+    if (range) editor.chain().setTextSelection(range).scrollIntoView().run();
+    requestAnimationFrame(() =>
+      document.getElementById(`comment-${c.id}`)?.scrollIntoView({ block: "nearest" }),
+    );
+  }, [editor, comments, active, open, saved]);
 
   const visible = comments.filter((c) => showResolved || c.state !== "RESOLVED");
   const resolvedCount = comments.filter((c) => c.state === "RESOLVED").length;
@@ -479,7 +502,9 @@ function CommentItem({
 
   return (
     <li
+      id={`comment-${c.id}`}
       aria-label={label}
+      aria-current={active ? "true" : undefined}
       data-state={c.state}
       className={cn(
         "space-y-2 rounded-md border p-3",

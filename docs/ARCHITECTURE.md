@@ -79,7 +79,8 @@ the mechanisms. "Not built" marks designed parts with no code yet.
     Excepted.** A state is an observation shown to the author, never an
     automatic fix. Built for beat assignments only (M14, decision 112):
     Current, Potentially Stale, Conflicted, Intentionally Excepted; later
-    milestones extend it. Findings and review are not built.
+    milestones extend it. Findings are not built; Review (M17) lists
+    comments only.
 12. **Change Impact is universal.** Every system that can move, delete,
     detach or affect connected data produces a report through the shared
     builder (Green automatic, Yellow suggested, Red approval required),
@@ -124,7 +125,8 @@ the mechanisms. "Not built" marks designed parts with no code yet.
 21. **Findings are evidence-based observations**, carrying their evidence
     and subjects. A finding is never automatically an error and never a
     change. Not built (`auditGraph()` is a developer check, not a
-    finding).
+    finding). Review (M17, decision 115) lists comments only; findings
+    and finders are a separate, later milestone.
 22. **Work Context.** Temporary detours never lose the author's place.
     **Back** (browser history), **Return to Work** (the exact place being
     worked on) and **Continue Writing** (the latest writing place, on any
@@ -567,8 +569,26 @@ changed since the author started editing), `setCommentResolved`,
 `updateCommentAnchor`, `deleteComment`, `restoreComment`. **Reads:**
 `listComments`, `countCommentsToReview`. Internal: `reanchorComments`
 (inside the text write's transaction). Not built: replies, threads,
-mentions, collaborators' comments (M22), a workspace-wide review page (M17),
-tasks from comments (M18), AI suggestions (M24).
+mentions, collaborators' comments (M22), tasks from comments (M18), AI
+suggestions (M24).
+
+**Review (M17, decision 115).** `/review` lists the workspace's comments in
+one state at a time: Needs review (the default), Open or Resolved, with a
+count for each; reading a view changes nothing. Comments are grouped by book
+(then scene) with notes apart, newest first, 50 at a time with a keyset
+cursor (`created_at`, `id`) so paging never repeats or skips. The query
+(`listCommentsForReview`, `countCommentsForReview`) applies the Story Graph
+visibility rules and the kinds the reader may view (`viewableKinds`) inside
+the comment filter, so comments of documents in the Trash are left out and
+return with them; titles and links come from one `resolveNodes` batch per
+page, and anything it doesn't resolve is dropped. Writing as a pen name
+shows that pen name's scenes and every (shared) note, once. Resolve, Reopen
+and Delete with Undo are M16's actions; attaching a comment to new text
+happens only in the editor: **Open in text** goes to the scene or note with
+`?comment=` (the panel opens on the comment and selects its passage when it
+is still anchored) and `from=` (a "Back to Review" link to that view). Work
+Context is unchanged: Review is a detour, so Return to Work keeps meaning the
+author's writing place, and Back is the browser's. No sidebar badge.
 
 ## World objects (M15)
 
@@ -984,7 +1004,8 @@ re-placed or inferred from the text. The board shows placements that
 aren't current as calm notes ("No longer fits", "Scene in the Trash",
 "Kept intentionally") with "Keep intentionally" and "Remove placement";
 progress counts current and kept placements. Validity is limited to beat
-assignments; Findings and Review are a later milestone.
+assignments; findings are a later milestone (Review, M17, lists comments
+only).
 
 **Series structures (M4).** An outline belongs to exactly one book _or_ one
 series (database CHECK). A series structure, such as a series-long romance

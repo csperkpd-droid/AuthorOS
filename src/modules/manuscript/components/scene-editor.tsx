@@ -21,6 +21,7 @@ export function SceneEditor({
   href,
   comments,
   canComment,
+  focusCommentId = null,
 }: {
   sceneId: string;
   content: Doc | null;
@@ -34,6 +35,8 @@ export function SceneEditor({
   /** The scene's comments (M16), kept beside the text. */
   comments: ComponentProps<typeof DocumentComments>["initial"];
   canComment: boolean;
+  /** A comment to open the panel on (Review's "Open in text", M17). */
+  focusCommentId?: string | null;
 }) {
   const save = useCallback(
     (doc: Doc, baseVersion: number) => saveSceneContentAction(sceneId, doc, baseVersion),
@@ -68,6 +71,7 @@ export function SceneEditor({
           saved={api.saved}
           canComment={canComment}
           thing="scene"
+          focusId={focusCommentId}
         />
       )}
     />

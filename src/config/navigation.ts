@@ -6,6 +6,7 @@ import {
   LayoutDashboard,
   Library,
   Lightbulb,
+  MessageSquareText,
   MapPin,
   Orbit,
   Rocket,
@@ -66,6 +67,13 @@ export const navigation: NavGroup[] = [
         href: "/search",
         icon: Search,
         description: "Find anything: words in scenes and notes, characters, books, structures.",
+        availability: { status: "available" },
+      },
+      {
+        label: "Review",
+        href: "/review",
+        icon: MessageSquareText,
+        description: "Comments across your scenes and notes, and the ones that need review.",
         availability: { status: "available" },
       },
       {

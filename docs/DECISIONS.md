@@ -999,6 +999,64 @@ writing is only on this device; the server ends the session on the next
 request (`/sign-out`). Nothing is uploaded on the way out and nothing is
 deleted.
 
+## Milestone 17 (Review — comments)
+
+### 115. Review lists comments only; findings are a separate milestone — Accepted (M17)
+
+Plan M17 ("Findings and Review") is split. **M17 builds Review for
+comments**; findings storage and the first automatic finders (beat
+placement, story-time conflicts, missing point of view, stale beats) are a
+separate milestone, planned with no number yet. Review is useful now
+because M16 comments need review when their text changes, and findings
+need their own design (evidence, subjects, lifecycle) that a comment list
+shouldn't presuppose. M18 and later keep their numbers.
+
+- **One page, three views.** `/review` (in the Write section of the
+  navigation) shows Needs review (default), Open or Resolved, one state at a
+  time, with counts on the page. Switching views changes nothing. No sidebar
+  badge and no query on other pages; the binder's per-scene counts are
+  unchanged.
+- **Reads through the funnel.** `listCommentsForReview` and
+  `countCommentsForReview` (`view`, any area) filter comments by the Story
+  Graph visibility rules (`liveScene` with its book, `liveNote`) and the
+  kinds the reader may view, scoped to the workspace; titles, contexts and
+  links come from `resolveNodes` (one batch per page), and an item it
+  doesn't resolve is dropped, never shown with a placeholder. Comments of a
+  document in the Trash are left out and come back with it; deleted
+  comments never appear.
+- **Writing as.** A pen name shows its books' scenes and all notes (notes
+  are shared); all identities shows everything; a note's comment appears
+  once.
+- **Actions are M16's** (Resolve, Reopen, Delete with Undo, the same
+  permissions and tokens). Review never re-attaches: **Open in text** opens
+  the scene or note with the panel on the comment (its passage selected
+  when still anchored; otherwise the original quote and its state) and
+  re-attaching is "Attach to selection" there. Links carry only the comment
+  id and the view name.
+- **Work Context.** Review is a detour: Return to Work still means the
+  author's writing place (the work stack holds documents, decision 107), so
+  opening a comment from Review doesn't replace it. The way back to Review
+  is a "Back to Review" link to the view it came from (validated against
+  the three names) and the browser's Back. Rejected: making Review a Work
+  Context entry (a second navigation history).
+- **Paging and performance.** Newest first, keyset cursor
+  (`created_at|id`), 50 per page (at most 200), so a page never repeats or
+  skips a comment, also when comments share a timestamp or change while
+  paging. Target set before measuring: first page and counts each ≤ 100 ms
+  p95 on a local database with 5,000 comments. Measured
+  (`pnpm bench:review`: 5,000 comments over 200 scenes and 50 notes, 2% of
+  them deleted, plus 5,000 in another workspace; Postgres 16, 4 cores, 30
+  runs after a warm-up, three runs): first page p95 16–27 ms, later pages
+  p95 17–20 ms, counts p95 5–7 ms; the list query executes in about 3 ms
+  (`comments_workspace_id_idx`, hash joins, top-N sort). Each page takes a
+  fixed number of statements (one per kind the funnel resolves, at most
+  12, for 50 or 200 comments). **No new index:** the plan doesn't need
+  one. Right after a bulk load, before the table has statistics, the
+  planner chose a nested loop (about 300 ms); autovacuum's analyze removes
+  that, and the benchmark analyzes after seeding.
+- **Not here:** findings, finders, replies and threads, tasks from comments
+  (M18), AI, automatic re-attachment, a sidebar badge.
+
 ## Milestone 16 (Comments with external anchors)
 
 ### 114. Comments are built with external anchors in one table — Accepted (M16)

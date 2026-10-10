@@ -4,10 +4,12 @@ import { runAction } from "@/server/action";
 import { requireAuthorContext } from "@/server/context";
 
 import type { AnchorInput, NewCommentInput } from "./schemas";
+import type { ReviewState } from "./service";
 import {
   addComment,
   deleteComment,
   listComments,
+  listCommentsForReview,
   restoreComment,
   setCommentResolved,
   updateCommentAnchor,
@@ -47,4 +49,12 @@ export async function deleteCommentAction(id: string) {
 
 export async function restoreCommentAction(id: string, deletedAt: string) {
   return runAction(async () => restoreComment(await requireAuthorContext(), id, deletedAt));
+}
+
+/** The next page of Review (M17); reading only. */
+export async function listCommentsForReviewAction(state: ReviewState, cursor: string) {
+  return runAction(
+    async () => listCommentsForReview(await requireAuthorContext(), { state, cursor }),
+    quiet,
+  );
 }
