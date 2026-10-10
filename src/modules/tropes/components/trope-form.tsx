@@ -22,21 +22,31 @@ export function TropeForm({
 }) {
   const save = useAction(updateTropeAction);
   const [saved, setSaved] = useState(false);
-  // When the stored description changes from elsewhere (restoring an earlier
-  // version), show it; after the author's own save the field already matches.
+  // When the stored trope changes from elsewhere (restoring an earlier
+  // version), show its description; after the author's own save the field
+  // already matches. Only while the field still shows the last stored or
+  // saved text: a refresh that arrives after the author started typing again
+  // never replaces their words.
   const description = useRef<HTMLTextAreaElement>(null);
+  const shown = useRef(trope.description ?? "");
   useEffect(() => {
     const field = description.current;
-    if (field && field.value !== (trope.description ?? "")) field.value = trope.description ?? "";
-  }, [trope.description]);
+    const stored = trope.description ?? "";
+    if (field && field.value === shown.current) field.value = stored;
+    shown.current = stored;
+  }, [trope.description, trope.updatedAt]);
   return (
     <form
       className="max-w-prose space-y-3"
       onSubmit={async (e) => {
         e.preventDefault();
         setSaved(false);
-        const result = await save.run(trope.id, new FormData(e.currentTarget));
-        if (result.ok) setSaved(true);
+        const data = new FormData(e.currentTarget);
+        const result = await save.run(trope.id, data);
+        if (result.ok) {
+          shown.current = String(data.get("description") ?? "");
+          setSaved(true);
+        }
       }}
     >
       <input type="hidden" name="updatedAt" value={trope.updatedAt} />
