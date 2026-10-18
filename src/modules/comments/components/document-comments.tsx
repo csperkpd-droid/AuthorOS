@@ -25,6 +25,7 @@ import {
   updateCommentBodyAction,
 } from "../actions";
 import type { CommentView } from "../service";
+import { MakeTaskButton } from "./make-task";
 
 type Comment = Omit<CommentView, "createdAt" | "updatedAt"> & {
   createdAt: Date | string;
@@ -116,6 +117,7 @@ export function DocumentComments({
   canComment,
   thing,
   focusId = null,
+  canMakeTask = false,
 }: {
   nodeId: string;
   initial: Comment[];
@@ -131,6 +133,8 @@ export function DocumentComments({
    * shows its original quote. Ignored when it isn't one of this text's.
    */
   focusId?: string | null;
+  /** Planning edit rights: "Make a task" from a comment (M18). */
+  canMakeTask?: boolean;
 }) {
   const [comments, setComments] = useState<Comment[]>(initial);
   const focused = focusId ? initial.find((c) => c.id === focusId) : undefined;
@@ -384,6 +388,8 @@ export function DocumentComments({
                       comment={c}
                       active={c.id === active}
                       canComment={canComment}
+                      canMakeTask={canMakeTask}
+                      thing={thing}
                       pending={pending}
                       onShow={() => show(c)}
                       onEdit={async (body) => {
@@ -478,6 +484,8 @@ function CommentItem({
   comment: c,
   active,
   canComment,
+  canMakeTask,
+  thing,
   pending,
   onShow,
   onEdit,
@@ -488,6 +496,8 @@ function CommentItem({
   comment: Comment;
   active: boolean;
   canComment: boolean;
+  canMakeTask: boolean;
+  thing: string;
   pending: boolean;
   onShow: () => void;
   onEdit: (body: string) => Promise<boolean>;
@@ -575,9 +585,9 @@ function CommentItem({
       ) : (
         <p className="break-words whitespace-pre-wrap">{c.body}</p>
       )}
-      {canComment && !editing && (
+      {(canComment || canMakeTask) && !editing && (
         <div className="flex flex-wrap gap-1">
-          {review && (
+          {canComment && review && (
             <Button
               size="sm"
               variant="outline"
@@ -588,26 +598,33 @@ function CommentItem({
               Attach to selection
             </Button>
           )}
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={pending}
-            onClick={() => void onResolve(c.state !== "RESOLVED")}
-          >
-            {c.state === "RESOLVED" ? "Reopen" : "Resolve"}
-          </Button>
-          <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
-            Edit
-          </Button>
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-destructive"
-            disabled={pending}
-            onClick={() => void onDelete()}
-          >
-            Delete
-          </Button>
+          {canComment && (
+            <>
+              <Button
+                size="sm"
+                variant="ghost"
+                disabled={pending}
+                onClick={() => void onResolve(c.state !== "RESOLVED")}
+              >
+                {c.state === "RESOLVED" ? "Reopen" : "Resolve"}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setEditing(true)}>
+                Edit
+              </Button>
+            </>
+          )}
+          {canMakeTask && <MakeTaskButton commentId={c.id} body={c.body} thing={thing} />}
+          {canComment && (
+            <Button
+              size="sm"
+              variant="ghost"
+              className="text-destructive"
+              disabled={pending}
+              onClick={() => void onDelete()}
+            >
+              Delete
+            </Button>
+          )}
         </div>
       )}
     </li>

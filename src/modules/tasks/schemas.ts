@@ -23,3 +23,9 @@ export const taskInput = z.object({
 export type TaskInput = z.input<typeof taskInput>;
 
 export const taskStatus = z.enum(TaskStatus);
+
+/** A day to move a task to, or null for "No date". */
+export const dueDate = z
+  .string()
+  .nullable()
+  .refine((v) => v === null || isDateString(v), "Use a valid date.");

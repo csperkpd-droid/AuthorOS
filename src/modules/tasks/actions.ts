@@ -5,7 +5,7 @@ import { runAction } from "@/server/action";
 import { requireAuthorContext } from "@/server/context";
 
 import type { TaskInput } from "./schemas";
-import { createTask, setTaskStatus, trashTask, updateTask } from "./service";
+import { createTask, setTaskDueDate, setTaskStatus, trashTask, updateTask } from "./service";
 
 export async function createTaskAction(input: TaskInput & { concernsId?: string | null }) {
   return runAction(async () => createTask(await requireAuthorContext(), input));
@@ -19,6 +19,11 @@ export async function updateTaskAction(id: string, input: TaskInput, expectedUpd
 
 export async function setTaskStatusAction(id: string, status: TaskStatus) {
   return runAction(async () => setTaskStatus(await requireAuthorContext(), id, status));
+}
+
+/** Week (M18): a new due date, or null for "No date". */
+export async function setTaskDueDateAction(id: string, date: string | null) {
+  return runAction(async () => setTaskDueDate(await requireAuthorContext(), id, date));
 }
 
 export async function trashTaskAction(id: string) {

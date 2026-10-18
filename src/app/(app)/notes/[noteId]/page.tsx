@@ -77,6 +77,7 @@ export default async function NotePage({ params, searchParams }: Props) {
         comments={comments}
         canComment={can(ctx, "comment", "storyBible")}
         focusCommentId={typeof comment === "string" ? comment : null}
+        canMakeTask={can(ctx, "edit", "planning")}
       />
     </div>
   );

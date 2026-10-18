@@ -63,6 +63,12 @@ export function startOfMonthGrid(month: string): DateString {
   return addDays(`${month}-01`, -weekday);
 }
 
+/** The Monday on or before a date: the first day of its week. */
+export function startOfWeek(date: DateString): DateString {
+  const weekday = (toDbDate(date).getUTCDay() + 6) % 7; // Monday = 0
+  return addDays(date, -weekday);
+}
+
 /** "2026-10" for a date. */
 export function monthOf(date: DateString): string {
   return date.slice(0, 7);

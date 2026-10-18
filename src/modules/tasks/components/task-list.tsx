@@ -89,6 +89,7 @@ export function TaskList({
                 )}
               </div>
               <div className="flex shrink-0 flex-wrap justify-end gap-1">
+                {t.status === "IN_PROGRESS" && !done && <Badge>In progress</Badge>}
                 {t.priority === "HIGH" && !done && (
                   <Badge className="bg-secondary text-primary">High</Badge>
                 )}

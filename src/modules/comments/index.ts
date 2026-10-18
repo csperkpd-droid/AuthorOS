@@ -3,6 +3,7 @@ export {
   countCommentsToReview,
   deleteComment,
   countCommentsForReview,
+  createTaskFromComment,
   listComments,
   listCommentsForReview,
   reanchorComments,

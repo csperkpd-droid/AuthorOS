@@ -1001,7 +1001,7 @@ deleted.
 
 ## Milestone 18 (Task views)
 
-### 116. Task views are views over the one tasks table; tasks can come from comments — Accepted (M18, not built)
+### 116. Task views are views over the one tasks table; tasks can come from comments — Accepted (M18)
 
 Decided before M18 is implemented (decisions A–R approved by the author).
 Builds invariant 17 (one Task system) with the existing `tasks` table and
@@ -1050,6 +1050,35 @@ or index, and export format 9 is unchanged.
 - **Not here:** tasks from findings, manual order, custom columns, a
   planned-for date, recurrence, times and reminders, assignees, the Life
   Planner (M23), publishing workflows (M21), AI (M24).
+
+**Addendum (built in M18).** Details settled while building, within the
+decisions above:
+
+- **Every open task shows once in Week.** An open task due before today is
+  in the Overdue tray, not on its past day (also when that day is in the
+  week shown); finished tasks stay on their day. The No date tray holds
+  open undated tasks and undated tasks finished in the last 14 days, so a
+  finished task moved to No date doesn't disappear.
+- **Today** is overdue and due-today open tasks plus every task in
+  progress, in the List's order.
+- **Services:** `listTaskBoard`, `listTasksForToday`, `setTaskDueDate`
+  (planning edit, single field) in `tasks`; `taskWeek` in `calendar` (it
+  reuses `calendarRange` for events and deadlines); `createTaskFromComment`
+  in `comments` (planning edit first, then the comment through
+  `requireComment`, then `createTask` with the document as `concerns`).
+- **Moves:** the Board and Week share one lane component: a drag handle
+  (mouse, touch, or keyboard Space, arrows from lane to lane, Space) and a
+  "Move to" menu on every card; handles are hidden on phones. The last
+  view is remembered per device under `spellbound:task-view` (only plain
+  `/tasks` opens it).
+- **Performance** (`pnpm bench:tasks`, target set before measuring: each
+  view ≤ 100 ms p95 locally): 2,000 tasks (a quarter done, half concerning
+  a scene) plus 2,000 in another workspace, Postgres 16, 30 runs after a
+  warm-up, three runs: Board p95 55–72 ms, Week 35–38 ms, Today 25–27 ms,
+  List 34–49 ms. Statements per view are fixed (Board 6, Week 26, Today 6);
+  the task query uses `tasks_workspace_id_due_on_idx` and executes in
+  about 2–3 ms, the rest is building 1,500 cards. **No new index**; no
+  migration; export format stays 9.
 
 ## Milestone 17 (Review — comments)
 

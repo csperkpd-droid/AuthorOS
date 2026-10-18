@@ -9,6 +9,7 @@ import {
 import { ReviewList } from "@/modules/comments/ui";
 import { getPenName } from "@/modules/pen-names";
 import { requireAuthorContext } from "@/server/context";
+import { can } from "@/server/policy";
 
 export const metadata: Metadata = { title: "Review" };
 
@@ -41,6 +42,7 @@ export default async function ReviewPage({ searchParams }: PageProps<"/review">)
         }
       />
       <ReviewList
+        canMakeTask={can(ctx, "edit", "planning")}
         key={`${state}:${ctx.activePenNameId ?? "all"}`}
         state={state}
         counts={counts}

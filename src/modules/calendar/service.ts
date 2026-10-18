@@ -1,6 +1,14 @@
 import "server-only";
 
-import { addDays, fromDbDate, startOfMonthGrid, toDbDate, type DateString } from "@/lib/dates";
+import {
+  addDays,
+  fromDbDate,
+  isDateString,
+  startOfMonthGrid,
+  startOfWeek,
+  toDbDate,
+  type DateString,
+} from "@/lib/dates";
 import { db } from "@/lib/db";
 import { assertNotStale, staleError, type EditGuard } from "@/lib/concurrency";
 import { NotFoundError, RuleError } from "@/lib/errors";
@@ -14,7 +22,7 @@ import {
   resolveNodes,
   storyObjectType,
 } from "@/modules/story-graph";
-import { listTasks } from "@/modules/tasks";
+import { BOARD_DONE_DAYS, listTasks, type TaskView } from "@/modules/tasks";
 import type { AuthorContext } from "@/server/context";
 import { recordFieldHistory } from "@/modules/history";
 import { assertCan, assertCanView } from "@/server/policy";
@@ -243,6 +251,63 @@ export async function calendarMonth(
   const weekday = (toDbDate(last).getUTCDay() + 6) % 7;
   const to = addDays(last, 6 - weekday);
   return { month: m, days: await calendarRange(ctx, { from, to, penNameId }) };
+}
+
+export type WeekDay = {
+  date: DateString;
+  tasks: TaskView[];
+  /** Events and deadlines on this day: read-only context in Week. */
+  entries: Exclude<CalendarEntry, { type: "task" }>[];
+};
+
+export type TaskWeek = {
+  /** The Monday the week starts on. */
+  start: DateString;
+  days: WeekDay[];
+  /** Every open task due before today (not repeated on its day). */
+  overdue: TaskView[];
+  /** Tasks without a due date: open ones, and those finished in the last 14 days. */
+  undated: TaskView[];
+};
+
+/**
+ * Week (M18, decision 116): seven days from Monday with the tasks due on
+ * each (a task's day is its due date), the calendar's events and deadlines
+ * as read-only context (deadlines follow "Writing as" as on the calendar;
+ * tasks never do), and trays for overdue and undated open tasks: an open
+ * task due before today is in Overdue, not on its past day, so every open
+ * task shows exactly once. `today` is the author's own day.
+ */
+export async function taskWeek(
+  ctx: AuthorContext,
+  { weekOf, today, penNameId }: { weekOf: DateString; today: DateString; penNameId: string | null },
+): Promise<TaskWeek> {
+  assertCanView(ctx, "planning");
+  if (!isDateString(weekOf)) throw new RuleError("Use a valid date.");
+  const start = startOfWeek(weekOf);
+  const end = addDays(start, 6);
+  const [range, tasks, overdue, undated] = await Promise.all([
+    calendarRange(ctx, { from: start, to: end, penNameId }),
+    listTasks(ctx, { status: "all", dueFrom: start, dueTo: end }),
+    listTasks(ctx, { status: "open", dueTo: addDays(today, -1) }),
+    listTasks(ctx, {
+      status: "all",
+      undated: true,
+      completedSince: new Date(Date.now() - BOARD_DONE_DAYS * 86_400_000),
+    }),
+  ]);
+  return {
+    start,
+    days: range.map((d) => ({
+      date: d.date,
+      tasks: tasks.filter((t) => t.dueOn === d.date && !(t.status !== "DONE" && t.dueOn < today)),
+      entries: d.entries.filter(
+        (e): e is Exclude<CalendarEntry, { type: "task" }> => e.type !== "task",
+      ),
+    })),
+    overdue,
+    undated,
+  };
 }
 
 /** What's coming up: the next `days` days that have something on them. */

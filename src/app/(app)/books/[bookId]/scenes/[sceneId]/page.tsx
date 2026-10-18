@@ -148,6 +148,7 @@ export default async function ScenePage({ params, searchParams }: Props) {
           comments={comments}
           canComment={can(ctx, "comment", "manuscript")}
           focusCommentId={typeof comment === "string" ? comment : null}
+          canMakeTask={can(ctx, "edit", "planning")}
         />
 
         <nav

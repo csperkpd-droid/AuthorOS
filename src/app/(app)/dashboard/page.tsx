@@ -16,6 +16,8 @@ import { listRecentScenes } from "@/modules/manuscript";
 import { getActivePenName } from "@/modules/pen-names";
 import { bookPace, writingStats } from "@/modules/progress";
 import { BookPaceList, DailyGoalDialog, LogWordsDialog, WordsChart } from "@/modules/progress/ui";
+import { listTasksForToday } from "@/modules/tasks";
+import { TaskList } from "@/modules/tasks/ui";
 import { getWritingPlace } from "@/modules/work-context";
 import { ContinueWritingButton } from "@/modules/work-context/ui";
 import { getWorkspace } from "@/modules/workspaces";
@@ -49,7 +51,10 @@ export default async function DashboardPage() {
           anchor: null,
         }
       : null;
-  const soon = await upcoming(ctx, { from: stats.today, days: 7, penNameId });
+  const [soon, todayTasks] = await Promise.all([
+    upcoming(ctx, { from: stats.today, days: 7, penNameId }),
+    listTasksForToday(ctx, stats.today),
+  ]);
   const books = [...library.series.flatMap((s) => s.books), ...library.standalone].map((b) => ({
     id: b.id,
     title: b.title,
@@ -102,9 +107,27 @@ export default async function DashboardPage() {
         </section>
       )}
 
-      <section aria-labelledby="today-heading" className="space-y-4">
-        <h2 id="today-heading" className="sr-only">
-          Today
+      <section aria-labelledby="today-heading" className="space-y-3">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="today-heading" className="text-lg font-semibold">
+            Today
+          </h2>
+          <Link href="/tasks?view=week" className="text-sm text-primary hover:underline">
+            This week’s tasks →
+          </Link>
+        </div>
+        {todayTasks.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nothing overdue, due today or in progress.
+          </p>
+        ) : (
+          <TaskList tasks={todayTasks} today={stats.today} label="Tasks for today" />
+        )}
+      </section>
+
+      <section aria-labelledby="writing-heading" className="space-y-4">
+        <h2 id="writing-heading" className="sr-only">
+          Writing today
         </h2>
         <div className="grid gap-4 sm:grid-cols-3">
           <Card>

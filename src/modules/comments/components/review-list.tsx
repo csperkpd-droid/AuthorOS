@@ -9,6 +9,8 @@ import { Button } from "@/components/ui/button";
 import { FormError } from "@/components/ui/field";
 import { cn } from "@/lib/utils";
 
+import { MakeTaskButton } from "./make-task";
+
 import {
   deleteCommentAction,
   listCommentsForReviewAction,
@@ -96,11 +98,14 @@ export function ReviewList({
   counts,
   initial,
   initialCursor,
+  canMakeTask = false,
 }: {
   state: ReviewState;
   counts: Record<ReviewState, number>;
   initial: Item[];
   initialCursor: string | null;
+  /** Planning edit rights: "Make a task" from a comment (M18). */
+  canMakeTask?: boolean;
 }) {
   const [items, setItems] = useState<Item[]>(initial);
   const [cursor, setCursor] = useState(initialCursor);
@@ -257,6 +262,7 @@ export function ReviewList({
                         item={item}
                         href={textHref(item, view.slug)}
                         busy={pending === item.id}
+                        canMakeTask={canMakeTask}
                         onResolve={(resolved) =>
                           act(item, () => setCommentResolvedAction(item.id, resolved))
                         }
@@ -295,12 +301,14 @@ function ReviewEntry({
   item,
   href,
   busy,
+  canMakeTask,
   onResolve,
   onDelete,
 }: {
   item: Item;
   href: string;
   busy: boolean;
+  canMakeTask: boolean;
   onResolve: (resolved: boolean) => Promise<boolean>;
   onDelete: () => Promise<void>;
 }) {
@@ -349,6 +357,13 @@ function ReviewEntry({
         >
           {item.state === "RESOLVED" ? "Reopen" : "Resolve"}
         </Button>
+        {canMakeTask && (
+          <MakeTaskButton
+            commentId={item.id}
+            body={item.body}
+            thing={item.document.kind === "NOTE" ? "note" : "scene"}
+          />
+        )}
         <Button
           size="sm"
           variant="ghost"

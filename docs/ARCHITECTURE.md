@@ -109,7 +109,8 @@ the mechanisms. "Not built" marks designed parts with no code yet.
     thereby current. Not built.
 17. **One Task system.** Planner, Kanban, Home, Publishing, Marketing and
     Review are views and workflows over the one `tasks` table; there is no
-    second task store.
+    second task store. Built for the List, Board, Week and the Dashboard's
+    Today (M18, decision 116).
 18. **Story Time ≠ real-world time.** Fictional story time is separate
     from the author's planner time, publication dates and version
     timestamps. The calendar and writing progress are real-world time.
@@ -569,8 +570,11 @@ changed since the author started editing), `setCommentResolved`,
 `updateCommentAnchor`, `deleteComment`, `restoreComment`. **Reads:**
 `listComments`, `countCommentsToReview`. Internal: `reanchorComments`
 (inside the text write's transaction). Not built: replies, threads,
-mentions, collaborators' comments (M22), tasks from comments (M18), AI
-suggestions (M24).
+mentions, collaborators' comments (M22), AI suggestions (M24). **Tasks
+from comments (M18):** "Make a task" in the comments panel and on Review
+creates a task concerning the comment's scene or note, titled from the
+comment's text (editable); the quoted passage is never copied, nothing
+links the task to the comment, and neither changes the other.
 
 **Review (M17, decision 115).** `/review` lists the workspace's comments in
 one state at a time: Needs review (the default), Open or Resolved, with a
@@ -1190,9 +1194,20 @@ Planner roadmap; the model takes them as new columns, not a new table.
   don't count. Authors can also log words written elsewhere. "Today" is the
   author's own day (`users.time_zone`, detected from the browser once,
   changeable in Settings).
-- **The dashboard** shows words today against the daily goal, the streak,
-  the last 30 days, the next 7 days, and each book's pace toward its target
+- **The dashboard** shows Today (overdue and due-today open tasks, and
+  tasks in progress), words today against the daily goal, the streak, the
+  last 30 days, the next 7 days, and each book's pace toward its target
   and deadline.
+- **Task views (M18, decision 116)** are tabs of `/tasks` (`?view=list`,
+  `board`, `week`; plain `/tasks` opens the view last used on this device).
+  The **Board** has the three statuses as fixed columns in the List's order
+  (due date, priority, creation); Done holds the last 14 days. The **Week**
+  runs Monday to Sunday in the author's time zone: a task's day is its due
+  date, moving it changes the due date (No date clears it); events and
+  deadlines show as read-only context (deadlines follow "Writing as");
+  Overdue and No date trays. Moves are single-field updates (status or due
+  date; the last wins), by dragging or a "Move to" menu; phones use menus
+  and one Board column at a time. Tasks are never filtered by "Writing as".
 
 **Shared editor.** `components/editor/rich-text-editor.tsx` provides
 autosave, Ctrl/Cmd+S, the leave-page warning and conflict protection for any

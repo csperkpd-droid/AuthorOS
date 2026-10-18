@@ -9,6 +9,7 @@ import {
   isValidTimeZone,
   localDate,
   startOfMonthGrid,
+  startOfWeek,
   toDbDate,
 } from "./dates";
 
@@ -30,6 +31,13 @@ describe("dates", () => {
     expect(daysBetween("2026-10-01", "2026-10-31")).toBe(30);
     expect(addMonths("2026-12", 1)).toBe("2027-01");
     expect(addMonths("2026-01", -1)).toBe("2025-12");
+  });
+
+  it("starts weeks on Monday, across months and years", () => {
+    expect(startOfWeek("2026-10-18")).toBe("2026-10-12"); // a Sunday
+    expect(startOfWeek("2026-10-12")).toBe("2026-10-12"); // a Monday
+    expect(startOfWeek("2027-01-01")).toBe("2026-12-28"); // a Friday
+    expect(startOfWeek("2026-03-29")).toBe("2026-03-23"); // clocks change in Europe
   });
 
   it("starts month grids on Monday", () => {

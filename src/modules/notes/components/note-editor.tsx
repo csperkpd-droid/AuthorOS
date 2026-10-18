@@ -21,6 +21,7 @@ export function NoteEditor({
   comments,
   canComment,
   focusCommentId = null,
+  canMakeTask = false,
 }: {
   noteId: string;
   title: string;
@@ -33,6 +34,8 @@ export function NoteEditor({
   canComment: boolean;
   /** A comment to open the panel on (Review's "Open in text", M17). */
   focusCommentId?: string | null;
+  /** "Make a task" from a comment (M18): planning edit rights. */
+  canMakeTask?: boolean;
 }) {
   const [value, setValue] = useState(title);
   const rename = useAction(renameNoteAction);
@@ -88,6 +91,7 @@ export function NoteEditor({
             canComment={canComment}
             thing="note"
             focusId={focusCommentId}
+            canMakeTask={canMakeTask}
           />
         )}
       />

@@ -14,6 +14,7 @@ import {
   viewableKinds,
   type NodeSummary,
 } from "@/modules/story-graph";
+import { createTask } from "@/modules/tasks";
 import type { AuthorContext } from "@/server/context";
 import { assertCan, assertCanView } from "@/server/policy";
 
@@ -559,4 +560,25 @@ export async function reanchorComments(
     if (Object.keys(change).length)
       await tx.comment.update({ where: { id: row.id }, data: change as never });
   }
+}
+
+// ─── Tasks from comments (M18) ──────────────────────────────────────────────
+
+/**
+ * "Make a task" (M18, decision 116): a task concerning the comment's scene
+ * or note, with the title the author chose (prefilled from the comment's
+ * text). Planning edit rights, and the comment must be visible: a comment
+ * the reader can't see, or a deleted one, is not found. The quoted passage
+ * is never copied and nothing links the task to the comment; the comment
+ * itself is not changed.
+ */
+export async function createTaskFromComment(
+  ctx: AuthorContext,
+  commentId: string,
+  { title }: { title: string },
+) {
+  assertCan(ctx, "edit", "planning");
+  const comment = await requireComment(ctx, commentId);
+  if (comment.deletedAt) throw new NotFoundError("Comment");
+  return createTask(ctx, { title, concernsId: comment.nodeId });
 }

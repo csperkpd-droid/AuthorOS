@@ -22,6 +22,7 @@ export function SceneEditor({
   comments,
   canComment,
   focusCommentId = null,
+  canMakeTask = false,
 }: {
   sceneId: string;
   content: Doc | null;
@@ -37,6 +38,8 @@ export function SceneEditor({
   canComment: boolean;
   /** A comment to open the panel on (Review's "Open in text", M17). */
   focusCommentId?: string | null;
+  /** "Make a task" from a comment (M18): planning edit rights. */
+  canMakeTask?: boolean;
 }) {
   const save = useCallback(
     (doc: Doc, baseVersion: number) => saveSceneContentAction(sceneId, doc, baseVersion),
@@ -72,6 +75,7 @@ export function SceneEditor({
           canComment={canComment}
           thing="scene"
           focusId={focusCommentId}
+          canMakeTask={canMakeTask}
         />
       )}
     />

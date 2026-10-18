@@ -11,7 +11,7 @@ import type { AuthorContext } from "@/server/context";
 import { recordFieldHistory } from "@/modules/history";
 import { assertCan, assertCanView } from "@/server/policy";
 
-import { taskInput, taskStatus, type TaskInput } from "./schemas";
+import { dueDate, taskInput, taskStatus, type TaskInput } from "./schemas";
 
 /**
  * Tasks: the author's to-dos, with priority and an optional due date. A task
@@ -62,6 +62,10 @@ export type TaskFilter = {
   /** Only tasks due within [from, to]. */
   dueFrom?: DateString;
   dueTo?: DateString;
+  /** Only tasks without a due date. */
+  undated?: boolean;
+  /** Done tasks only if finished since then. */
+  completedSince?: Date;
 };
 
 /** Open tasks first by due date (undated last), then by priority. */
@@ -74,9 +78,18 @@ export async function listTasks(ctx: AuthorContext, filter: TaskFilter = {}) {
       ...liveTask,
       ...(status === "open" ? { status: { not: "DONE" } } : {}),
       ...(status === "done" ? { status: "DONE" } : {}),
+      ...(filter.completedSince
+        ? {
+            OR: [
+              { status: { not: "DONE" } },
+              { status: "DONE", completedAt: { gte: filter.completedSince } },
+            ],
+          }
+        : {}),
       ...(filter.concernsId
         ? { node: { outgoing: { some: { kind: "concerns", targetId: filter.concernsId } } } }
         : {}),
+      ...(filter.undated ? { dueOn: null } : {}),
       ...(filter.dueFrom || filter.dueTo
         ? {
             dueOn: {
@@ -86,10 +99,68 @@ export async function listTasks(ctx: AuthorContext, filter: TaskFilter = {}) {
           }
         : {}),
     },
-    orderBy:
-      status === "done"
-        ? [{ completedAt: "desc" }]
-        : [{ dueOn: { sort: "asc", nulls: "last" } }, { priority: "desc" }, { createdAt: "asc" }],
+    orderBy: status === "done" ? [{ completedAt: "desc" }] : DUE_ORDER,
+    select: taskSelect,
+  });
+  return withConcerns(ctx, rows);
+}
+
+/** Open tasks first by due date (undated last), then by priority, then creation. */
+const DUE_ORDER = [
+  { dueOn: { sort: "asc", nulls: "last" } },
+  { priority: "desc" },
+  { createdAt: "asc" },
+] satisfies Prisma.TaskOrderByWithRelationInput[];
+
+/** How long a finished task stays on the Board's Done column. */
+export const BOARD_DONE_DAYS = 14;
+
+/** The start of the Board's Done window. */
+function recentlyDone(): Date {
+  return new Date(Date.now() - BOARD_DONE_DAYS * 86_400_000);
+}
+
+export type TaskBoard = Record<TaskStatus, TaskView[]>;
+
+/**
+ * The Board (M18, decision 116): the three statuses as columns, each in the
+ * List's order (due date, priority, creation). Done holds the tasks
+ * finished in the previous 14 days; every done task stays in the List.
+ */
+export async function listTaskBoard(ctx: AuthorContext): Promise<TaskBoard> {
+  assertCanView(ctx, "planning");
+  const doneSince = recentlyDone();
+  const rows = await db.task.findMany({
+    where: {
+      workspaceId: ctx.workspaceId,
+      ...liveTask,
+      OR: [{ status: { not: "DONE" } }, { status: "DONE", completedAt: { gte: doneSince } }],
+    },
+    orderBy: DUE_ORDER,
+    select: taskSelect,
+  });
+  const tasks = await withConcerns(ctx, rows);
+  return {
+    TODO: tasks.filter((t) => t.status === "TODO"),
+    IN_PROGRESS: tasks.filter((t) => t.status === "IN_PROGRESS"),
+    DONE: tasks.filter((t) => t.status === "DONE"),
+  };
+}
+
+/**
+ * Today on the Dashboard (M18): open tasks that are overdue or due today,
+ * and every task in progress, in the List's order.
+ */
+export async function listTasksForToday(ctx: AuthorContext, today: DateString) {
+  assertCanView(ctx, "planning");
+  const rows = await db.task.findMany({
+    where: {
+      workspaceId: ctx.workspaceId,
+      ...liveTask,
+      status: { not: "DONE" },
+      OR: [{ dueOn: { lte: toDbDate(today) } }, { status: "IN_PROGRESS" }],
+    },
+    orderBy: DUE_ORDER,
     select: taskSelect,
   });
   return withConcerns(ctx, rows);
@@ -175,6 +246,19 @@ export async function setTaskStatus(ctx: AuthorContext, id: string, status: Task
     where: { id },
     data: { status: next, completedAt: next === "DONE" ? new Date() : null },
   });
+}
+
+/**
+ * Moves a task to another day (Week, M18): changes its due date only, or
+ * clears it (`null`, "No date"). A single-field move: the last one wins,
+ * and nothing else about the task changes (decision 116).
+ */
+export async function setTaskDueDate(ctx: AuthorContext, id: string, date: DateString | null) {
+  assertCan(ctx, "edit", "planning");
+  const day = dueDate.parse(date);
+  const task = await getTask(ctx, id);
+  if (task.dueOn === day) return;
+  await db.task.update({ where: { id }, data: { dueOn: day ? toDbDate(day) : null } });
 }
 
 export async function trashTask(ctx: AuthorContext, id: string) {

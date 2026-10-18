@@ -20,9 +20,14 @@ const entry = (page: Page, body: string) =>
 const returnToWork = (page: Page) => page.getByRole("button", { name: /Return to work/ });
 
 async function selectLastParagraph(page: Page) {
-  await editorText(page).click();
-  await page.keyboard.press("ControlOrMeta+End");
-  await page.keyboard.press("Shift+Home");
+  // Under load the keys can land before the editor has its caret (Ctrl+End
+  // scrolls the page): check that text is selected, and select again if not.
+  await expect(async () => {
+    await editorText(page).click();
+    await page.keyboard.press("ControlOrMeta+End");
+    await page.keyboard.press("Shift+Home");
+    expect(await page.evaluate(() => window.getSelection()?.toString().trim() ?? "")).not.toBe("");
+  }).toPass({ timeout: 10_000 });
 }
 
 async function addComment(page: Page, body: string) {

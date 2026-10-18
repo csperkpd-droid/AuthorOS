@@ -7,6 +7,7 @@ import type { AnchorInput, NewCommentInput } from "./schemas";
 import type { ReviewState } from "./service";
 import {
   addComment,
+  createTaskFromComment,
   deleteComment,
   listComments,
   listCommentsForReview,
@@ -55,6 +56,14 @@ export async function restoreCommentAction(id: string, deletedAt: string) {
 export async function listCommentsForReviewAction(state: ReviewState, cursor: string) {
   return runAction(
     async () => listCommentsForReview(await requireAuthorContext(), { state, cursor }),
+    quiet,
+  );
+}
+
+/** "Make a task" from a comment (M18); returns the new task's id. */
+export async function createTaskFromCommentAction(commentId: string, title: string) {
+  return runAction(
+    async () => createTaskFromComment(await requireAuthorContext(), commentId, { title }),
     quiet,
   );
 }

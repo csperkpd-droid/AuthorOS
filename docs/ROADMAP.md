@@ -25,6 +25,7 @@ Scope details: [MVP.md](MVP.md). Schema: [DATABASE.md](DATABASE.md).
 | 15  | World objects: places and world entries as story objects for every genre; scenes set in places (Scene Setting)                                             | ✅ Complete (manually validated) |
 | 16  | Comments with external anchors: comments on scene and note text, kept outside the document and re-found strictly when the text changes                     | ✅ Complete (manually validated) |
 | 17  | Review — comments: one page for comments by state (Needs review, Open, Resolved) across books, scenes and notes; Open in text                              | ✅ Complete (manually validated) |
+| 18  | Task views: Today on the Dashboard, a Board and a Week over the one tasks table; tasks from comments (decision 116)                                        | ✅ Complete (awaiting approval)  |
 
 **Status words.** _Planned_: documented, not approved for implementation.
 _Approved_: authorized, not yet started. _In progress_: authorized and begun.
@@ -32,7 +33,7 @@ _Complete (awaiting approval)_: implemented and automatically validated,
 waiting for the author's manual acceptance. _Complete (manually validated)_:
 the author accepted it and approved closing it.
 
-### Planned milestones (M18–M24, and Findings)
+### Planned milestones (M19–M24, and Findings)
 
 From the implementation-readiness plan (sixteen milestones, M9–M24; the plan
 itself is a separate report, not in this repository). Built so far, in a
@@ -49,7 +50,6 @@ since earlier milestones change what it needs.
 |     | Milestone                                                                                                                                                                                                                                                       | Status  |
 | --- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------- |
 | —   | Findings and finders: findings stored as evidence-based observations the author reviews (not errors, not changes), shown in Review; the first automatic finders (beat placement, story-time conflicts, missing point of view, stale beats); tasks from findings | Planned |
-| 18  | Task views: Today on the Dashboard, a Board and a Week over the one tasks table; tasks from comments (decisions recorded: 116)                                                                                                                                  | Planned |
 | 19  | Assets and Files: an asset (cover, map, image) separate from its stored file and versions; needs an object-storage package (approval)                                                                                                                           | Planned |
 | 20  | Editions, provenance and the Publication Boundary: Book ≠ Edition, lineage to the manuscript version; replaces the "Publication status" stopgap                                                                                                                 | Planned |
 | 21  | Publishing workflows and publication export: checklists per edition; EPUB, DOCX and PDF from an edition; first background jobs                                                                                                                                  | Planned |

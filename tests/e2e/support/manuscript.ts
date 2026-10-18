@@ -53,8 +53,15 @@ export async function keyboardMove(page: Page, handle: Locator, name: string, st
       timeout: 1000,
     });
   }).toPass({ timeout: 10_000 });
+  // One step at a time, each confirmed by its announcement: an arrow pressed
+  // before dnd-kit has measured the list right after lifting is ignored.
+  const said = async () => (await announcer.allInnerTexts()).join("|");
   for (let i = 0; i < Math.abs(steps); i++) {
-    await page.keyboard.press(steps < 0 ? "ArrowUp" : "ArrowDown");
+    const before = await said();
+    await expect(async () => {
+      if ((await said()) === before) await page.keyboard.press(steps < 0 ? "ArrowUp" : "ArrowDown");
+      await expect.poll(said, { timeout: 500 }).not.toBe(before);
+    }).toPass({ timeout: 10_000 });
   }
   await expect(announcer.filter({ hasText: `${name} moved to` })).toHaveCount(1);
   const saved = page.waitForResponse((r) => r.request().method() === "POST");
