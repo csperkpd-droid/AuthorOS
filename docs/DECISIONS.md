@@ -999,6 +999,58 @@ writing is only on this device; the server ends the session on the next
 request (`/sign-out`). Nothing is uploaded on the way out and nothing is
 deleted.
 
+## Milestone 18 (Task views)
+
+### 116. Task views are views over the one tasks table; tasks can come from comments — Accepted (M18, not built)
+
+Decided before M18 is implemented (decisions A–R approved by the author).
+Builds invariant 17 (one Task system) with the existing `tasks` table and
+its existing statuses, priorities and due dates; no new table, column, enum
+or index, and export format 9 is unchanged.
+
+- **Findings (A).** "Tasks from findings" moves to the Findings milestone;
+  findings don't exist yet (decision 115).
+- **One Tasks page (B).** List, Board and Week are tabs of `/tasks`, the
+  view in the address (`?view=board`, `?view=week`; List is the default).
+  No new navigation entries.
+- **Today (C).** A Today section on the existing Dashboard: overdue, due
+  today and in-progress tasks. The Dashboard keeps its name; no separate
+  Home page.
+- **Board columns (D).** Fixed: To do, In progress, Done (the existing
+  statuses). No custom columns.
+- **Order (E).** Automatic, as the List: due date, then priority, then
+  creation. No manual card order.
+- **Done column (F).** Tasks completed in the previous 14 days, with a link
+  to all done tasks.
+- **Week (G, I, J).** A task's day is its due date: moving it to another
+  day changes its due date. No separate planned-for date. Weeks start on
+  Monday, in the author's own time zone. Overdue and No date trays sit
+  beside the days.
+- **Calendar context (H).** Events and deadlines show in Week as read-only
+  context, from the existing calendar (and follow "Writing as" as the
+  calendar does).
+- **Pen names (K).** Tasks stay shared across pen names; "Writing as" does
+  not filter them.
+- **Tasks from comments (L, M, N, O).** "Make a task" in the editor's
+  comments panel and on Review creates a task concerning the comment's
+  scene or note, with an editable title prefilled from the comment body.
+  The quoted passage is never copied and no link to the comment is stored.
+  Task and comment are independent: creating, completing or resolving one
+  never changes the other. It needs planning edit rights and visibility of
+  the comment's document through the established comment visibility rules;
+  otherwise the comment is not found.
+- **View preference (P).** An explicit address wins; the last view is
+  remembered per device. No account-level database preference.
+- **Interaction (Q).** Drag and drop and a "Move to" menu on desktop, both
+  keyboard accessible. On phones, menus only, one Board column at a time,
+  and Week as a list of days without horizontal overflow.
+- **Concurrent changes (R).** Status and due-date moves are single-field
+  updates; the last move wins, and a move never changes other fields. Full
+  edits keep their stale-form protection.
+- **Not here:** tasks from findings, manual order, custom columns, a
+  planned-for date, recurrence, times and reminders, assignees, the Life
+  Planner (M23), publishing workflows (M21), AI (M24).
+
 ## Milestone 17 (Review — comments)
 
 ### 115. Review lists comments only; findings are a separate milestone — Accepted (M17)
