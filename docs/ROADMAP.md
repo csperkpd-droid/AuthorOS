@@ -24,7 +24,7 @@ Scope details: [MVP.md](MVP.md). Schema: [DATABASE.md](DATABASE.md).
 | 14  | Beats, Beat Assignments and Validity: beats as story objects; placements Current, Potentially Stale, Conflicted or Intentionally Excepted                  | ✅ Complete (manually validated) |
 | 15  | World objects: places and world entries as story objects for every genre; scenes set in places (Scene Setting)                                             | ✅ Complete (manually validated) |
 | 16  | Comments with external anchors: comments on scene and note text, kept outside the document and re-found strictly when the text changes                     | ✅ Complete (manually validated) |
-| 17  | Review — comments: one page for comments by state (Needs review, Open, Resolved) across books, scenes and notes; Open in text                              | ✅ Complete (awaiting approval)  |
+| 17  | Review — comments: one page for comments by state (Needs review, Open, Resolved) across books, scenes and notes; Open in text                              | ✅ Complete (manually validated) |
 
 **Status words.** _Planned_: documented, not approved for implementation.
 _Approved_: authorized, not yet started. _In progress_: authorized and begun.
