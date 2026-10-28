@@ -25,7 +25,7 @@ Scope details: [MVP.md](MVP.md). Schema: [DATABASE.md](DATABASE.md).
 | 15  | World objects: places and world entries as story objects for every genre; scenes set in places (Scene Setting)                                             | ✅ Complete (manually validated) |
 | 16  | Comments with external anchors: comments on scene and note text, kept outside the document and re-found strictly when the text changes                     | ✅ Complete (manually validated) |
 | 17  | Review — comments: one page for comments by state (Needs review, Open, Resolved) across books, scenes and notes; Open in text                              | ✅ Complete (manually validated) |
-| 18  | Task views: Today on the Dashboard, a Board and a Week over the one tasks table; tasks from comments (decision 116)                                        | ✅ Complete (awaiting approval)  |
+| 18  | Task views: Today on the Dashboard, a Board and a Week over the one tasks table; tasks from comments (decision 116)                                        | ✅ Complete (manually validated) |
 
 **Status words.** _Planned_: documented, not approved for implementation.
 _Approved_: authorized, not yet started. _In progress_: authorized and begun.
